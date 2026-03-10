@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Getter
+// JSON > 자바객체 변환시 빈 객체 만들기 때문에
 @NoArgsConstructor
 @AllArgsConstructor
 public class SignupRequest {

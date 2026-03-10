@@ -15,3 +15,35 @@ Content-Type: application/json
   "email": "test@test.com",
   "password": "password123"
 }
+
+### 디바이스 등록
+POST http://localhost:8080/devices
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzczMTQxODMwLCJleHAiOjE3NzMxNDU0MzB9.xbcZL5AVJ1B8T_QO-mH797K6ZKaTugnfUZmcslQ2o-CffP0I7-Msg5JtKeVkEw6K
+
+{
+  "name": "온도센서1",
+  "type": "TEMPERATURE",
+  "location": "공장1층",
+  "thresholdValue": 80.0
+}
+
+### 내 디바이스 목록
+GET http://localhost:8080/devices
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzczMTQxODMwLCJleHAiOjE3NzMxNDU0MzB9.xbcZL5AVJ1B8T_QO-mH797K6ZKaTugnfUZmcslQ2o-CffP0I7-Msg5JtKeVkEw6K
+
+### 디바이스 수정
+PUT http://localhost:8080/devices/1
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzczMTQxODMwLCJleHAiOjE3NzMxNDU0MzB9.xbcZL5AVJ1B8T_QO-mH797K6ZKaTugnfUZmcslQ2o-CffP0I7-Msg5JtKeVkEw6K
+
+{
+  "name": "온도센서1-수정",
+  "type": "TEMPERATURE",
+  "location": "공장2층",
+  "thresholdValue": 90.0
+}
+
+### 디바이스 삭제
+DELETE http://localhost:8080/devices/1
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzczMTQxODMwLCJleHAiOjE3NzMxNDU0MzB9.xbcZL5AVJ1B8T_QO-mH797K6ZKaTugnfUZmcslQ2o-CffP0I7-Msg5JtKeVkEw6K
