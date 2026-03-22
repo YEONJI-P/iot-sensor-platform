@@ -19,6 +19,7 @@ public class DeviceService {
     private final UserRepository userRepository;
     private final DeviceRepository deviceRepository;
     // device 등록
+    // user 정보가 있어야 새로 등록하므로 User 객체 확인 필요
     @Transactional
     public DeviceResponse register(DeviceRegisterRequest request,String email){
         // User 객체 확인 > 컨트롤러에서 조회한 사용자 이메일(Unique)로
@@ -39,6 +40,7 @@ public class DeviceService {
         return DeviceResponse.from(device);
     }
     // device 정보 수정
+    // device객체안의 user 정보를 확인하므로 user 객체 별도 검증 X
     @Transactional
     public DeviceResponse update(Long deviceId, DeviceUpdateRequest request,String email){
         // device Repo에서 findById
