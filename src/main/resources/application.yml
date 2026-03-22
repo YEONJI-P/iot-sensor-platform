@@ -7,6 +7,20 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+    open-in-view: false
+  kafka:
+    topic:
+      sensor-data: sensor-data
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: iot-sensor-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 jwt:
   secret-key: ${JWT_SECRET:iot-sensor-platform-jwt-secret-key-must-be-at-least-32}
   expiration: 3600000
+

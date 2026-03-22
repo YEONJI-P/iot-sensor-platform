@@ -37,7 +37,7 @@ public class SecurityConfig {
                 // 위에서 아래로 break
                 .authorizeHttpRequests(auth -> auth
                         // 회원가입, 로그인은 누구나 접근 가능
-                        .requestMatchers(HttpMethod.POST, "/auth/signup", "/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/signup", "/auth/login","/sensor-data").permitAll()
                         // 나머지는 인증 필요
                         .anyRequest().authenticated()
                 )

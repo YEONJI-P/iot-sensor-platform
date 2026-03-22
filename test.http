@@ -19,7 +19,7 @@ Content-Type: application/json
 ### 디바이스 등록
 POST http://localhost:8080/devices
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzczMTQxODMwLCJleHAiOjE3NzMxNDU0MzB9.xbcZL5AVJ1B8T_QO-mH797K6ZKaTugnfUZmcslQ2o-CffP0I7-Msg5JtKeVkEw6K
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTYxOTAwLCJleHAiOjE3NzQxNjU1MDB9.H5vh1GX-AUWkyIhThd_DMMbBUAF_R2h5Tuo82H6PvAUGQiV7QVjsEdm_LHUAURxt
 
 {
   "name": "온도센서1",
@@ -30,12 +30,12 @@ Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0I
 
 ### 내 디바이스 목록
 GET http://localhost:8080/devices
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzczMTQxODMwLCJleHAiOjE3NzMxNDU0MzB9.xbcZL5AVJ1B8T_QO-mH797K6ZKaTugnfUZmcslQ2o-CffP0I7-Msg5JtKeVkEw6K
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTYxOTAwLCJleHAiOjE3NzQxNjU1MDB9.H5vh1GX-AUWkyIhThd_DMMbBUAF_R2h5Tuo82H6PvAUGQiV7QVjsEdm_LHUAURxt
 
 ### 디바이스 수정
 PUT http://localhost:8080/devices/1
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzczMTQxODMwLCJleHAiOjE3NzMxNDU0MzB9.xbcZL5AVJ1B8T_QO-mH797K6ZKaTugnfUZmcslQ2o-CffP0I7-Msg5JtKeVkEw6K
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTYxOTAwLCJleHAiOjE3NzQxNjU1MDB9.H5vh1GX-AUWkyIhThd_DMMbBUAF_R2h5Tuo82H6PvAUGQiV7QVjsEdm_LHUAURxt
 
 {
   "name": "온도센서1-수정",
@@ -46,4 +46,14 @@ Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0I
 
 ### 디바이스 삭제
 DELETE http://localhost:8080/devices/1
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzczMTQxODMwLCJleHAiOjE3NzMxNDU0MzB9.xbcZL5AVJ1B8T_QO-mH797K6ZKaTugnfUZmcslQ2o-CffP0I7-Msg5JtKeVkEw6K
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTYxOTAwLCJleHAiOjE3NzQxNjU1MDB9.H5vh1GX-AUWkyIhThd_DMMbBUAF_R2h5Tuo82H6PvAUGQiV7QVjsEdm_LHUAURxt
+
+
+### 센서 데이터 전송
+POST http://localhost:8080/sensor-data
+Content-Type: application/json
+
+{
+  "deviceId": 5,
+  "value": 81.2
+}
