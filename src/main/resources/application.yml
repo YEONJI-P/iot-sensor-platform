@@ -20,6 +20,11 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+springdoc:
+  swagger-ui:
+    path: /swagger-ui/index.html
+  api-docs:
+    path: /api-docs
 jwt:
   secret-key: ${JWT_SECRET:iot-sensor-platform-jwt-secret-key-must-be-at-least-32}
   expiration: 3600000

@@ -3,6 +3,7 @@ package dev.yeon.iotsensorplatform.auth.controller;
 import dev.yeon.iotsensorplatform.auth.dto.LoginRequest;
 import dev.yeon.iotsensorplatform.auth.dto.SignupRequest;
 import dev.yeon.iotsensorplatform.auth.service.AuthService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,7 @@ public class AuthController {
     private final AuthService authService;
 
     // POST /auth/signup
+    @SecurityRequirements
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody @Valid SignupRequest request) {
         authService.signup(request);
@@ -23,6 +25,7 @@ public class AuthController {
     }
 
     // POST /auth/login
+    @SecurityRequirements
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody @Valid LoginRequest request) {
         String token = authService.login(request);

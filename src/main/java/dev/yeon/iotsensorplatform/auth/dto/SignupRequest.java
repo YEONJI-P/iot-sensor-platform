@@ -1,6 +1,7 @@
 package dev.yeon.iotsensorplatform.auth.dto;
 
 import dev.yeon.iotsensorplatform.user.entity.User;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
@@ -11,6 +12,7 @@ import lombok.NoArgsConstructor;
 // JSON > 자바객체 변환시 빈 객체 만들기 때문에
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "회원가입 요청")
 public class SignupRequest {
     @NotBlank
     @Email
