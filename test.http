@@ -19,7 +19,7 @@ Content-Type: application/json
 ### 디바이스 등록
 POST http://localhost:8080/devices
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTYxOTAwLCJleHAiOjE3NzQxNjU1MDB9.H5vh1GX-AUWkyIhThd_DMMbBUAF_R2h5Tuo82H6PvAUGQiV7QVjsEdm_LHUAURxt
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
 
 {
   "name": "온도센서1",
@@ -30,12 +30,12 @@ Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0I
 
 ### 내 디바이스 목록
 GET http://localhost:8080/devices
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTYxOTAwLCJleHAiOjE3NzQxNjU1MDB9.H5vh1GX-AUWkyIhThd_DMMbBUAF_R2h5Tuo82H6PvAUGQiV7QVjsEdm_LHUAURxt
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
 
 ### 디바이스 수정
 PUT http://localhost:8080/devices/1
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTYxOTAwLCJleHAiOjE3NzQxNjU1MDB9.H5vh1GX-AUWkyIhThd_DMMbBUAF_R2h5Tuo82H6PvAUGQiV7QVjsEdm_LHUAURxt
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
 
 {
   "name": "온도센서1-수정",
@@ -46,7 +46,7 @@ Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0I
 
 ### 디바이스 삭제
 DELETE http://localhost:8080/devices/1
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTYxOTAwLCJleHAiOjE3NzQxNjU1MDB9.H5vh1GX-AUWkyIhThd_DMMbBUAF_R2h5Tuo82H6PvAUGQiV7QVjsEdm_LHUAURxt
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
 
 
 ### 센서 데이터 전송
@@ -54,6 +54,22 @@ POST http://localhost:8080/sensor-data
 Content-Type: application/json
 
 {
-  "deviceId": 5,
+  "deviceId": 1,
   "value": 81.2
 }
+
+### 전체 센서 데이터 조회
+GET http://localhost:8080/sensor-data
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+
+### 특정 디바이스 센서 데이터 조회
+GET http://localhost:8080/sensor-data/1
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+
+### 전체 Alert 조회
+GET http://localhost:8080/alerts
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+
+### 특정 디바이스 Alert 조회
+GET http://localhost:8080/alerts/1
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG

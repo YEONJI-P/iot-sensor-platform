@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface AlertRepository extends JpaRepository<Alert, Long> {
     List<Alert> findAllByDeviceIdOrderByCreatedAtDesc(Long deviceId);
+    List<Alert> findAllByDeviceUserEmailOrderByCreatedAtDesc(String email);
 }

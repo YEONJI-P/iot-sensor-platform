@@ -7,6 +7,7 @@ import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +19,7 @@ public class DeviceService {
     private final UserRepository userRepository;
     private final DeviceRepository deviceRepository;
     // device 등록
+    @Transactional
     public DeviceResponse register(DeviceRegisterRequest request,String email){
         // User 객체 확인 > 컨트롤러에서 조회한 사용자 이메일(Unique)로
         // Device 객체 build 하여 repo 에 저장
@@ -37,6 +39,7 @@ public class DeviceService {
         return DeviceResponse.from(device);
     }
     // device 정보 수정
+    @Transactional
     public DeviceResponse update(Long deviceId, DeviceUpdateRequest request,String email){
         // device Repo에서 findById
         // Device Id에 해당되는 device 객체가 User Email 이 맞는지
@@ -53,12 +56,13 @@ public class DeviceService {
 
     }
     // device 조회응답
+    @Transactional(readOnly=true)
     public List<DeviceResponse> getMyDevices(String email){
         // email 정보로 해당 User의 device 목록 전체 조회
-        List<Device> devices = deviceRepository.findAllByUserEmail(email);
-        return devices.stream().map(DeviceResponse::from).toList();
+        return deviceRepository.findAllByUserEmail(email).stream().map(DeviceResponse::from).toList();
 
     }
+    @Transactional
     public void delete(Long deviceId,String email){
         Device device = deviceRepository.findById(deviceId).orElseThrow(()->new IllegalArgumentException("장치정보가 존재하지 않아요."));
         if(!device.getUser().getEmail().equals(email)){
