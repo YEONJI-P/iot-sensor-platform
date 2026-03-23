@@ -1,21 +1,14 @@
 spring:
   datasource:
+    driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql:///iot_sensor_db?cloudSqlInstance=project-f4d2acb6-c4a9-4f38-9be:asia-northeast3:iot-db-instance&socketFactory=com.google.cloud.sql.postgres.SocketFactory
     username: postgres
     password: ${DB_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-  cloud:
-    gcp:
-      sql:
-        database-name: iot_sensor_db
-        instance-connection-name: project-f4d2acb6-c4a9-4f38-9be:asia-northeast3:iot-db-instance
   jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update
     show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
