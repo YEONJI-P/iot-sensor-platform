@@ -1,10 +1,14 @@
 spring:
   datasource:
-    url: jdbc:postgresql:///${DB_NAME}?cloudSqlInstance=${DB_INSTANCE_NAME}&socketFactory=com.google.cloud.sql.postgres.SocketFactory
+    url: jdbc:postgresql:///iot_sensor_db?cloudSqlInstance=project-f4d2acb6-c4a9-4f38-9be:asia-northeast3:iot-db-instance&socketFactory=com.google.cloud.sql.postgres.SocketFactory
     username: postgres
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
-
+  cloud:
+    gcp:
+      sql:
+        database-name: iot_sensor_db
+        instance-connection-name: project-f4d2acb6-c4a9-4f38-9be:asia-northeast3:iot-db-instance
   jpa:
     hibernate:
       ddl-auto: update
@@ -12,8 +16,6 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-
-  # Kafka 비활성화 (prod에서는 직접 저장 방식 or pub/sub 사용)
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 

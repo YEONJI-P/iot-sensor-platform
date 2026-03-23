@@ -46,4 +46,4 @@ jobs:
             --region asia-northeast3 \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "SPRING_PROFILES_ACTIVE=prod,DB_PASSWORD=${{ secrets.DB_PASSWORD }},DB_NAME=iot_sensor_db,DB_INSTANCE_NAME=project-f4d2acb6-c4a9-4f38-9be:asia-northeast3:iot-db-instance,JWT_SECRET=${{ secrets.JWT_SECRET }}"
+            --set-env-vars "SPRING_PROFILES_ACTIVE=prod,DB_PASSWORD=${{ secrets.DB_PASSWORD }}, JWT_SECRET=${{ secrets.JWT_SECRET }}"
