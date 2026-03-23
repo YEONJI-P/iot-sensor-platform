@@ -23,13 +23,14 @@ jobs:
         run: chmod +x gradlew
       - name: Build with Gradle
         run: ./gradlew build -x test
+      # test
+      - name: Docker image build check
+        run: docker build -t iot-sensor-platform .
       - id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: 'projects/142990968320/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
           service_account: 'github-action-pusher@project-f4d2acb6-c4a9-4f38-9be.iam.gserviceaccount.com'
-      - name: Set up gcloud CLI and configure Docker for Artifact Registry
-        uses: 'google-github-actions/setup-gcloud@v3'
 
       - name: 'Docker Login'
         run: |
