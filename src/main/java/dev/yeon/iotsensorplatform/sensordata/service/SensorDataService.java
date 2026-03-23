@@ -1,9 +1,12 @@
 package dev.yeon.iotsensorplatform.sensordata.service;
 
+import dev.yeon.iotsensorplatform.alert.entity.Alert;
+import dev.yeon.iotsensorplatform.alert.repository.AlertRepository;
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataRequest;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataResponse;
+import dev.yeon.iotsensorplatform.sensordata.entity.SensorData;
 import dev.yeon.iotsensorplatform.sensordata.kafka.SensorDataProducer;
 import dev.yeon.iotsensorplatform.sensordata.repository.SensorDataRepository;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +21,7 @@ public class SensorDataService {
     private final SensorDataProducer sensorDataProducer;
     private final DeviceRepository deviceRepository;
     private final SensorDataRepository sensorDataRepository;
+    private final AlertRepository alertRepository;
 
     @Transactional
     public void receive(SensorDataRequest sensorDataRequest) {
@@ -26,6 +30,26 @@ public class SensorDataService {
                         "존재하지 않는 장치에요 - deviceId: " + sensorDataRequest.getDeviceId()
                 ));
         sensorDataProducer.send(sensorDataRequest);
+    }
+
+    @Transactional
+    public SensorDataResponse receiveDirect(SensorDataRequest sensorDataRequest){
+        Device device = deviceRepository.findById(sensorDataRequest.getDeviceId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "존재하지 않는 장치에요 - deviceId: " + sensorDataRequest.getDeviceId()
+                ));
+        SensorData sensorData = SensorData.builder()
+                .device(device)
+                .value(sensorDataRequest.getValue()).build();
+        sensorDataRepository.save(sensorData);
+        if (sensorDataRequest.getValue() > device.getThresholdValue()) {
+            Alert alert = Alert.builder().device(device).sensorValue(sensorDataRequest.getValue()).thresholdValue(device.getThresholdValue())
+                .message(String.format("[%s] 임계값 초과! 현재값: %.1f, 임계값: %.1f ", device.getName(),sensorDataRequest.getValue(),device.getThresholdValue()))
+                .build();
+            alertRepository.save(alert);
+        }
+
+        return SensorDataResponse.from(sensorData);
     }
     // save는 kafka측에서
     // just read

@@ -1,0 +1,28 @@
+spring:
+  datasource:
+    url: jdbc:postgresql:///${DB_NAME}?cloudSqlInstance=${DB_INSTANCE_NAME}&socketFactory=com.google.cloud.sql.postgres.SocketFactory
+    username: postgres
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Kafka 비활성화 (prod에서는 직접 저장 방식 or pub/sub 사용)
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+
+jwt:
+  secret-key: ${JWT_SECRET}
+  expiration: 3600000
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui/index.html
+  api-docs:
+    path: /api-docs
