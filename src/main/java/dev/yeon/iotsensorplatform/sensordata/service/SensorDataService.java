@@ -26,32 +26,27 @@ public class SensorDataService {
 
     @Transactional
     public void receive(SensorDataRequest sensorDataRequest) {
-        deviceRepository.findById(sensorDataRequest.getDeviceId())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "존재하지 않는 장치에요 - deviceId: " + sensorDataRequest.getDeviceId()
-                ));
-        sensorDataProducer.get().send(sensorDataRequest);
-    }
-
-    @Transactional
-    public SensorDataResponse receiveDirect(SensorDataRequest sensorDataRequest){
         Device device = deviceRepository.findById(sensorDataRequest.getDeviceId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "존재하지 않는 장치에요 - deviceId: " + sensorDataRequest.getDeviceId()
                 ));
-        SensorData sensorData = SensorData.builder()
-                .device(device)
-                .value(sensorDataRequest.getValue()).build();
-        sensorDataRepository.save(sensorData);
-        if (sensorDataRequest.getValue() > device.getThresholdValue()) {
-            Alert alert = Alert.builder().device(device).sensorValue(sensorDataRequest.getValue()).thresholdValue(device.getThresholdValue())
-                .message(String.format("[%s] 임계값 초과! 현재값: %.1f, 임계값: %.1f ", device.getName(),sensorDataRequest.getValue(),device.getThresholdValue()))
-                .build();
-            alertRepository.save(alert);
+        if(sensorDataProducer.isPresent()) {
+            sensorDataProducer.get().send(sensorDataRequest);
+        }else{
+            SensorData sensorData = SensorData.builder()
+                    .device(device)
+                    .value(sensorDataRequest.getValue()).build();
+            sensorDataRepository.save(sensorData);
+            if (sensorDataRequest.getValue() > device.getThresholdValue()) {
+                Alert alert = Alert.builder().device(device).sensorValue(sensorDataRequest.getValue()).thresholdValue(device.getThresholdValue())
+                        .message(String.format("[%s] 임계값 초과! 현재값: %.1f, 임계값: %.1f ", device.getName(),sensorDataRequest.getValue(),device.getThresholdValue()))
+                        .build();
+                alertRepository.save(alert);
+            }
         }
 
-        return SensorDataResponse.from(sensorData);
     }
+
     // save는 kafka측에서
     // just read
     @Transactional(readOnly=true)
