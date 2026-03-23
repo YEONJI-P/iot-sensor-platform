@@ -14,11 +14,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class SensorDataService {
-    private final SensorDataProducer sensorDataProducer;
+    private final Optional<SensorDataProducer> sensorDataProducer;
     private final DeviceRepository deviceRepository;
     private final SensorDataRepository sensorDataRepository;
     private final AlertRepository alertRepository;
@@ -29,7 +30,7 @@ public class SensorDataService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "존재하지 않는 장치에요 - deviceId: " + sensorDataRequest.getDeviceId()
                 ));
-        sensorDataProducer.send(sensorDataRequest);
+        sensorDataProducer.get().send(sensorDataRequest);
     }
 
     @Transactional

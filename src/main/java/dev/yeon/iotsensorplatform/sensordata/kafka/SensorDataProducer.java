@@ -7,9 +7,11 @@ import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+@Profile("!prod") // prod 환경이 아닐때만 Bean 생성
 @Slf4j
 @Component
 @RequiredArgsConstructor
