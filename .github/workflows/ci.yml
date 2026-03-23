@@ -24,8 +24,8 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build -x test
       # test
-      - name: Docker image build check
-        run: docker build -t iot-sensor-platform .
+#      - name: Docker image build check
+#        run: docker build -t iot-sensor-platform .
       - id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:

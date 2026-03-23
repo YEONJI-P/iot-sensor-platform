@@ -37,7 +37,7 @@ public class SecurityConfig {
                 // 위에서 아래로 break
                 .authorizeHttpRequests(auth -> auth
                         // 회원가입, 로그인은 누구나 접근 가능
-                        .requestMatchers("/swagger-ui/**", "/api-docs/**","/v3/api-docs/**")
+                        .requestMatchers("/","/swagger-ui/**", "/api-docs/**","/v3/api-docs/**")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/signup", "/auth/login","/sensor-data")
                         .permitAll()
