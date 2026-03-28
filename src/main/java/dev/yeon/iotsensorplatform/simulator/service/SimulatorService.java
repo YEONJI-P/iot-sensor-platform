@@ -13,6 +13,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Random;
@@ -36,6 +37,7 @@ public class SimulatorService {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
     private final Random random = new Random();
 
+    @Transactional
     public void start(String employeeId, SimulatorStartRequest request) {
         Long deviceId = request.getDeviceId();
 
@@ -121,6 +123,7 @@ public class SimulatorService {
         );
     }
 
+    @Transactional(readOnly = true)
     public List<Device> getDevices(String employeeId) {
         User user = getUser(employeeId);
         return accessControlService.getAccessibleDevices(user);

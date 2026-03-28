@@ -49,6 +49,7 @@ public class AccessControlService {
                 .stream().map(Device::getId).toList();
     }
 
+    @Transactional(readOnly = true)
     public void assertCanAccessDevice(User user, Device device) {
         if (user.getRole() == Role.SUPER_ADMIN) return;
         if (user.getRole() == Role.USER_ADMIN) {
@@ -65,6 +66,7 @@ public class AccessControlService {
         }
     }
 
+    @Transactional(readOnly = true)
     public void assertCanManageGroup(User user, OrgGroup group) {
         if (user.getRole() == Role.SUPER_ADMIN) return;
         if (user.getRole() == Role.USER_ADMIN) {
