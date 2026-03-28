@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>IoT Simulator</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+  <style>
+    body { background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    .navbar { background: #1e293b !important; border-bottom: 1px solid #334155; }
+    .card { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; }
+    .form-control, .form-select {
+      background: #0f172a; border: 1px solid #475569;
+      color: #e2e8f0;
+    }
+    .form-control:focus, .form-select:focus {
+      background: #0f172a; color: #e2e8f0;
+      border-color: #3b82f6; box-shadow: 0 0 0 0.2rem rgba(59,130,246,.25);
+    }
+    .form-control::placeholder { color: #64748b; }
+    #logArea {
+      background: #020617; border: 1px solid #1e3a5f;
+      border-radius: 8px; height: 320px;
+      overflow-y: auto; font-family: monospace; font-size: 0.85rem;
+      padding: 12px;
+    }
+    .log-normal { color: #4ade80; }
+    .log-exceed { color: #f87171; }
+    .log-info   { color: #60a5fa; }
+    .log-warn   { color: #facc15; }
+    .badge-pending { background: #854d0e; color: #fef08a; }
+    .badge-running { background: #14532d; color: #86efac; }
+    .badge-done    { background: #1e3a5f; color: #93c5fd; }
+  </style>
+</head>
+<body>
+
+<!-- ── Navbar ── -->
+<nav class="navbar navbar-dark px-4 py-2">
+  <span class="navbar-brand fw-bold">🏭 IoT Simulator</span>
+  <div id="navRight" class="d-none d-flex gap-2 align-items-center">
+    <a href="/dashboard.html" class="btn btn-sm btn-outline-info">📊 대시보드</a>
+    <button onclick="logout()" class="btn btn-sm btn-outline-danger">로그아웃</button>
+  </div>
+</nav>
+
+<!-- ── Login Section ── -->
+<div id="loginSection" class="d-flex justify-content-center align-items-center" style="min-height:85vh;">
+  <div class="card p-4" style="width:360px;">
+    <h5 class="mb-4 text-center">로그인</h5>
+    <div class="mb-3">
+      <label class="form-label text-secondary small">사원번호</label>
+      <input id="loginEmployeeId" type="text" class="form-control" placeholder="예: ADMIN001"/>
+    </div>
+    <div class="mb-3">
+      <label class="form-label text-secondary small">비밀번호</label>
+      <input id="loginPassword" type="password" class="form-control" placeholder="비밀번호 입력"/>
+    </div>
+    <div id="loginError" class="text-danger small mb-2 d-none"></div>
+    <button onclick="login()" class="btn btn-primary w-100">로그인</button>
+  </div>
+</div>
+
+<!-- ── Simulator Section ── -->
+<div id="simulatorSection" class="container py-4 d-none">
+  <div class="row g-4">
+
+    <!-- 설정 패널 -->
+    <div class="col-lg-4">
+      <div class="card p-4 h-100">
+        <h6 class="mb-3 text-info">⚙️ 시뮬레이터 설정</h6>
+
+        <div class="mb-3">
+          <label class="form-label text-secondary small">장치 선택</label>
+          <select id="deviceSelect" class="form-select" onchange="onDeviceChange()">
+            <option value="">-- 장치 선택 --</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label text-secondary small">전송 간격 (초, 최소 1)</label>
+          <input id="intervalSeconds" type="number" class="form-control" value="2" min="1"/>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label text-secondary small">전송 횟수 (1~100)</label>
+          <input id="count" type="number" class="form-control" value="10" min="1" max="100"/>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button id="startBtn" onclick="startSimulation()" class="btn btn-success flex-fill" disabled>
+            ▶ START
+          </button>
+          <button id="stopBtn" onclick="stopSimulation()" class="btn btn-danger flex-fill" disabled>
+            ■ STOP
+          </button>
+        </div>
+
+        <div class="mt-3 text-center">
+          <span id="statusBadge" class="badge badge-pending px-3 py-2">대기 중</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 로그 패널 -->
+    <div class="col-lg-8">
+      <div class="card p-4 h-100 d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="mb-0 text-info">📋 실행 로그</h6>
+          <button onclick="clearLog()" class="btn btn-sm btn-outline-secondary">지우기</button>
+        </div>
+        <div id="logArea" class="flex-fill"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /* ── 상태 변수 ── */
+  let pollingTimer = null;
+  let currentDeviceId = null;
+
+  /* ── 초기화 ── */
+  window.onload = () => {
+    const token = localStorage.getItem('jwt_token');
+    if (token) showSimulator();
+    else showLogin();
+  };
+
+  /* ── 화면 전환 ── */
+  function showLogin() {
+    document.getElementById('loginSection').classList.remove('d-none');
+    document.getElementById('simulatorSection').classList.add('d-none');
+    document.getElementById('navRight').classList.add('d-none');
+  }
+
+  async function showSimulator() {
+    document.getElementById('loginSection').classList.add('d-none');
+    document.getElementById('simulatorSection').classList.remove('d-none');
+    document.getElementById('navRight').classList.remove('d-none');
+    await loadDevices();
+  }
+
+  /* ── 로그인 ── */
+  async function login() {
+    const employeeId = document.getElementById('loginEmployeeId').value.trim();
+    const password   = document.getElementById('loginPassword').value;
+    const errEl = document.getElementById('loginError');
+    errEl.classList.add('d-none');
+
+    try {
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, password })
+      });
+      if (!res.ok) {
+        errEl.textContent = await res.text();
+        errEl.classList.remove('d-none');
+        return;
+      }
+      const token = await res.text();
+      localStorage.setItem('jwt_token', token);
+      showSimulator();
+    } catch {
+      errEl.textContent = '서버 연결 오류';
+      errEl.classList.remove('d-none');
+    }
+  }
+
+  /* ── 로그아웃 ── */
+  function logout() {
+    stopPolling();
+    localStorage.removeItem('jwt_token');
+    showLogin();
+  }
+
+  /* ── 헤더 ── */
+  function authHeaders() {
+    return { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'), 'Content-Type': 'application/json' };
+  }
+
+  /* ── 장치 목록 로드 ── */
+  async function loadDevices() {
+    try {
+      const res = await fetch('/simulator/devices', { headers: authHeaders() });
+      if (res.status === 401 || res.status === 403) { logout(); return; }
+      const devices = await res.json();
+      const sel = document.getElementById('deviceSelect');
+      sel.innerHTML = '<option value="">-- 장치 선택 --</option>';
+      devices.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = `${d.name} (${d.type}) — ${d.location}`;
+        sel.appendChild(opt);
+      });
+      appendLog('info', `장치 ${devices.length}개 로드됨`);
+    } catch {
+      appendLog('warn', '장치 목록 로드 실패');
+    }
+  }
+
+  /* ── 장치 선택 시 상태 확인 ── */
+  async function onDeviceChange() {
+    const deviceId = getSelectedDeviceId();
+    if (!deviceId) {
+      setButtons(false, false);
+      return;
+    }
+    currentDeviceId = deviceId;
+    stopPolling();
+    await syncStatus(deviceId);
+  }
+
+  async function syncStatus(deviceId) {
+    try {
+      const res = await fetch(`/simulator/status/${deviceId}`, { headers: authHeaders() });
+      const status = await res.json();
+      if (status.running) {
+        appendLog('info', `실행 중인 작업 복원: ${status.completedCount}/${status.totalCount}`);
+        setButtons(false, true);
+        updateBadge(true);
+        startPolling(deviceId);
+      } else {
+        setButtons(true, false);
+        updateBadge(false);
+      }
+    } catch { /* ignore */ }
+  }
+
+  /* ── 시뮬레이터 시작 ── */
+  async function startSimulation() {
+    const deviceId       = getSelectedDeviceId();
+    const intervalSeconds = parseInt(document.getElementById('intervalSeconds').value) || 2;
+    const count          = parseInt(document.getElementById('count').value) || 10;
+
+    if (!deviceId) { appendLog('warn', '장치를 선택해주세요'); return; }
+
+    try {
+      const res = await fetch('/simulator/start', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ deviceId: parseInt(deviceId), intervalSeconds, count })
+      });
+      if (res.status === 409) {
+        appendLog('warn', await res.text()); return;
+      }
+      if (!res.ok) {
+        appendLog('warn', await res.text()); return;
+      }
+      appendLog('info', `시뮬레이션 시작 — 장치 ${deviceId}, ${count}회, ${intervalSeconds}초 간격`);
+      setButtons(false, true);
+      updateBadge(true);
+      currentDeviceId = deviceId;
+      startPolling(deviceId);
+    } catch {
+      appendLog('warn', '시작 요청 실패');
+    }
+  }
+
+  /* ── 시뮬레이터 중단 ── */
+  async function stopSimulation() {
+    const deviceId = currentDeviceId || getSelectedDeviceId();
+    if (!deviceId) return;
+
+    try {
+      await fetch('/simulator/stop', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ deviceId: parseInt(deviceId) })
+      });
+      appendLog('warn', '시뮬레이터 중단 요청됨');
+    } catch {
+      appendLog('warn', '중단 요청 실패');
+    }
+  }
+
+  /* ── 폴링 ── */
+  function startPolling(deviceId) {
+    stopPolling();
+    pollingTimer = setInterval(async () => {
+      try {
+        const res = await fetch(`/simulator/status/${deviceId}`, { headers: authHeaders() });
+        const status = await res.json();
+        updateProgressLog(status, deviceId);
+
+        if (!status.running) {
+          stopPolling();
+          setButtons(true, false);
+          updateBadge(false);
+          const isDone = status.completedCount >= status.totalCount && status.totalCount > 0;
+          appendLog('info', isDone ? `✅ 완료 (${status.completedCount}/${status.totalCount})` : '⛔ 중단됨');
+        }
+      } catch {
+        stopPolling();
+      }
+    }, 1000);
+  }
+
+  function stopPolling() {
+    if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
+  }
+
+  /* ── UI 헬퍼 ── */
+  function getSelectedDeviceId() { return document.getElementById('deviceSelect').value; }
+
+  function setButtons(startEnabled, stopEnabled) {
+    document.getElementById('startBtn').disabled = !startEnabled;
+    document.getElementById('stopBtn').disabled  = !stopEnabled;
+  }
+
+  function updateBadge(running) {
+    const el = document.getElementById('statusBadge');
+    el.className = 'badge px-3 py-2';
+    if (running) {
+      el.classList.add('badge-running'); el.textContent = '실행 중';
+    } else {
+      el.classList.add('badge-pending'); el.textContent = '대기 중';
+    }
+  }
+
+  let lastProgressLine = null;
+  function updateProgressLog(status, deviceId) {
+    const logArea = document.getElementById('logArea');
+    const text = `진행 중: ${status.completedCount} / ${status.totalCount}`;
+
+    if (lastProgressLine && logArea.contains(lastProgressLine)) {
+      lastProgressLine.textContent = `[${now()}] ${text}`;
+    } else {
+      lastProgressLine = appendLog('normal', text, true);
+    }
+  }
+
+  function appendLog(type, text, returnEl = false) {
+    const logArea = document.getElementById('logArea');
+    const line = document.createElement('div');
+    line.className = `log-${type}`;
+    line.textContent = `[${now()}] ${text}`;
+    logArea.appendChild(line);
+    logArea.scrollTop = logArea.scrollHeight;
+    return returnEl ? line : undefined;
+  }
+
+  function clearLog() {
+    document.getElementById('logArea').innerHTML = '';
+    lastProgressLine = null;
+  }
+
+  function now() {
+    return new Date().toLocaleTimeString('ko-KR', { hour12: false });
+  }
+
+  /* ── 엔터 키 로그인 ── */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('loginSection') &&
+        !document.getElementById('loginSection').classList.contains('d-none')) {
+      login();
+    }
+  });
+</script>
+</body>
+</html>

@@ -29,13 +29,19 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        // 정적 리소스 & Swagger
                         .requestMatchers("/", "/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**")
                         .permitAll()
+                        // HTML 파일 자체는 열리게 (API 호출 시 JWT로 제어)
+                        .requestMatchers("/simulator.html", "/dashboard.html")
+                        .permitAll()
+                        // 인증 불필요 API
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/sensor-data")
                         .permitAll()
-                        // /admin/** 는 USER_ADMIN 이상만 접근
+                        // 어드민: USER_ADMIN 이상
                         .requestMatchers("/admin/**")
                         .hasAnyRole("SUPER_ADMIN", "USER_ADMIN")
+                        // 나머지 전부 인증 필요 (/simulator/**, /devices/**, /alerts/**, /sensor-data GET 등)
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
