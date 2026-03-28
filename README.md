@@ -1,204 +1,327 @@
-# 🏭 IoT Sensor Monitoring Platform
+# 🏭 IoT Sensor Platform
 
-> 공장/설비 센서 데이터를 실시간으로 수집·적재하고, 이상 감지 시 알림을 발행하는 IoT 모니터링 백엔드 플랫폼
+> 공장/설비 센서 데이터를 실시간 수집·적재하고 이상 감지 시 알림을 발행하는 IoT 모니터링 백엔드 플랫폼
 
 <br>
 
-## 🛠 기술 스택
+![Java](https://img.shields.io/badge/Java_17-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot_3.x-6DB33F?style=flat-square&logo=springboot&logoColor=white)
+![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?style=flat-square&logo=springsecurity&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white)
+![Kafka](https://img.shields.io/badge/Apache_Kafka-231F20?style=flat-square&logo=apachekafka&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis_(예정)-DC382D?style=flat-square&logo=redis&logoColor=white)
+![GCP](https://img.shields.io/badge/GCP_Cloud_Run-4285F4?style=flat-square&logo=googlecloud&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)
+
+<br>
+
+🔗 **배포 URL:** https://iot-sensor-platform-142990968320.asia-northeast3.run.app
+📂 **GitHub:** https://github.com/YEONJI-P/iot-sensor-platform
+
+<br>
+
+---
+
+## 📋 목차
+
+1. [프로젝트 소개](#1-프로젝트-소개)
+2. [기술 스택](#2-기술-스택)
+3. [시스템 아키텍처](#3-시스템-아키텍처)
+4. [ERD](#4-erd)
+5. [API 명세](#5-api-명세)
+6. [주요 기능](#6-주요-기능)
+7. [확장 로드맵](#7-확장-로드맵)
+8. [실행 방법](#8-실행-방법)
+
+---
+
+## 1. 프로젝트 소개
+
+IoT Sensor Platform은 제조 설비·공장 환경에서 발생하는 센서 데이터를 실시간으로 수집하고, 이상 징후 발생 시 자동으로 알림을 생성하는 **IoT 모니터링 백엔드 플랫폼**입니다.
+
+사번(employeeId) 기반의 **승인제 회원 관리**와 6단계 **역할 기반 접근 제어(RBAC)** 를 통해 조직 내 권한을 세밀하게 관리할 수 있습니다.
+Kafka 이벤트 파이프라인으로 대량의 센서 데이터를 안정적으로 처리하며, GCP Cloud Run + Cloud SQL 기반으로 운영됩니다.
+
+<br>
+
+---
+
+## 2. 기술 스택
 
 | 영역 | 기술 |
 |---|---|
 | Language | Java 17 |
 | Framework | Spring Boot 3.x, Spring Security |
 | Auth | JWT (JSON Web Token) |
-| ORM | Spring Data JPA |
+| ORM | Spring Data JPA (Hibernate) |
 | Message Queue | Apache Kafka |
 | Database | PostgreSQL (GCP Cloud SQL) |
+| Cache | Redis *(예정)* |
 | API Docs | Swagger (springdoc-openapi) |
 | Test | JUnit5, Mockito |
-| Deploy | Docker, GCP Cloud Run |
-| CI/CD | GitHub Actions, GCP Artifact Registry |
+| Infra | GCP Cloud Run, GCP Artifact Registry |
+| CI/CD | GitHub Actions, Docker |
 
 <br>
 
-## 🏗 아키텍처
+---
+
+## 3. 시스템 아키텍처
 
 ```mermaid
-graph LR
-    A[센서 시뮬레이터<br/>HTTP POST] --> B[Spring Boot API Server]
-    B --> C{Kafka Producer}
-    C --> D[Kafka Topic<br/>sensor-data]
-    D --> E[Consumer A<br/>DB 적재]
-    D --> F[Consumer B<br/>임계값 감지]
-    E --> G[(PostgreSQL<br/>Cloud SQL)]
-    F --> H[Alert 이벤트 저장]
-    H --> G
-    B --> I[GCP Cloud Run]
-    J[GitHub Actions] --> K[Artifact Registry]
-    K --> I
+graph TD
+    SIM[센서 시뮬레이터\nHTTP POST]:::client
+    CLI[외부 클라이언트\nSwagger / 앱]:::client
+
+    subgraph API["Spring Boot API Server (GCP Cloud Run)"]
+        AUTH[Auth API\nJWT + 승인제 가입]
+        ADMIN[Admin API\n사용자 승인·관리]
+        DEVICE[Device API\n장치 CRUD]
+        SENSOR[Sensor Data API\n데이터 수신]
+        PRODUCER[Kafka Producer]
+    end
+
+    subgraph KAFKA["Apache Kafka"]
+        TOPIC[Topic: sensor-data]
+        CA[Consumer A\nDB 적재]
+        CB[Consumer B\n임계값 감지]
+    end
+
+    DB[(PostgreSQL\nGCP Cloud SQL)]
+
+    GHA[GitHub Actions]
+    AR[GCP Artifact Registry]
+
+    SIM -->|POST /sensor-data| SENSOR
+    CLI --> AUTH
+    CLI --> ADMIN
+    CLI --> DEVICE
+    CLI --> SENSOR
+    SENSOR --> PRODUCER
+    PRODUCER --> TOPIC
+    TOPIC --> CA --> DB
+    TOPIC --> CB -->|Alert 생성| DB
+
+    GHA -->|Docker Build & Push| AR
+    AR -->|Deploy| API
+
+    classDef client fill:#e8f4f8,stroke:#2196F3
 ```
 
 <br>
 
-## ⚙️ CI/CD 파이프라인
+---
+
+## 4. ERD
 
 ```mermaid
-graph LR
-    A[개발자 Push] --> B[GitHub Actions]
-    B --> C[Gradle Build & Test]
-    C --> D[Docker Image Build]
-    D --> E[GCP Artifact Registry Push]
-    E --> F[Cloud Run 자동 배포]
-    F --> G[(Cloud SQL PostgreSQL)]
-```
+erDiagram
+    users {
+        bigint id PK
+        varchar employee_id UK "NOT NULL"
+        varchar email "NULLABLE"
+        varchar password
+        varchar name "NOT NULL"
+        varchar department "NULLABLE"
+        varchar role "SUPER_ADMIN/USER_ADMIN/DEVICE_MANAGER/DATA_INPUTTER/DATA_ANALYST/VIEWER"
+        varchar status "PENDING/ACTIVE/REJECTED"
+        bigint organization_id "NULLABLE"
+        timestamp created_at
+        timestamp updated_at
+    }
 
-**GCP 인증 방식:** Workload Identity Federation (서비스 계정 키 없는 안전한 인증)
+    devices {
+        bigint id PK
+        bigint user_id FK
+        varchar name
+        varchar type "TEMPERATURE/VIBRATION/ILLUMINANCE"
+        varchar location
+        double threshold_value
+        timestamp created_at
+    }
 
-<br>
+    sensor_data {
+        bigint id PK
+        bigint device_id FK
+        double value
+        timestamp recorded_at
+    }
 
-## 📌 주요 기능
+    alerts {
+        bigint id PK
+        bigint device_id FK
+        double sensor_value
+        double threshold_value
+        varchar message
+        timestamp created_at
+    }
 
-### 👤 회원 / 인증
-- 회원가입 / 로그인 (JWT Access Token 발급)
-- Role 기반 접근 제어 (ADMIN / USER)
-- Spring Security 필터 체인 구성
-
-### 🔧 센서 장치 관리
-- 장치 등록 / 수정 / 삭제 / 목록 조회 (CRUD)
-- 장치 타입 분류 (온도 / 진동 / 조도 등)
-- 설치 위치 정보 관리
-
-### 📡 실시간 센서 데이터 수신
-- HTTP POST 로 센서 데이터 수신
-- Kafka Producer 로 `sensor-data` 토픽 발행
-- Consumer A: PostgreSQL 실시간 적재
-- Consumer B: 임계값 초과 시 Alert 자동 생성
-
-### 🚨 알림 (Alert)
-- 장치별 임계값 설정
-- 초과 감지 시 Alert 테이블 자동 적재
-- 알림 목록 조회 API
-
-<br>
-
-## 🔑 기술적 의사결정
-
-### Kafka를 선택한 이유
-단순 HTTP 직접 저장 방식은 대량의 센서 데이터가 동시에 유입될 때 DB 병목이 발생합니다.
-Kafka를 도입하여 수신과 적재를 분리함으로써 유입량 급증 시에도 안정적인 처리가 가능하도록 설계했습니다.
-실제 제조 설비 데이터 수집 프로젝트(FMEA 시스템) 경험을 바탕으로 동일한 구조를 직접 구현했습니다.
-
-### GCP Cloud Run을 선택한 이유
-Kafka Consumer는 항상 실행 중이어야 하지만, API 서버는 트래픽에 따라 유동적으로 운영하는 것이 효율적입니다.
-Cloud Run의 서버리스 특성을 활용해 트래픽 기반 자동 스케일링과 비용 최적화를 동시에 달성했습니다.
-
-### Workload Identity Federation을 선택한 이유
-기존 서비스 계정 JSON 키 방식은 키 유출 시 보안 리스크가 큽니다.
-Workload Identity Federation을 사용하여 GitHub Actions에서 키 없이 GCP 인증을 수행함으로써 보안성을 강화했습니다.
-
-<br>
-
-## 🗂 ERD
-
-```
-User
-├── id (PK)
-├── email (unique)
-├── password (BCrypt)
-├── role (ADMIN / USER)
-└── created_at
-
-Device
-├── id (PK)
-├── user_id (FK → User)
-├── name
-├── type (TEMPERATURE / VIBRATION / ILLUMINANCE)
-├── location
-└── threshold_value  ← 임계값
-
-SensorData
-├── id (PK)
-├── device_id (FK → Device)
-├── value
-└── recorded_at
-
-Alert
-├── id (PK)
-├── device_id (FK → Device)
-├── sensor_value     ← 감지 당시 값
-├── threshold_value  ← 기준 임계값
-├── message
-└── created_at
+    users ||--o{ devices : "등록"
+    devices ||--o{ sensor_data : "수집"
+    devices ||--o{ alerts : "발생"
 ```
 
 <br>
 
-## 🐛 트러블슈팅
+---
 
-> 구현 진행 중 추가 예정
+## 5. API 명세
+
+Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+
+### Auth
+
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| POST | `/auth/register` | 가입 신청 (status=PENDING) | 불필요 |
+| POST | `/auth/login` | 로그인 — ACTIVE 상태만 허용 | 불필요 |
+
+### Admin `USER_ADMIN 이상`
+
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| GET | `/admin/users` | 전체 사용자 목록 | JWT |
+| GET | `/admin/users/pending` | 승인 대기 목록 | JWT |
+| PATCH | `/admin/users/{id}/approve` | 가입 승인 → ACTIVE | JWT |
+| PATCH | `/admin/users/{id}/reject` | 가입 반려 → REJECTED | JWT |
+
+### Device `인증 필요`
+
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| GET | `/devices` | 내 장치 목록 | JWT |
+| POST | `/devices` | 장치 등록 | JWT |
+| PUT | `/devices/{id}` | 장치 수정 | JWT |
+| DELETE | `/devices/{id}` | 장치 삭제 | JWT |
+
+### Sensor Data
+
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| POST | `/sensor-data` | 센서 데이터 수신 (장치 → 서버) | 불필요 |
+| GET | `/sensor-data` | 전체 센서 데이터 조회 | JWT |
+| GET | `/sensor-data/{deviceId}` | 장치별 센서 데이터 조회 | JWT |
+
+### Alert
+
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| GET | `/alerts` | 전체 알림 조회 | JWT |
+| GET | `/alerts/{deviceId}` | 장치별 알림 조회 | JWT |
+
+### Simulator `인증 필요`
+
+> ⚠️ 시뮬레이터는 포트폴리오 시연 목적의 테스트용 기능입니다. 실제 IoT 센서의 동작을 재현하기 위해 랜덤 센서값을 자동 생성·전송하며, 프로덕션 환경에서의 사용을 목적으로 하지 않습니다.
+
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| GET | `/simulator/devices` | 시뮬레이션 가능한 장치 목록 | JWT |
+| POST | `/simulator/start` | 데이터 자동 생성 시작 | JWT |
+| POST | `/simulator/stop` | 데이터 자동 생성 중단 | JWT |
 
 <br>
 
-## 🚀 로컬 실행 방법
+---
+
+## 6. 주요 기능
+
+### 👤 승인제 사용자 관리
+- **사번(employeeId)** 기반 가입 신청 — 가입 즉시 `PENDING` 상태로 저장
+- `USER_ADMIN` 이상의 관리자가 승인(`ACTIVE`) 또는 반려(`REJECTED`) 처리
+- `PENDING` / `REJECTED` 상태에서 로그인 시 `DisabledException`으로 차단
+- **6단계 ROLE 기반 접근 제어**: `SUPER_ADMIN` → `USER_ADMIN` → `DEVICE_MANAGER` → `DATA_INPUTTER` → `DATA_ANALYST` → `VIEWER`
+- 앱 최초 기동 시 `SUPER_ADMIN` 계정 자동 생성 (`ADMIN001`)
+
+### 📡 Kafka 기반 이벤트 파이프라인
+- 센서 데이터 수신 → Kafka `sensor-data` 토픽 발행
+- **Consumer A**: PostgreSQL 실시간 적재
+- **Consumer B**: 임계값 초과 감지 → Alert 자동 생성
+- 운영 환경(GCP Cloud Run)에서는 Kafka 비활성화 — 직접 저장 방식 사용
+
+### 🤖 IoT 시뮬레이터 *(개발 예정 — 포트폴리오 테스트용)*
+- 등록된 장치 선택 후 전송 간격·횟수 설정
+- 랜덤 센서값 자동 생성 및 `/sensor-data` 엔드포인트로 자동 전송
+- 시뮬레이션 진행 상태 실시간 로그 출력
+- 실제 IoT 센서 환경 재현을 위한 포트폴리오 전용 테스트 기능
+
+### 📊 대시보드 *(개발 예정)*
+- 장치별 센서값 라인 차트 시각화
+- 알림 발생 현황 바 차트
+- JWT 인증 기반 접근 제어
+
+<br>
+
+---
+
+## 7. 확장 로드맵
+
+### ✅ 완료
+- JWT 인증 / 인가
+- 사번 기반 로그인 + 승인제 가입
+- 6단계 ROLE 기반 접근 제어
+- Kafka 이벤트 파이프라인 (수신 → 적재 → Alert)
+- GCP Cloud Run 배포 + GitHub Actions CI/CD
+
+### 🔜 예정
+- **IoT 시뮬레이터 페이지** — 장치 선택 후 랜덤 센서값 자동 생성·전송
+- **대시보드 페이지** — 장치별 센서값 라인 차트 / 알림 현황 바 차트
+- **Redis RefreshToken** 저장소 — 토큰 갱신 및 로그아웃 처리
+- **GCP VM에 Kafka 운영** — Cloud Run 외부 전용 VM 인스턴스에서 Kafka 상시 운영
+- **BigQuery + Looker Studio** — 대용량 센서 데이터 분석 및 시각화
+- **작업자×환경 vs 품질 상관관계 분석 API** — FMEA 도메인 지식 기반 분석
+- **AWS 이전 아키텍처 설계 문서** — 멀티 클라우드 전환 시나리오
+
+```
+현재 아키텍처
+Kafka → Consumer A → PostgreSQL (실시간 조회)
+
+확장 계획
+Kafka → Consumer A → PostgreSQL   (실시간 OLTP)
+       → Consumer B → BigQuery     (대용량 OLAP)
+                           ↓
+                     Looker Studio  (분석 대시보드)
+```
+
+<br>
+
+---
+
+## 8. 실행 방법
 
 ### 사전 요구사항
 - Java 17
-- Docker & Docker Compose
-- Gradle
+- Docker & Docker Compose (PostgreSQL, Kafka 로컬 실행)
 
-### 실행 순서
+### 로컬 실행
 
 ```bash
 # 1. 레포 클론
-git clone https://github.com/{your-username}/iot-sensor-platform.git
+git clone https://github.com/YEONJI-P/iot-sensor-platform.git
 cd iot-sensor-platform
 
-# 2. Kafka 실행 (Docker)
+# 2. PostgreSQL + Kafka 실행
 docker-compose up -d
 
-# 3. 환경변수 설정
-cp .env.example .env
-# .env 파일에 DB 정보 입력
-
-# 4. 애플리케이션 실행
-./gradlew bootRun --args='--spring.profiles.active=local'
+# 3. 애플리케이션 실행
+./gradlew bootRun
 ```
 
-### API 명세 확인
+### Swagger UI
+
 ```
 http://localhost:8080/swagger-ui/index.html
 ```
 
-<br>
+### 환경변수
 
-## 📈 향후 확장 계획
+| 변수명 | 설명 | 기본값 |
+|---|---|---|
+| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/iot_sensor_db_v2` |
+| `DB_USERNAME` | DB 사용자명 | `postgres` |
+| `DB_PASSWORD` | DB 비밀번호 | `postgres` |
+| `JWT_SECRET` | JWT 서명 키 (32자 이상) | 개발용 기본값 |
+| `KAFKA_BOOTSTRAP_SERVERS` | Kafka 브로커 주소 | `localhost:9092` |
 
-```
-현재 아키텍처
-Kafka → Consumer A → PostgreSQL (실시간 조회용)
-
-확장 계획
-Kafka → Consumer A → PostgreSQL     (실시간 모니터링)
-      → Consumer B → BigQuery        (대용량 분석/집계)
-                         ↓
-                   Looker Studio      (시각화 대시보드)
-```
-
-Kafka의 컨슈머 그룹 독립성을 활용하여 동일 토픽을 OLTP(PostgreSQL)와 OLAP(BigQuery) 저장소에 동시 적재하는 Lambda Architecture로 확장할 예정입니다.
-
-<br>
-
-## 📁 프로젝트 구조
-
-```
-src/main/java/com/bbg/iot_sensor_platform
-├── auth/                  # JWT, Security 설정
-├── user/                  # 회원 도메인
-├── device/                # 센서 장치 도메인
-├── sensordata/            # 센서 데이터 수신/적재
-├── alert/                 # 알림 도메인
-├── kafka/                 # Producer / Consumer
-└── global/
-    ├── exception/         # 통합 예외처리
-    └── config/            # 공통 설정
-```
+> 초기 관리자 계정: `employeeId=ADMIN001` / `password=admin1234!`
