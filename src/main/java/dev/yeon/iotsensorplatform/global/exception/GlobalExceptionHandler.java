@@ -24,4 +24,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<String> handleConflict(IllegalStateException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
     }
+
+
 }

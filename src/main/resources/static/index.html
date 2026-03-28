@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>IoT Sensor Platform</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+  <style>
+    body { background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    .navbar { background: #1e293b !important; border-bottom: 1px solid #334155; }
+    .card { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; }
+    .form-control {
+      background: #0f172a; border: 1px solid #475569; color: #e2e8f0;
+    }
+    .form-control:focus {
+      background: #0f172a; color: #e2e8f0;
+      border-color: #3b82f6; box-shadow: 0 0 0 0.2rem rgba(59,130,246,.25);
+    }
+    .form-control::placeholder { color: #64748b; }
+    .page-link-card {
+      background: #0f172a; border: 1px solid #334155; border-radius: 12px;
+      padding: 1.2rem 1.5rem; text-decoration: none; color: #e2e8f0;
+      display: block; transition: border-color .2s, background .2s;
+    }
+    .page-link-card:hover { border-color: #3b82f6; background: #1e293b; color: #e2e8f0; }
+    .page-link-card .icon { font-size: 2rem; }
+    .role-badge { font-size: 0.75rem; letter-spacing: .05em; }
+    #loginSection, #homeSection { min-height: 85vh; }
+  </style>
+</head>
+<body>
+
+<!-- ── Navbar ── -->
+<nav class="navbar navbar-dark px-4 py-2">
+  <span class="navbar-brand fw-bold">🏭 IoT Sensor Platform</span>
+  <div id="navRight" class="d-none d-flex gap-2 align-items-center">
+    <span id="navEmployeeId" class="text-secondary small"></span>
+    <span id="navRoleBadge" class="badge role-badge bg-secondary"></span>
+    <button onclick="logout()" class="btn btn-sm btn-outline-danger">로그아웃</button>
+  </div>
+</nav>
+
+<!-- ── 로그인 섹션 ── -->
+<div id="loginSection" class="d-flex justify-content-center align-items-center">
+  <div class="card p-4" style="width:360px;">
+    <h5 class="mb-1 text-center">로그인</h5>
+    <p class="text-secondary small text-center mb-4">사원번호와 비밀번호를 입력하세요</p>
+    <div class="mb-3">
+      <label class="form-label text-secondary small">사원번호</label>
+      <input id="loginEmployeeId" type="text" class="form-control" placeholder="예: DM001"/>
+    </div>
+    <div class="mb-3">
+      <label class="form-label text-secondary small">비밀번호</label>
+      <input id="loginPassword" type="password" class="form-control" placeholder="비밀번호 입력"/>
+    </div>
+    <div id="loginError" class="text-danger small mb-2 d-none"></div>
+    <button onclick="login()" class="btn btn-primary w-100">로그인</button>
+  </div>
+</div>
+
+<!-- ── 홈 섹션 (로그인 후) ── -->
+<div id="homeSection" class="d-none container py-5">
+  <div class="mb-5">
+    <h4 class="fw-bold mb-1">안녕하세요 👋</h4>
+    <p class="text-secondary">접근 가능한 페이지를 선택하세요.</p>
+  </div>
+
+  <div id="pageLinks" class="row g-3 mb-5"></div>
+
+  <hr class="border-secondary my-4"/>
+
+  <!-- Swagger -->
+  <div class="mb-2 text-secondary small text-uppercase fw-semibold" style="letter-spacing:.08em;">API 문서</div>
+  <a href="/swagger-ui/index.html" target="_blank" class="page-link-card d-inline-flex align-items-center gap-3" style="width:auto; padding:.8rem 1.2rem;">
+    <span class="icon">📄</span>
+    <div>
+      <div class="fw-semibold">Swagger UI</div>
+      <div class="text-secondary small">REST API 명세 및 테스트</div>
+    </div>
+  </a>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  /* ── JWT payload 디코딩 ── */
+  function decodeJwt(token) {
+    try {
+      const payload = token.split('.')[1];
+      return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    } catch { return null; }
+  }
+
+  /* ── role → 접근 가능 페이지 정의 ── */
+  const PAGE_MAP = {
+    SUPER_ADMIN:    [],
+    USER_ADMIN:     [],
+    DEVICE_MANAGER: [
+      { href: '/simulator.html', icon: '🤖', title: '시뮬레이터', desc: '센서 데이터 자동 전송 시뮬레이션' },
+      { href: '/dashboard.html', icon: '📊', title: '대시보드',   desc: '센서 데이터 및 알림 시각화' }
+    ],
+    DATA_INPUTTER: [
+      { href: '/simulator.html', icon: '🤖', title: '시뮬레이터', desc: '센서 데이터 자동 전송 시뮬레이션' }
+    ],
+    DATA_ANALYST: [
+      { href: '/dashboard.html', icon: '📊', title: '대시보드', desc: '센서 데이터 및 알림 시각화' }
+    ],
+    VIEWER: [
+      { href: '/dashboard.html', icon: '📊', title: '대시보드', desc: '센서 데이터 및 알림 시각화' }
+    ]
+  };
+
+  const ROLE_LABEL = {
+    SUPER_ADMIN:    { text: 'SUPER ADMIN',    bg: 'bg-danger' },
+    USER_ADMIN:     { text: 'USER ADMIN',     bg: 'bg-warning text-dark' },
+    DEVICE_MANAGER: { text: 'DEVICE MANAGER', bg: 'bg-info text-dark' },
+    DATA_INPUTTER:  { text: 'DATA INPUTTER',  bg: 'bg-primary' },
+    DATA_ANALYST:   { text: 'DATA ANALYST',   bg: 'bg-success' },
+    VIEWER:         { text: 'VIEWER',         bg: 'bg-secondary' }
+  };
+
+  /* ── 초기화 ── */
+  window.onload = () => {
+    const token = localStorage.getItem('jwt_token');
+    if (token) showHome(token);
+    else showLogin();
+  };
+
+  function showLogin() {
+    document.getElementById('loginSection').classList.remove('d-none');
+    document.getElementById('homeSection').classList.add('d-none');
+    document.getElementById('navRight').classList.add('d-none');
+  }
+
+  function showHome(token) {
+    const payload = decodeJwt(token);
+    if (!payload) { logout(); return; }
+
+    const role = payload.role;
+    const employeeId = payload.sub;
+
+    // 네비게이션 바
+    document.getElementById('navEmployeeId').textContent = employeeId;
+    const rl = ROLE_LABEL[role] || { text: role, bg: 'bg-secondary' };
+    const roleBadge = document.getElementById('navRoleBadge');
+    roleBadge.textContent = rl.text;
+    roleBadge.className = `badge role-badge ${rl.bg}`;
+    document.getElementById('navRight').classList.remove('d-none');
+
+    // 페이지 링크
+    const pages = PAGE_MAP[role] || [];
+    const container = document.getElementById('pageLinks');
+
+    if (pages.length === 0) {
+      // 관리자 역할 — Swagger만 사용
+      container.innerHTML = `
+        <div class="col-12">
+          <div class="alert alert-warning border-0" style="background:#451a03; color:#fde68a;">
+            관리자 계정입니다. Swagger UI를 통해 Admin API를 사용하세요.
+          </div>
+        </div>`;
+    } else {
+      container.innerHTML = pages.map(p => `
+        <div class="col-md-4 col-sm-6">
+          <a href="${p.href}" class="page-link-card h-100 d-flex align-items-center gap-3">
+            <span class="icon">${p.icon}</span>
+            <div>
+              <div class="fw-semibold">${p.title}</div>
+              <div class="text-secondary small">${p.desc}</div>
+            </div>
+          </a>
+        </div>`
+      ).join('');
+    }
+
+    document.getElementById('loginSection').classList.add('d-none');
+    document.getElementById('homeSection').classList.remove('d-none');
+  }
+
+  /* ── 로그인 ── */
+  async function login() {
+    const employeeId = document.getElementById('loginEmployeeId').value.trim();
+    const password   = document.getElementById('loginPassword').value;
+    const errEl = document.getElementById('loginError');
+    errEl.classList.add('d-none');
+
+    try {
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, password })
+      });
+      if (!res.ok) {
+        errEl.textContent = await res.text();
+        errEl.classList.remove('d-none');
+        return;
+      }
+      const token = await res.text();
+      localStorage.setItem('jwt_token', token);
+      showHome(token);
+    } catch {
+      errEl.textContent = '서버 연결 오류';
+      errEl.classList.remove('d-none');
+    }
+  }
+
+  /* ── 로그아웃 ── */
+  function logout() {
+    localStorage.removeItem('jwt_token');
+    showLogin();
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !document.getElementById('loginSection').classList.contains('d-none')) login();
+  });
+</script>
+</body>
+</html>

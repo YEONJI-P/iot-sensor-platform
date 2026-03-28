@@ -75,8 +75,9 @@ public class SimulatorService {
                 sensorDataService.receive(new SensorDataRequest(device.getId(), value));
                 task.incrementCompleted();
 
-                log.debug("시뮬레이터 전송 [{}/{}] deviceId={} value={:.2f}",
-                        task.getCompletedCount().get(), count, device.getId(), value);
+                log.debug("시뮬레이터 전송 [{}/{}] deviceId={} value={}",
+                        task.getCompletedCount().get(), count, device.getId(),
+                        String.format("%.2f", value));
 
                 if (i < count - 1) {
                     Thread.sleep(intervalSeconds * 1000L);
@@ -87,6 +88,9 @@ public class SimulatorService {
             log.info("시뮬레이터 인터럽트 (deviceId: {})", device.getId());
         } finally {
             task.markDone();
+            // 완료 후 일정 시간 뒤 Map에서 제거 (status 조회 여유시간 30초)
+            scheduler.schedule(() -> taskMap.remove(device.getId()),
+                    30, TimeUnit.SECONDS);
         }
     }
 
