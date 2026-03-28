@@ -42,7 +42,8 @@
         <div class="fs-1 mb-2">🚫</div>
         <h6 class="text-white mb-1">접근 권한 없음</h6>
         <p class="text-secondary small mb-3">해당 기능에 접근 권한이 없습니다.</p>
-        <button type="button" class="btn btn-outline-secondary btn-sm px-4" data-bs-dismiss="modal">확인</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm px-4"
+                onclick="location.href='/index.html'">확인</button>
       </div>
     </div>
   </div>
@@ -51,34 +52,14 @@
 <!-- ── Navbar ── -->
 <nav class="navbar navbar-dark px-4 py-2">
   <a href="/index.html" class="navbar-brand fw-bold text-decoration-none">🏭 IoT Simulator</a>
-  <div id="navRight" class="d-none d-flex gap-2 align-items-center">
+  <div class="d-flex gap-2 align-items-center">
     <a href="/dashboard.html" class="btn btn-sm btn-outline-info">📊 대시보드</a>
     <button onclick="logout()" class="btn btn-sm btn-outline-danger">로그아웃</button>
   </div>
 </nav>
 
-<!-- ── 로그인 섹션 ── -->
-<div id="loginSection" class="d-flex justify-content-center align-items-center" style="min-height:85vh;">
-  <div class="card p-4" style="width:360px;">
-    <h5 class="mb-4 text-center">로그인</h5>
-    <div class="mb-3">
-      <label class="form-label text-secondary small">사원번호</label>
-      <input id="loginEmployeeId" type="text" class="form-control" placeholder="예: DM001"/>
-    </div>
-    <div class="mb-3">
-      <label class="form-label text-secondary small">비밀번호</label>
-      <input id="loginPassword" type="password" class="form-control" placeholder="비밀번호 입력"/>
-    </div>
-    <div id="loginError" class="text-danger small mb-2 d-none"></div>
-    <button onclick="login()" class="btn btn-primary w-100">로그인</button>
-    <div class="text-center mt-3">
-      <a href="/index.html" class="text-secondary small">← 홈으로</a>
-    </div>
-  </div>
-</div>
-
 <!-- ── 시뮬레이터 섹션 ── -->
-<div id="simulatorSection" class="container py-4 d-none">
+<div class="container py-4">
   <div class="row g-4">
 
     <!-- 설정 패널 -->
@@ -129,6 +110,11 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+  /* ── 초기 인증 확인 ── */
+  if (!localStorage.getItem('jwt_token')) {
+    location.href = '/index.html';
+  }
+
   /* ── 공통 fetch 함수 ── */
   async function apiFetch(url, options = {}) {
     const token = localStorage.getItem('jwt_token');
@@ -142,9 +128,8 @@
     });
 
     if (res.status === 401) {
-      alert('세션이 만료됐습니다. 다시 로그인해주세요.');
       localStorage.removeItem('jwt_token');
-      showLogin();
+      location.href = '/index.html';
       return null;
     }
 
@@ -162,54 +147,11 @@
 
   /* ── 초기화 ── */
   window.onload = () => {
-    if (localStorage.getItem('jwt_token')) showSimulator();
-    else showLogin();
+    loadDevices();
   };
-
-  /* ── 화면 전환 ── */
-  function showLogin() {
-    stopPolling();
-    document.getElementById('loginSection').classList.remove('d-none');
-    document.getElementById('simulatorSection').classList.add('d-none');
-    document.getElementById('navRight').classList.add('d-none');
-  }
-
-  async function showSimulator() {
-    document.getElementById('loginSection').classList.add('d-none');
-    document.getElementById('simulatorSection').classList.remove('d-none');
-    document.getElementById('navRight').classList.remove('d-none');
-    await loadDevices();
-  }
-
-  /* ── 로그인 (공개 API — apiFetch 불필요) ── */
-  async function login() {
-    const employeeId = document.getElementById('loginEmployeeId').value.trim();
-    const password   = document.getElementById('loginPassword').value;
-    const errEl = document.getElementById('loginError');
-    errEl.classList.add('d-none');
-
-    try {
-      const res = await fetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, password })
-      });
-      if (!res.ok) {
-        errEl.textContent = await res.text();
-        errEl.classList.remove('d-none');
-        return;
-      }
-      localStorage.setItem('jwt_token', await res.text());
-      showSimulator();
-    } catch {
-      errEl.textContent = '서버 연결 오류';
-      errEl.classList.remove('d-none');
-    }
-  }
 
   /* ── 로그아웃 ── */
   function logout() {
-    stopPolling();
     localStorage.removeItem('jwt_token');
     location.href = '/index.html';
   }
@@ -353,10 +295,6 @@
   function now() {
     return new Date().toLocaleTimeString('ko-KR', { hour12: false });
   }
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !document.getElementById('loginSection').classList.contains('d-none')) login();
-  });
 </script>
 </body>
 </html>

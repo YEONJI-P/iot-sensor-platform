@@ -38,7 +38,8 @@
         <div class="fs-1 mb-2">🚫</div>
         <h6 class="text-white mb-1">접근 권한 없음</h6>
         <p class="text-secondary small mb-3">해당 기능에 접근 권한이 없습니다.</p>
-        <button type="button" class="btn btn-outline-secondary btn-sm px-4" data-bs-dismiss="modal">확인</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm px-4"
+                onclick="location.href='/index.html'">확인</button>
       </div>
     </div>
   </div>
@@ -137,7 +138,7 @@
   /* ── 공통 fetch 함수 ── */
   async function apiFetch(url, options = {}) {
     const token = localStorage.getItem('jwt_token');
-    if (!token) { location.href = '/simulator.html'; return null; }
+    if (!token) { location.href = '/index.html'; return null; }
 
     const res = await fetch(url, {
       ...options,
@@ -150,7 +151,7 @@
 
     if (res.status === 401) {
       localStorage.removeItem('jwt_token');
-      location.href = '/simulator.html';
+      location.href = '/index.html';
       return null;
     }
 
@@ -169,7 +170,7 @@
   }
 
   /* ── 초기 JWT 확인 ── */
-  if (!localStorage.getItem('jwt_token')) { location.href = '/simulator.html'; }
+  if (!localStorage.getItem('jwt_token')) { location.href = '/index.html'; }
 
   /* ── Chart.js 인스턴스 ── */
   let sensorChart = null;
