@@ -16,6 +16,7 @@ public class UserResponse {
     private final String email;
     private final String department;
     private final Long organizationId;
+    private final String organizationName;
     private final Role role;
     private final UserStatus status;
     private final LocalDateTime createdAt;
@@ -27,7 +28,8 @@ public class UserResponse {
         this.name = user.getName();
         this.email = user.getEmail();
         this.department = user.getDepartment();
-        this.organizationId = user.getOrganizationId();
+        this.organizationId = user.getOrganization() != null ? user.getOrganization().getId() : null;
+        this.organizationName = user.getOrganization() != null ? user.getOrganization().getName() : null;
         this.role = user.getRole();
         this.status = user.getStatus();
         this.createdAt = user.getCreatedAt();

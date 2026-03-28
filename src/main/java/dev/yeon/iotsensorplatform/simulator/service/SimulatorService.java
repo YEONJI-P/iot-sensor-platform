@@ -2,10 +2,13 @@ package dev.yeon.iotsensorplatform.simulator.service;
 
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
+import dev.yeon.iotsensorplatform.global.service.AccessControlService;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataRequest;
 import dev.yeon.iotsensorplatform.sensordata.service.SensorDataService;
 import dev.yeon.iotsensorplatform.simulator.dto.SimulatorStartRequest;
 import dev.yeon.iotsensorplatform.simulator.dto.SimulatorStatusResponse;
+import dev.yeon.iotsensorplatform.user.entity.User;
+import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +27,9 @@ public class SimulatorService {
     private static final int MAX_COUNT = 100;
 
     private final DeviceRepository deviceRepository;
+    private final UserRepository userRepository;
     private final SensorDataService sensorDataService;
+    private final AccessControlService accessControlService;
 
     private final ConcurrentHashMap<Long, SimulatorTask> taskMap = new ConcurrentHashMap<>();
     private final ExecutorService taskExecutor = Executors.newCachedThreadPool();
@@ -34,22 +39,18 @@ public class SimulatorService {
     public void start(String employeeId, SimulatorStartRequest request) {
         Long deviceId = request.getDeviceId();
 
-        // 이미 실행 중인 경우 409
         SimulatorTask existing = taskMap.get(deviceId);
         if (existing != null && existing.isRunning()) {
             throw new IllegalStateException("이미 실행 중인 장치예요 (deviceId: " + deviceId + ")");
         }
 
-        // 유효성 강제 적용
         int count = Math.max(1, Math.min(request.getCount(), MAX_COUNT));
         int intervalSeconds = Math.max(1, request.getIntervalSeconds());
 
+        User user = getUser(employeeId);
         Device device = deviceRepository.findById(deviceId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 장치예요"));
-
-        if (!device.getUser().getEmployeeId().equals(employeeId)) {
-            throw new IllegalArgumentException("본인 장치만 시뮬레이션할 수 있어요");
-        }
+        accessControlService.assertCanAccessDevice(user, device);
 
         SimulatorTask task = new SimulatorTask(count);
         taskMap.put(deviceId, task);
@@ -57,7 +58,6 @@ public class SimulatorService {
         Future<?> future = taskExecutor.submit(() -> runTask(task, device, intervalSeconds, count));
         task.setFuture(future);
 
-        // 10분 초과 시 강제 종료
         scheduler.schedule(() -> {
             if (task.isRunning()) {
                 log.warn("시뮬레이터 최대 실행 시간(10분) 초과 — 강제 종료 (deviceId: {})", deviceId);
@@ -88,19 +88,15 @@ public class SimulatorService {
             log.info("시뮬레이터 인터럽트 (deviceId: {})", device.getId());
         } finally {
             task.markDone();
-            // 완료 후 일정 시간 뒤 Map에서 제거 (status 조회 여유시간 30초)
-            scheduler.schedule(() -> taskMap.remove(device.getId()),
-                    30, TimeUnit.SECONDS);
+            scheduler.schedule(() -> taskMap.remove(device.getId()), 30, TimeUnit.SECONDS);
         }
     }
 
-    private double generateValue(double threshold) {
-        if (threshold <= 0) threshold = 100.0;
+    private double generateValue(Double threshold) {
+        if (threshold == null || threshold <= 0) threshold = 100.0;
         if (random.nextDouble() < 0.8) {
-            // 정상 범위: 0 ~ threshold * 95%
             return Math.round(random.nextDouble() * threshold * 0.95 * 10.0) / 10.0;
         } else {
-            // 임계값 초과: threshold * 101% ~ threshold * 150%
             return Math.round((threshold * 1.01 + random.nextDouble() * threshold * 0.49) * 10.0) / 10.0;
         }
     }
@@ -126,7 +122,13 @@ public class SimulatorService {
     }
 
     public List<Device> getDevices(String employeeId) {
-        return deviceRepository.findAllByUserEmployeeId(employeeId);
+        User user = getUser(employeeId);
+        return accessControlService.getAccessibleDevices(user);
+    }
+
+    private User getUser(String employeeId) {
+        return userRepository.findByEmployeeId(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원번호예요"));
     }
 
     @PreDestroy

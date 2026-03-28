@@ -1,8 +1,5 @@
 package dev.yeon.iotsensorplatform.auth.dto;
 
-import dev.yeon.iotsensorplatform.user.entity.Role;
-import dev.yeon.iotsensorplatform.user.entity.User;
-import dev.yeon.iotsensorplatform.user.entity.UserStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
@@ -35,17 +32,4 @@ public class RegisterRequest {
 
     @Schema(description = "조직 ID (선택)", example = "1")
     private Long organizationId;
-
-    public User toEntity(String encodedPassword) {
-        return User.builder()
-                .employeeId(this.employeeId)
-                .name(this.name)
-                .email(this.email)
-                .password(encodedPassword)
-                .department(this.department)
-                .organizationId(this.organizationId)
-                .role(Role.VIEWER)
-                .status(UserStatus.PENDING)
-                .build();
-    }
 }

@@ -14,17 +14,18 @@ public class DeviceResponse {
     private Device.DeviceType deviceType;
     private String location;
     private Double thresholdValue;
-    private Long userId;
+    private Long groupId;
+    private String groupName;
 
-    public static DeviceResponse from(Device device){
+    public static DeviceResponse from(Device device) {
         return new DeviceResponse(
                 device.getId(),
                 device.getName(),
                 device.getType(),
                 device.getLocation(),
                 device.getThresholdValue(),
-                device.getUser().getId()
+                device.getGroup() != null ? device.getGroup().getId() : null,
+                device.getGroup() != null ? device.getGroup().getName() : null
         );
     }
-
 }

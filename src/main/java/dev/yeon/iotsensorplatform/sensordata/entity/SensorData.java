@@ -1,12 +1,14 @@
 package dev.yeon.iotsensorplatform.sensordata.entity;
 
 import dev.yeon.iotsensorplatform.device.entity.Device;
+import dev.yeon.iotsensorplatform.user.entity.User;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -14,20 +16,38 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
 public class SensorData {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "device_id")
     private Device device;
+
     private Double value;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private InputType inputType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
+    private User createdBy;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime recordedAt;
 
     @Builder
-    public SensorData(Device device, Double value) {
+    public SensorData(Device device, Double value, InputType inputType, User createdBy) {
         this.device = device;
         this.value = value;
+        this.inputType = inputType != null ? inputType : InputType.AUTO;
+        this.createdBy = createdBy;
+    }
+
+    public enum InputType {
+        AUTO, MANUAL
     }
 }

@@ -11,11 +11,7 @@ import java.util.List;
 public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     List<Alert> findAllByDeviceIdOrderByCreatedAtDesc(Long deviceId);
-
-    List<Alert> findAllByDeviceUserEmployeeIdOrderByCreatedAtDesc(String employeeId);
-
-    // 장치별 최근 N건
-    List<Alert> findTopByDeviceIdOrderByCreatedAtDesc(Long deviceId);
+    List<Alert> findAllByDeviceIdInOrderByCreatedAtDesc(List<Long> deviceIds);
 
     @Query(value = """
             SELECT *
@@ -26,7 +22,6 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
             """, nativeQuery = true)
     List<Alert> findRecentByDeviceId(@Param("deviceId") Long deviceId, @Param("limit") int limit);
 
-    // 최근 N일 일별 알림 건수
     @Query(value = """
             SELECT to_char(created_at, 'YYYY-MM-DD') AS date,
                    COUNT(*)                          AS count

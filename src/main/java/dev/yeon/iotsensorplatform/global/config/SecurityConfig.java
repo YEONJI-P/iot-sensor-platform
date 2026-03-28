@@ -41,7 +41,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/sensor-data")
                         .permitAll()
 
-                        // 어드민 — SUPER_ADMIN, USER_ADMIN
+                        // 조직 관리 — SUPER_ADMIN만
+                        .requestMatchers("/admin/organizations/**")
+                        .hasRole("SUPER_ADMIN")
+
+                        // 그룹 관리 — SUPER_ADMIN, USER_ADMIN
+                        .requestMatchers("/admin/groups/**")
+                        .hasAnyRole("SUPER_ADMIN", "USER_ADMIN")
+
+                        // 기존 어드민 — SUPER_ADMIN, USER_ADMIN
                         .requestMatchers("/admin/**")
                         .hasAnyRole("SUPER_ADMIN", "USER_ADMIN")
 

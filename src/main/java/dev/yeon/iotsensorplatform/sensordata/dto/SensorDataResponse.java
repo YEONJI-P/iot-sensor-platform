@@ -1,7 +1,6 @@
 package dev.yeon.iotsensorplatform.sensordata.dto;
 
 import dev.yeon.iotsensorplatform.sensordata.entity.SensorData;
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,15 +14,18 @@ public class SensorDataResponse {
     private Long id;
     private Long deviceId;
     private Double value;
+    private SensorData.InputType inputType;
+    private String createdByEmployeeId;
     private LocalDateTime recordedAt;
 
-    public static SensorDataResponse from(SensorData sensorData){
+    public static SensorDataResponse from(SensorData data) {
         return new SensorDataResponse(
-                sensorData.getId(),
-                sensorData.getDevice().getId(),
-                sensorData.getValue(),
-                sensorData.getRecordedAt()
+                data.getId(),
+                data.getDevice().getId(),
+                data.getValue(),
+                data.getInputType(),
+                data.getCreatedBy() != null ? data.getCreatedBy().getEmployeeId() : null,
+                data.getRecordedAt()
         );
     }
-
 }

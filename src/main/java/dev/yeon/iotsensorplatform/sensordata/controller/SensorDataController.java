@@ -1,6 +1,5 @@
 package dev.yeon.iotsensorplatform.sensordata.controller;
 
-
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataRequest;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataResponse;
 import dev.yeon.iotsensorplatform.sensordata.service.SensorDataService;
@@ -15,24 +14,28 @@ import java.util.List;
 @RequestMapping("/sensor-data")
 @RequiredArgsConstructor
 public class SensorDataController {
+
     private final SensorDataService sensorDataService;
 
-    // 센서종단 데이터 > AuthenticationPrincipal 미적용
-    // IP 화이트리스트, API Key 등으로 보안 처리
+    // 외부 장치 또는 수동 입력 — employeeId가 있으면 MANUAL, 없으면 AUTO
     @PostMapping
-    public ResponseEntity<String> receive(@RequestBody SensorDataRequest sensorDataRequest) {
-        sensorDataService.receive(sensorDataRequest);
+    public ResponseEntity<String> receive(
+            @RequestBody SensorDataRequest request,
+            @AuthenticationPrincipal String employeeId) {
+        sensorDataService.receive(request, employeeId);
         return ResponseEntity.ok("메시지 발행 완료");
     }
 
     @GetMapping
-    public ResponseEntity<List<SensorDataResponse>> getAllSensorData(@AuthenticationPrincipal String employeeId){
+    public ResponseEntity<List<SensorDataResponse>> getAllSensorData(
+            @AuthenticationPrincipal String employeeId) {
         return ResponseEntity.ok(sensorDataService.getAllSensorData(employeeId));
     }
 
     @GetMapping("/{deviceId}")
-    public ResponseEntity<List<SensorDataResponse>> getAllSensorDataByDeviceId(@PathVariable Long deviceId, @AuthenticationPrincipal String employeeId){
+    public ResponseEntity<List<SensorDataResponse>> getAllSensorDataByDeviceId(
+            @PathVariable Long deviceId,
+            @AuthenticationPrincipal String employeeId) {
         return ResponseEntity.ok(sensorDataService.getAllSensorDataByDeviceId(employeeId, deviceId));
     }
-
 }
