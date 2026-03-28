@@ -71,8 +71,6 @@ public class DataInitializer implements ApplicationRunner {
         orgGroupRepository.deleteAll();
         userRepository.deleteAll();
         organizationRepository.deleteAll();
-        entityManager.flush();
-        entityManager.clear();
         log.info("전체 데이터 삭제 완료");
     }
 
@@ -130,7 +128,7 @@ public class DataInitializer implements ApplicationRunner {
         deviceRepository.save(Device.builder()
                 .group(group2).name("압력센서1")
                 .type(Device.DeviceType.PRESSURE)
-                .thresholdValue(60.0).location("2구역A").build());
+                .thresholdValue(1.0).location("2구역A").build());
 
         log.info("초기 데이터 생성 완료 — 조직: {}, 그룹: 2, 사용자: 7, 장치: 3", org.getName());
     }

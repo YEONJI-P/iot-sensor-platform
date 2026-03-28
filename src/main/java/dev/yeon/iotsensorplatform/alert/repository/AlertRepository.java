@@ -15,7 +15,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     @Query(value = """
             SELECT *
-            FROM alerts
+            FROM alert
             WHERE device_id = :deviceId
             ORDER BY created_at DESC
             LIMIT :limit
@@ -25,7 +25,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     @Query(value = """
             SELECT to_char(created_at, 'YYYY-MM-DD') AS date,
                    COUNT(*)                          AS count
-            FROM alerts
+            FROM alert
             WHERE device_id = :deviceId
               AND created_at >= :startDate
             GROUP BY to_char(created_at, 'YYYY-MM-DD')
