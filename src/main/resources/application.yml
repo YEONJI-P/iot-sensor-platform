@@ -29,3 +29,7 @@ jwt:
   secret-key: ${JWT_SECRET:iot-sensor-platform-jwt-secret-key-must-be-at-least-32}
   expiration: 3600000
 
+app:
+  data-initializer:
+    reset-on-startup: false
+
