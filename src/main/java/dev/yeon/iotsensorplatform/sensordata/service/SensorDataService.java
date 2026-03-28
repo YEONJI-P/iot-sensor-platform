@@ -50,16 +50,15 @@ public class SensorDataService {
     // save는 kafka측에서
     // just read
     @Transactional(readOnly=true)
-    public List<SensorDataResponse> getAllSensorData(String email){
-        return sensorDataRepository.findAllByDeviceUserEmailOrderByRecordedAtDesc(email)
+    public List<SensorDataResponse> getAllSensorData(String employeeId){
+        return sensorDataRepository.findAllByDeviceUserEmployeeIdOrderByRecordedAtDesc(employeeId)
                 .stream().map(SensorDataResponse::from).toList();
     }
     // 특정 device의 sensor 값만 조회
     @Transactional(readOnly=true)
-    public List<SensorDataResponse> getAllSensorDataByDeviceId(String email, Long deviceId){
+    public List<SensorDataResponse> getAllSensorDataByDeviceId(String employeeId, Long deviceId){
         Device device = deviceRepository.findById(deviceId).orElseThrow(()->new IllegalArgumentException("존재하지 않는 장치에요 - deviceId: " + deviceId));
-        // device가 내 device인지 확인
-        if(!device.getUser().getEmail().equals(email)) {
+        if(!device.getUser().getEmployeeId().equals(employeeId)) {
             throw new IllegalArgumentException("본인 장치만 조회할 수 있어요");
         }
         return sensorDataRepository.findAllByDeviceIdOrderByRecordedAtDesc(deviceId)

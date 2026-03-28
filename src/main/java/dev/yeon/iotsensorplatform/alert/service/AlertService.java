@@ -20,15 +20,14 @@ public class AlertService {
     private final DeviceRepository deviceRepository;
 
     @Transactional(readOnly=true)
-    public List<AlertResponse> getAllAlerts(String email){
-        return alertRepository.findAllByDeviceUserEmailOrderByCreatedAtDesc(email).stream().map(AlertResponse::from).toList();
+    public List<AlertResponse> getAllAlerts(String employeeId){
+        return alertRepository.findAllByDeviceUserEmployeeIdOrderByCreatedAtDesc(employeeId).stream().map(AlertResponse::from).toList();
     }
 
     @Transactional(readOnly=true)
-    public List<AlertResponse> getAllAlertsByDeviceId(String email,Long deviceId){
+    public List<AlertResponse> getAllAlertsByDeviceId(String employeeId, Long deviceId){
         Device device = deviceRepository.findById(deviceId).orElseThrow(()->new IllegalArgumentException("존재하지 않는 장치에요 - deviceId: " + deviceId));
-        // device가 내 device인지 확인
-        if(!device.getUser().getEmail().equals(email)){
+        if(!device.getUser().getEmployeeId().equals(employeeId)){
             throw new IllegalArgumentException("본인 장치만 조회할 수 있어요");
         }
         return alertRepository.findAllByDeviceIdOrderByCreatedAtDesc(device.getId())

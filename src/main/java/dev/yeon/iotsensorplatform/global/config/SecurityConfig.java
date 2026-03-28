@@ -24,34 +24,25 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // CSRF 비활성화 (JWT 방식은 불필요)
                 .csrf(AbstractHttpConfigurer::disable)
-
-                // 세션 사용 안 함 (JWT 쓰니까 STATELESS)
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-
-                // URL별 접근 권한 설정
-                // 대상지정 > 동작 메서드 세트 반복
-                // 위에서 아래로 break
                 .authorizeHttpRequests(auth -> auth
-                        // 회원가입, 로그인은 누구나 접근 가능
-                        .requestMatchers("/","/swagger-ui/**", "/api-docs/**","/v3/api-docs/**")
+                        .requestMatchers("/", "/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/signup", "/auth/login","/sensor-data")
+                        .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/sensor-data")
                         .permitAll()
-                        // 나머지는 인증 필요
+                        // /admin/** 는 USER_ADMIN 이상만 접근
+                        .requestMatchers("/admin/**")
+                        .hasAnyRole("SUPER_ADMIN", "USER_ADMIN")
                         .anyRequest().authenticated()
                 )
-
-                // JwtFilter를 Security 기본 필터 앞에 등록
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // 비밀번호 암호화 (BCrypt 단방향 해시 - 복호화 불가, 비교만 가능)
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

@@ -19,13 +19,13 @@ public class AlertController {
     private final AlertService alertService;
 
     @GetMapping
-    public ResponseEntity<List<AlertResponse>> getAllAlerts(@AuthenticationPrincipal String email) {
-        return ResponseEntity.ok(alertService.getAllAlerts(email));
+    public ResponseEntity<List<AlertResponse>> getAllAlerts(@AuthenticationPrincipal String employeeId) {
+        return ResponseEntity.ok(alertService.getAllAlerts(employeeId));
     }
 
     @GetMapping("/{deviceId}")
-    public ResponseEntity<List<AlertResponse>> getAllAlertsByDeviceId(@PathVariable Long deviceId, @AuthenticationPrincipal String email) {
-        return ResponseEntity.ok(alertService.getAllAlertsByDeviceId(email, deviceId));
+    public ResponseEntity<List<AlertResponse>> getAllAlertsByDeviceId(@PathVariable Long deviceId, @AuthenticationPrincipal String employeeId) {
+        return ResponseEntity.ok(alertService.getAllAlertsByDeviceId(employeeId, deviceId));
     }
 
 }

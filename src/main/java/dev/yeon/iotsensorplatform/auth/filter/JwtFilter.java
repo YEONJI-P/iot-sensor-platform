@@ -31,37 +31,27 @@ public class JwtFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 1. Header에서 토큰 꺼내기
         String token = resolveToken(request);
 
-        // 2. 토큰 유효성 검증
         if (token != null && jwtUtil.validateToken(token)) {
+            String employeeId = jwtUtil.getEmployeeId(token);
+            String role = jwtUtil.getRole(token);
 
-            // 3. 토큰에서 email 꺼내기
-            String email = jwtUtil.getEmail(token);
-
-            // 4. SecurityContext에 인증정보 저장
-            // principal=email 현재 인증받는주체를 뜻함,
-            // credentials 은 인증방법으로 대부분 PW 이나 여기서는 token 검증했으므로 null
-            // authorities SPRING 규칙 > ROLE_ 접두사를 따라 권한 할당
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
-                            email,
+                            employeeId,
                             null,
-                            List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                            List.of(new SimpleGrantedAuthority("ROLE_" + role))
                     );
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
-        // 5. 토큰 없어도 다음으로 통과 (차단은 SecurityConfig가 담당)
         filterChain.doFilter(request, response);
     }
 
-    // "Bearer 토큰값" 에서 토큰만 추출
     private String resolveToken(HttpServletRequest request) {
         String bearer = request.getHeader("Authorization");
         if (bearer != null && bearer.startsWith("Bearer ")) {
-            // Bearer 문자열 삭제
             return bearer.substring(7);
         }
         return null;

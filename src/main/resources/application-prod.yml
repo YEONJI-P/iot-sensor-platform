@@ -1,7 +1,7 @@
 spring:
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql:///iot_sensor_db?cloudSqlInstance=project-f4d2acb6-c4a9-4f38-9be:asia-northeast3:iot-db-instance&socketFactory=com.google.cloud.sql.postgres.SocketFactory
+    url: jdbc:postgresql:///iot_sensor_db_v2?cloudSqlInstance=project-f4d2acb6-c4a9-4f38-9be:asia-northeast3:iot-db-instance&socketFactory=com.google.cloud.sql.postgres.SocketFactory
     username: postgres
     password: ${DB_PASSWORD}
   jpa:

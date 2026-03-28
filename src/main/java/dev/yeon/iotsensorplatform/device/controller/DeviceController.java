@@ -19,24 +19,24 @@ public class DeviceController {
     private final DeviceService deviceService;
     // 조회
     @GetMapping
-    public ResponseEntity<List<DeviceResponse>> getMyDevices(@AuthenticationPrincipal String email){
-        return ResponseEntity.ok(deviceService.getMyDevices(email));
+    public ResponseEntity<List<DeviceResponse>> getMyDevices(@AuthenticationPrincipal String employeeId){
+        return ResponseEntity.ok(deviceService.getMyDevices(employeeId));
     }
     // 등록
     @PostMapping
-    public ResponseEntity<DeviceResponse> register(@RequestBody @Valid DeviceRegisterRequest request, @AuthenticationPrincipal String email){
-        return ResponseEntity.ok(deviceService.register(request,email));
+    public ResponseEntity<DeviceResponse> register(@RequestBody @Valid DeviceRegisterRequest request, @AuthenticationPrincipal String employeeId){
+        return ResponseEntity.ok(deviceService.register(request, employeeId));
     }
     // 수정
     @PutMapping("/{id}")
-    public ResponseEntity<DeviceResponse> update(@PathVariable Long id, @RequestBody @Valid DeviceUpdateRequest request, @AuthenticationPrincipal String email){
-        return ResponseEntity.ok(deviceService.update(id,request,email));
+    public ResponseEntity<DeviceResponse> update(@PathVariable Long id, @RequestBody @Valid DeviceUpdateRequest request, @AuthenticationPrincipal String employeeId){
+        return ResponseEntity.ok(deviceService.update(id, request, employeeId));
     }
 
     //삭제
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> delete(@PathVariable Long id,@AuthenticationPrincipal String email){
-        deviceService.delete(id,email);
+    public ResponseEntity<String> delete(@PathVariable Long id, @AuthenticationPrincipal String employeeId){
+        deviceService.delete(id, employeeId);
         return ResponseEntity.ok("장치 정보가 제거되었어요.");
     }
 

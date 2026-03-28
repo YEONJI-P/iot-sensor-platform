@@ -26,13 +26,13 @@ public class SensorDataController {
     }
 
     @GetMapping
-    public ResponseEntity<List<SensorDataResponse>> getAllSensorData(@AuthenticationPrincipal String email){
-        return ResponseEntity.ok(sensorDataService.getAllSensorData(email));
+    public ResponseEntity<List<SensorDataResponse>> getAllSensorData(@AuthenticationPrincipal String employeeId){
+        return ResponseEntity.ok(sensorDataService.getAllSensorData(employeeId));
     }
 
     @GetMapping("/{deviceId}")
-    public ResponseEntity<List<SensorDataResponse>> getAllSensorDataByDeviceId(@PathVariable Long deviceId,@AuthenticationPrincipal String email){
-        return ResponseEntity.ok(sensorDataService.getAllSensorDataByDeviceId(email,deviceId));
+    public ResponseEntity<List<SensorDataResponse>> getAllSensorDataByDeviceId(@PathVariable Long deviceId, @AuthenticationPrincipal String employeeId){
+        return ResponseEntity.ok(sensorDataService.getAllSensorDataByDeviceId(employeeId, deviceId));
     }
 
 }
