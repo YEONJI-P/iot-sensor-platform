@@ -1,5 +1,6 @@
 package dev.yeon.iotsensorplatform.simulator.service;
 
+import dev.yeon.iotsensorplatform.device.dto.DeviceResponse;
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
 import dev.yeon.iotsensorplatform.global.service.AccessControlService;
@@ -124,12 +125,16 @@ public class SimulatorService {
     }
 
     @Transactional(readOnly = true)
-    public List<Device> getDevices(String employeeId) {
+    public List<DeviceResponse> getDevices(String employeeId) {
         User user = getUser(employeeId);
-        return accessControlService.getAccessibleDevices(user);
+        return accessControlService.getAccessibleDevices(user)
+                .stream()
+                .map(DeviceResponse::from)
+                .toList();
     }
 
-    private User getUser(String employeeId) {
+    @Transactional(readOnly = true)
+    public User getUser(String employeeId) {
         return userRepository.findByEmployeeId(employeeId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원번호예요"));
     }

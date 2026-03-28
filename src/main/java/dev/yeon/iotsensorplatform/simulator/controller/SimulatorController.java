@@ -23,11 +23,7 @@ public class SimulatorController {
     // GET /simulator/devices — 내 장치 목록
     @GetMapping("/devices")
     public ResponseEntity<List<DeviceResponse>> getDevices(@AuthenticationPrincipal String employeeId) {
-        List<DeviceResponse> devices = simulatorService.getDevices(employeeId)
-                .stream()
-                .map(DeviceResponse::from)
-                .toList();
-        return ResponseEntity.ok(devices);
+        return ResponseEntity.ok(simulatorService.getDevices(employeeId));
     }
 
     // POST /simulator/start
