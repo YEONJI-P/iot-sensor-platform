@@ -14,6 +14,8 @@ import dev.yeon.iotsensorplatform.user.entity.Role;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.entity.UserStatus;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,11 +41,13 @@ public class DataInitializer implements ApplicationRunner {
     private final OrganizationRepository organizationRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Value("${app.data-initializer.reset-on-startup:false}")
     private boolean resetOnStartup;
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
         if (resetOnStartup) {
             log.warn("reset-on-startup=true — 전체 데이터 초기화 후 재생성");
@@ -57,7 +61,8 @@ public class DataInitializer implements ApplicationRunner {
         }
     }
 
-    private void clearAll() {
+    @Transactional
+    public void clearAll() {
         // FK 제약 고려한 삭제 순서
         alertRepository.deleteAll();
         sensorDataRepository.deleteAll();
@@ -66,10 +71,13 @@ public class DataInitializer implements ApplicationRunner {
         orgGroupRepository.deleteAll();
         userRepository.deleteAll();
         organizationRepository.deleteAll();
+        entityManager.flush();
+        entityManager.clear();
         log.info("전체 데이터 삭제 완료");
     }
 
-    private void initData() {
+    @Transactional
+    public void initData() {
         // ── Organization ──────────────────────────────────────
         Organization org = organizationRepository.save(
                 Organization.builder()
