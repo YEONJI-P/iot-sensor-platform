@@ -1,0 +1,140 @@
+{
+  "organizations": [
+    {
+      "name": "스마트공장A",
+      "description": "메인 생산 공장 (A동)"
+    },
+    {
+      "name": "스마트공장B",
+      "description": "신규 증설 공장 (B동)"
+    }
+  ],
+  "groups": [
+    {
+      "orgName": "스마트공장A",
+      "name": "1구역(생산라인)",
+      "description": "A동 주요 생산 공정"
+    },
+    {
+      "orgName": "스마트공장A",
+      "name": "2구역(품질검사)",
+      "description": "A동 제품 품질 검사실"
+    },
+    {
+      "orgName": "스마트공장A",
+      "name": "3구역(자재창고)",
+      "description": "A동 원자재 및 부품 보관소"
+    },
+    {
+      "orgName": "스마트공장B",
+      "name": "4구역(포장라인)",
+      "description": "B동 제품 포장 및 검수"
+    },
+    {
+      "orgName": "스마트공장B",
+      "name": "5구역(출하장)",
+      "description": "B동 완제품 출하 대기 구역"
+    }
+  ],
+  "users": [
+    {
+      "employeeId": "ADMIN001",
+      "name": "슈퍼관리자",
+      "email": "admin@factory.com",
+      "role": "SUPER_ADMIN",
+      "password": "admin1234!",
+      "orgName": "스마트공장A"
+    },
+    {
+      "employeeId": "MGR001",
+      "name": "공장A-관리자",
+      "email": "mgr_a@factory.com",
+      "role": "USER_ADMIN",
+      "password": "mgr1234!",
+      "orgName": "스마트공장A"
+    },
+    {
+      "employeeId": "MGR002",
+      "name": "공장B-관리자",
+      "email": "mgr_b@factory.com",
+      "role": "USER_ADMIN",
+      "password": "mgr1234!",
+      "orgName": "스마트공장B"
+    },
+    {
+      "employeeId": "DEV001",
+      "name": "장치담당자A",
+      "email": "dev01@factory.com",
+      "role": "DEVICE_MANAGER",
+      "password": "dev1234!",
+      "orgName": "스마트공장A",
+      "groupNames": ["1구역(생산라인)", "2구역(품질검사)"]
+    },
+    {
+      "employeeId": "INP001",
+      "name": "데이터입력자A1",
+      "email": "inp01@factory.com",
+      "role": "DATA_INPUTTER",
+      "password": "inp1234!",
+      "orgName": "스마트공장A",
+      "groupNames": ["1구역(생산라인)"]
+    },
+    {
+      "employeeId": "INP002",
+      "name": "데이터입력자A2",
+      "email": "inp02@factory.com",
+      "role": "DATA_INPUTTER",
+      "password": "inp1234!",
+      "orgName": "스마트공장A",
+      "groupNames": ["3구역(자재창고)"]
+    },
+    {
+      "employeeId": "INP003",
+      "name": "데이터입력자B1",
+      "email": "inp03@factory.com",
+      "role": "DATA_INPUTTER",
+      "password": "inp1234!",
+      "orgName": "스마트공장B",
+      "groupNames": ["4구역(포장라인)", "5구역(출하장)"]
+    },
+    {
+      "employeeId": "ANL001",
+      "name": "분석담당자A",
+      "email": "anl01@factory.com",
+      "role": "DATA_ANALYST",
+      "password": "anl1234!",
+      "orgName": "스마트공장A",
+      "groupNames": ["1구역(생산라인)", "2구역(품질검사)"]
+    },
+    {
+      "employeeId": "VWR001",
+      "name": "열람자A",
+      "email": "vwr01@factory.com",
+      "role": "VIEWER",
+      "password": "vwr1234!",
+      "orgName": "스마트공장A",
+      "groupNames": ["1구역(생산라인)", "2구역(품질검사)", "3구역(자재창고)"]
+    },
+    {
+      "employeeId": "VWR002",
+      "name": "열람자B",
+      "email": "vwr02@factory.com",
+      "role": "VIEWER",
+      "password": "vwr1234!",
+      "orgName": "스마트공장B",
+      "groupNames": ["4구역(포장라인)", "5구역(출하장)"]
+    }
+  ],
+  "devices": [
+    { "name": "온도센서-A1", "type": "TEMPERATURE", "groupName": "1구역(생산라인)", "thresholdValue": 80.0, "location": "1구역-생산-01" },
+    { "name": "진동센서-A1", "type": "VIBRATION", "groupName": "1구역(생산라인)", "thresholdValue": 50.0, "location": "1구역-생산-02" },
+    { "name": "조도센서-A1", "type": "ILLUMINANCE", "groupName": "1구역(생산라인)", "thresholdValue": 300.0, "location": "1구역-조명-01" },
+    { "name": "압력센서-A2", "type": "PRESSURE", "groupName": "2구역(품질검사)", "thresholdValue": 1.2, "location": "2구역-검사-01" },
+    { "name": "온도센서-A2", "type": "TEMPERATURE", "groupName": "2구역(품질검사)", "thresholdValue": 70.0, "location": "2구역-검사-02" },
+    { "name": "조도센서-A3", "type": "ILLUMINANCE", "groupName": "3구역(자재창고)", "thresholdValue": 200.0, "location": "3구역-창고-01" },
+    { "name": "온도센서-B4", "type": "TEMPERATURE", "groupName": "4구역(포장라인)", "thresholdValue": 75.0, "location": "4구역-포장-01" },
+    { "name": "진동센서-B4", "type": "VIBRATION", "groupName": "4구역(포장라인)", "thresholdValue": 45.0, "location": "4구역-포장-02" },
+    { "name": "압력센서-B5", "type": "PRESSURE", "groupName": "5구역(출하장)", "thresholdValue": 1.0, "location": "5구역-출하-01" },
+    { "name": "조도센서-B5", "type": "ILLUMINANCE", "groupName": "5구역(출하장)", "thresholdValue": 250.0, "location": "5구역-출하-02" }
+  ]
+}
