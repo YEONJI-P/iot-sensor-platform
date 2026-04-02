@@ -22,6 +22,16 @@
 
 <br>
 
+> ### 🖥️ 실행 환경 안내
+>
+> | 환경 | 방법 | 확인 가능한 기능 |
+> |---|---|---|
+> | **배포 URL** (Cloud Run) | 바로 접속 | JWT 인증·RBAC, 장치 CRUD, 센서 데이터 수신·조회, Alert API |
+> | **로컬 실행** (Docker) | `docker-compose up -d` → `./gradlew bootRun` | 위 항목 전체 + **Kafka 파이프라인** (Producer → Consumer → DB 적재 + Alert 생성) |
+>
+> Kafka 이벤트 파이프라인은 로컬 환경에서만 동작합니다. 배포 환경에서는 Kafka 없이 직접 저장 방식으로 운영됩니다.
+> 로컬 실행 방법은 [8. 실행 방법](#8-실행-방법)을 참고하세요.
+
 ---
 
 ## 📋 목차
