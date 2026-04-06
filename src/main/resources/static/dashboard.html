@@ -17,7 +17,6 @@
       background: #0f172a; color: #e2e8f0;
       border-color: #3b82f6; box-shadow: 0 0 0 0.2rem rgba(59,130,246,.25);
     }
-    .table { color: #e2e8f0; }
     .table-dark-custom { --bs-table-bg: #0f172a; --bs-table-border-color: #334155; }
     .table-dark-custom thead th { background: #1e3a5f; color: #93c5fd; }
     .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.2rem 1.5rem; }
@@ -31,7 +30,7 @@
 <body>
 
 <!-- ── 403 Forbidden 모달 ── -->
-<div class="modal fade" id="forbiddenModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="forbiddenModal" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-body text-center py-4 px-3">
@@ -50,7 +49,6 @@
   <a href="/index.html" class="navbar-brand fw-bold text-decoration-none">📊 IoT Dashboard</a>
   <div class="d-flex gap-2 align-items-center">
     <span id="refreshBadge" class="badge bg-secondary">갱신 대기</span>
-    <a href="/simulator.html" class="btn btn-sm btn-outline-warning">🤖 시뮬레이터</a>
     <button onclick="logout()" class="btn btn-sm btn-outline-danger">로그아웃</button>
   </div>
 </nav>
@@ -67,7 +65,7 @@
     </div>
     <div class="col-md-8 d-flex align-items-end gap-3" id="statCards" style="display:none!important;">
       <div class="stat-card text-center">
-        <div class="text-secondary small">총 알림</div>
+        <div class="text-secondary small">최근 알림</div>
         <div id="statTotalAlert" class="stat-value text-danger">—</div>
       </div>
       <div class="stat-card text-center">
@@ -113,7 +111,7 @@
   <div class="card p-3">
     <h6 class="mb-3 text-info">🔔 최근 알림 목록 (최대 20건)</h6>
     <div class="table-responsive">
-      <table class="table table-dark-custom table-hover mb-0">
+      <table class="table table-dark table-dark-custom table-hover mb-0">
         <thead>
           <tr>
             <th>#</th>
@@ -140,14 +138,22 @@
     const token = localStorage.getItem('jwt_token');
     if (!token) { location.href = '/index.html'; return null; }
 
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-        ...(options.headers || {})
-      }
-    });
+    let res;
+    try {
+      res = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          ...(options.headers || {})
+        }
+      });
+    } catch (e) {
+      console.error('[apiFetch] 네트워크 오류:', url, e);
+      return null;
+    }
+
+    if (res.ok) return res;
 
     if (res.status === 401) {
       localStorage.removeItem('jwt_token');
@@ -160,7 +166,13 @@
       return null;
     }
 
-    return res;
+    try {
+      const err = await res.json();
+      console.error(`[apiFetch] ${res.status} ${err.error}: ${err.message}`, url);
+    } catch {
+      console.error(`[apiFetch] ${res.status} (응답 파싱 실패):`, url);
+    }
+    return null;
   }
 
   /* ── 로그아웃 ── */
@@ -169,8 +181,24 @@
     location.href = '/index.html';
   }
 
-  /* ── 초기 JWT 확인 ── */
-  if (!localStorage.getItem('jwt_token')) { location.href = '/index.html'; }
+  /* ── JWT payload 디코딩 ── */
+  function decodeJwt(token) {
+    try {
+      const payload = token.split('.')[1];
+      return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    } catch { return null; }
+  }
+
+  /* ── 초기 JWT + role 확인 ── */
+  const DASHBOARD_ALLOWED_ROLES = ['SUPER_ADMIN', 'DEVICE_MANAGER', 'DATA_INPUTTER', 'DATA_ANALYST', 'VIEWER'];
+  (function checkAccess() {
+    const token = localStorage.getItem('jwt_token');
+    if (!token) { location.href = '/index.html'; return; }
+    const payload = decodeJwt(token);
+    if (!payload || !DASHBOARD_ALLOWED_ROLES.includes(payload.role)) {
+      new bootstrap.Modal(document.getElementById('forbiddenModal')).show();
+    }
+  })();
 
   /* ── Chart.js 인스턴스 ── */
   let sensorChart = null;
@@ -231,7 +259,7 @@
 
   /* ── 장치 목록 로드 ── */
   async function loadDevices() {
-    const res = await apiFetch('/simulator/devices');
+    const res = await apiFetch('/devices');
     if (!res) return;
     const devices = await res.json();
     const sel = document.getElementById('deviceSelect');
@@ -245,11 +273,30 @@
     });
   }
 
+  /* ── 대시보드 초기 상태로 리셋 ── */
+  function resetDashboard() {
+    currentThreshold = null;
+    document.getElementById('thresholdLabel').classList.add('d-none');
+    document.getElementById('statCards').style.setProperty('display', 'none', 'important');
+    document.getElementById('statTotalAlert').textContent = '—';
+    document.getElementById('statWeekAlert').textContent = '—';
+    document.getElementById('statDataCount').textContent = '—';
+    document.getElementById('alertTableBody').innerHTML =
+      '<tr><td colspan="6" class="text-center text-secondary py-4">장치를 선택하면 알림이 표시됩니다</td></tr>';
+    sensorChart.data.labels = [];
+    sensorChart.data.datasets[0].data = [];
+    if (sensorChart.data.datasets.length > 1) sensorChart.data.datasets.splice(1);
+    sensorChart.update();
+    alertChart.data.labels = [];
+    alertChart.data.datasets[0].data = [];
+    alertChart.update();
+  }
+
   /* ── 장치 선택 이벤트 ── */
   function onDeviceChange() {
     const sel = document.getElementById('deviceSelect');
     const deviceId = sel.value;
-    if (!deviceId) return;
+    if (!deviceId) { resetDashboard(); return; }
 
     const opt = sel.options[sel.selectedIndex];
     currentThreshold = parseFloat(opt.dataset.threshold) || null;

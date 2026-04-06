@@ -3,6 +3,7 @@ package dev.yeon.iotsensorplatform.admin.controller;
 import dev.yeon.iotsensorplatform.admin.dto.OrgRequest;
 import dev.yeon.iotsensorplatform.admin.dto.OrgResponse;
 import dev.yeon.iotsensorplatform.admin.service.OrganizationService;
+import dev.yeon.iotsensorplatform.global.dto.MessageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -34,8 +35,8 @@ public class OrganizationController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> delete(@PathVariable Long id) {
+    public ResponseEntity<MessageResponse> delete(@PathVariable Long id) {
         organizationService.delete(id);
-        return ResponseEntity.ok("조직이 삭제됐어요");
+        return ResponseEntity.ok(new MessageResponse("조직이 삭제됐어요"));
     }
 }

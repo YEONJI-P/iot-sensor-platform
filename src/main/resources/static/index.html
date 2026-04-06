@@ -94,12 +94,11 @@
   const PAGE_MAP = {
     SUPER_ADMIN:    [],
     USER_ADMIN:     [],
-    DEVICE_MANAGER: [
-      { href: '/simulator.html', icon: '🤖', title: '시뮬레이터', desc: '센서 데이터 자동 전송 시뮬레이션' },
-      { href: '/dashboard.html', icon: '📊', title: '대시보드',   desc: '센서 데이터 및 알림 시각화' }
-    ],
     DATA_INPUTTER: [
-      { href: '/simulator.html', icon: '🤖', title: '시뮬레이터', desc: '센서 데이터 자동 전송 시뮬레이션' }
+      { href: '/dashboard.html', icon: '📊', title: '대시보드', desc: '센서 데이터 및 알림 시각화' }
+    ],
+    DEVICE_MANAGER: [
+      { href: '/dashboard.html', icon: '📊', title: '대시보드', desc: '센서 데이터 및 알림 시각화' }
     ],
     DATA_ANALYST: [
       { href: '/dashboard.html', icon: '📊', title: '대시보드', desc: '센서 데이터 및 알림 시각화' }
@@ -151,11 +150,13 @@
     const container = document.getElementById('pageLinks');
 
     if (pages.length === 0) {
-      // 관리자 역할 — Swagger만 사용
+      const msg = (role === 'DATA_INPUTTER')
+        ? '데이터 입력 API는 Swagger UI를 통해 사용하세요.'
+        : '관리자 계정입니다. Swagger UI를 통해 Admin API를 사용하세요.';
       container.innerHTML = `
         <div class="col-12">
           <div class="alert alert-warning border-0" style="background:#451a03; color:#fde68a;">
-            관리자 계정입니다. Swagger UI를 통해 Admin API를 사용하세요.
+            ${msg}
           </div>
         </div>`;
     } else {
@@ -190,11 +191,16 @@
         body: JSON.stringify({ employeeId, password })
       });
       if (!res.ok) {
-        errEl.textContent = await res.text();
+        try {
+          const err = await res.json();
+          errEl.textContent = err.message;
+        } catch {
+          errEl.textContent = '로그인 중 오류가 발생했습니다.';
+        }
         errEl.classList.remove('d-none');
         return;
       }
-      const token = await res.text();
+      const { token } = await res.json();
       localStorage.setItem('jwt_token', token);
       showHome(token);
     } catch {

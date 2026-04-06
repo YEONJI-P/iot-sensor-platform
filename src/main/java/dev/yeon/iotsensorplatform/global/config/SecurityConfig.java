@@ -34,7 +34,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         // 정적 파일 & Swagger & 인증 불필요 API
-                        .requestMatchers("/", "/index.html", "/simulator.html", "/dashboard.html")
+                        .requestMatchers("/", "/index.html", "/dashboard.html")
                         .permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**")
                         .permitAll()
@@ -53,13 +53,17 @@ public class SecurityConfig {
                         .requestMatchers("/admin/**")
                         .hasAnyRole("SUPER_ADMIN", "USER_ADMIN")
 
-                        // 시뮬레이터 API — DEVICE_MANAGER, DATA_INPUTTER
-                        .requestMatchers("/simulator/**")
-                        .hasAnyRole("DEVICE_MANAGER", "DATA_INPUTTER")
-
                         // 대시보드 API — DEVICE_MANAGER, DATA_ANALYST, VIEWER
                         .requestMatchers("/dashboard/**")
                         .hasAnyRole("DEVICE_MANAGER", "DATA_ANALYST", "VIEWER")
+
+                        // 센서 데이터 조회 — USER_ADMIN 제외 (운영 데이터 불필요)
+                        .requestMatchers(HttpMethod.GET, "/sensor-data", "/sensor-data/**")
+                        .hasAnyRole("SUPER_ADMIN", "DEVICE_MANAGER", "DATA_INPUTTER", "DATA_ANALYST", "VIEWER")
+
+                        // 알림 조회 — USER_ADMIN 제외
+                        .requestMatchers(HttpMethod.GET, "/alerts", "/alerts/**")
+                        .hasAnyRole("SUPER_ADMIN", "DEVICE_MANAGER", "DATA_INPUTTER", "DATA_ANALYST", "VIEWER")
 
                         // 나머지 인증 필요
                         .anyRequest().authenticated()

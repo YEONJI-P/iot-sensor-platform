@@ -1,5 +1,6 @@
 package dev.yeon.iotsensorplatform.sensordata.controller;
 
+import dev.yeon.iotsensorplatform.global.dto.MessageResponse;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataRequest;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataResponse;
 import dev.yeon.iotsensorplatform.sensordata.service.SensorDataService;
@@ -19,11 +20,11 @@ public class SensorDataController {
 
     // 외부 장치 또는 수동 입력 — employeeId가 있으면 MANUAL, 없으면 AUTO
     @PostMapping
-    public ResponseEntity<String> receive(
+    public ResponseEntity<MessageResponse> receive(
             @RequestBody SensorDataRequest request,
             @AuthenticationPrincipal String employeeId) {
         sensorDataService.receive(request, employeeId);
-        return ResponseEntity.ok("메시지 발행 완료");
+        return ResponseEntity.ok(new MessageResponse("메시지 발행 완료"));
     }
 
     @GetMapping

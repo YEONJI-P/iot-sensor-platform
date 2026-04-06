@@ -12,28 +12,28 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException e) {
-        return ResponseEntity.badRequest().body(e.getMessage());
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse("BAD_REQUEST", e.getMessage()));
     }
 
     @ExceptionHandler(DisabledException.class)
-    public ResponseEntity<String> handleDisabled(DisabledException e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+    public ResponseEntity<ErrorResponse> handleDisabled(DisabledException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("FORBIDDEN", e.getMessage()));
     }
 
-    // 이미 실행 중인 시뮬레이터 → 409 Conflict
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<String> handleConflict(IllegalStateException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+    public ResponseEntity<ErrorResponse> handleConflict(IllegalStateException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("CONFLICT", e.getMessage()));
     }
 
     // 처리되지 않은 서버 예외 → 500
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<String> handleException(Exception e) {
+    public ResponseEntity<ErrorResponse> handleException(Exception e) {
         log.error("Unhandled exception: {}", e.getMessage(), e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("서버 오류가 발생했습니다.");
+                .body(new ErrorResponse("INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다."));
     }
-
-
 }

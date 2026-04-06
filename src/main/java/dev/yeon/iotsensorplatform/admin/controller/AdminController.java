@@ -2,6 +2,7 @@ package dev.yeon.iotsensorplatform.admin.controller;
 
 import dev.yeon.iotsensorplatform.admin.dto.UserResponse;
 import dev.yeon.iotsensorplatform.admin.service.AdminService;
+import dev.yeon.iotsensorplatform.global.dto.MessageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,15 +30,15 @@ public class AdminController {
 
     // PATCH /admin/users/{id}/approve — 승인
     @PatchMapping("/users/{id}/approve")
-    public ResponseEntity<String> approveUser(@PathVariable Long id) {
+    public ResponseEntity<MessageResponse> approveUser(@PathVariable Long id) {
         adminService.approveUser(id);
-        return ResponseEntity.ok("승인됐어요");
+        return ResponseEntity.ok(new MessageResponse("승인됐어요"));
     }
 
     // PATCH /admin/users/{id}/reject — 반려
     @PatchMapping("/users/{id}/reject")
-    public ResponseEntity<String> rejectUser(@PathVariable Long id) {
+    public ResponseEntity<MessageResponse> rejectUser(@PathVariable Long id) {
         adminService.rejectUser(id);
-        return ResponseEntity.ok("반려됐어요");
+        return ResponseEntity.ok(new MessageResponse("반려됐어요"));
     }
 }

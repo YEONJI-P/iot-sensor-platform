@@ -4,6 +4,7 @@ import dev.yeon.iotsensorplatform.device.dto.DeviceRegisterRequest;
 import dev.yeon.iotsensorplatform.device.dto.DeviceResponse;
 import dev.yeon.iotsensorplatform.device.dto.DeviceUpdateRequest;
 import dev.yeon.iotsensorplatform.device.service.DeviceService;
+import dev.yeon.iotsensorplatform.global.dto.MessageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -35,9 +36,9 @@ public class DeviceController {
 
     //삭제
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> delete(@PathVariable Long id, @AuthenticationPrincipal String employeeId){
+    public ResponseEntity<MessageResponse> delete(@PathVariable Long id, @AuthenticationPrincipal String employeeId){
         deviceService.delete(id, employeeId);
-        return ResponseEntity.ok("장치 정보가 제거되었어요.");
+        return ResponseEntity.ok(new MessageResponse("장치 정보가 제거되었어요."));
     }
 
 }

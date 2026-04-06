@@ -20,14 +20,15 @@
 --      psql "host=127.0.0.1 port=5433 dbname=iot_sensor_db_v2 user=postgres" -f seed.sql
 --
 -- ── Cloud SQL 실행 (gcloud CLI 직접 접속) ─────────────────────────────────────
---   gcloud sql connect <INSTANCE_NAME> --user=postgres --database=iot_sensor_db_v2
---   -- 접속 후 \i seed.sql 또는 내용을 직접 붙여넣기
+-- --   gcloud sql connect <INSTANCE_NAME> --user=postgres --database=iot_sensor_db_v2
+-- --   -- 접속 후 \i seed.sql 또는 내용을 직접 붙여넣기
 --
 -- =============================================================================
 
 
 -- BCrypt 확장 활성화
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE
+EXTENSION IF NOT EXISTS pgcrypto;
 
 
 -- =============================================================================
