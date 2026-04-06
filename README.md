@@ -426,3 +426,8 @@ docker-compose up -d
 - **Kafka 운영 환경 통합:** 현재 prod(Cloud Run)에서는 Kafka 비활성화, 로컬에서만 동작. GCP VM에 Kafka 상시 운영 시 로컬·prod 모두 동일 브로커를 사용할 수 있어 환경 차이가 줄어듦. 이 경우 프로파일 분리의 실질적 이유는 Cloud SQL 소켓팩토리 설정 정도만 남게 됨 *(미구현, 로드맵 예정)*
 - **BigQuery 연동 시 Consumer 확장:** 기존 Consumer(`iot-sensor-group`)를 수정하지 않고 별도 Consumer Group(`bigquery-group`)을 추가해 동일 토픽을 독립 구독하는 방식으로 확장 예정. 두 그룹이 독립적으로 모든 메시지를 수신하므로 기존 코드 변경 없이 Consumer 클래스 추가만으로 확장 가능 *(미구현, 로드맵 예정)*
 - **로컬 DB vs Cloud SQL:** 로컬 개발은 로컬 DB 유지. 로컬에서 Cloud SQL 직접 연결 시 배포 데이터 오염 위험·개발 속도 저하·상시 비용 등의 이유로 분리 유지 결정
+- **Redis 도입 — RefreshToken 저장소 및 추가 활용 검토 중:** RefreshToken 저장·갱신·로그아웃 처리를 위한 주 목적 외에, 아래 용도로 추가 활용 검토 중
+  - 대시보드 센서 데이터 최근 N개 캐시 — DB 조회 부하 감소
+  - `POST /sensor-data` Rate Limiting — 동일 장치에서 비정상적으로 빠른 요청 차단
+  - 알림 미읽음 카운트 — counter 구조로 조회 최적화
+  - GCP 환경 설정 방식: Kafka와 동일하게 환경변수(`REDIS_HOST`, `REDIS_PORT`)만 지정하는 방식으로 추상화. 로컬은 docker-compose Redis, prod는 GCP Memorystore 또는 VM 직접 설치 중 선택 예정 *(미구현, 로드맵 예정)*
