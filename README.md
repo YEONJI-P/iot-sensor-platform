@@ -11,26 +11,14 @@
 ![Kafka](https://img.shields.io/badge/Apache_Kafka-231F20?style=flat-square&logo=apachekafka&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis_(예정)-DC382D?style=flat-square&logo=redis&logoColor=white)
-![GCP](https://img.shields.io/badge/GCP_Cloud_Run-4285F4?style=flat-square&logo=googlecloud&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)
 
 <br>
 
-🔗 **배포 URL:** https://iot-sensor-platform-142990968320.asia-northeast3.run.app
 📂 **GitHub:** https://github.com/YEONJI-P/iot-sensor-platform
 
 <br>
-
-> ### 🖥️ 실행 환경 안내
->
-> | 환경 | 방법 | 확인 가능한 기능 |
-> |---|---|---|
-> | **배포 URL** (Cloud Run) | 바로 접속 | JWT 인증·RBAC, 장치 CRUD, 센서 데이터 수신·조회, Alert API |
-> | **로컬 실행** (Docker) | `docker-compose up -d` → `./gradlew bootRun` | 위 항목 전체 + **Kafka 파이프라인** (Producer → Consumer → DB 적재 + Alert 생성) |
->
-> Kafka 이벤트 파이프라인은 로컬 환경에서만 동작합니다. 배포 환경에서는 Kafka 없이 직접 저장 방식으로 운영됩니다.
-> 로컬 실행 방법은 [8. 실행 방법](#8-실행-방법)을 참고하세요.
 
 ---
 
@@ -52,7 +40,7 @@
 IoT Sensor Platform은 제조 설비·공장 환경에서 발생하는 센서 데이터를 실시간으로 수집하고, 이상 징후 발생 시 자동으로 알림을 생성하는 **IoT 모니터링 백엔드 플랫폼**입니다.
 
 사번(employeeId) 기반의 **승인제 회원 관리**와 6단계 **역할 기반 접근 제어(RBAC)** 를 통해 조직 내 권한을 세밀하게 관리할 수 있습니다.
-Kafka 이벤트 파이프라인으로 대량의 센서 데이터를 안정적으로 처리하며, GCP Cloud Run + Cloud SQL 기반으로 운영됩니다.
+Kafka 이벤트 파이프라인으로 대량의 센서 데이터를 안정적으로 처리합니다.
 
 <br>
 
@@ -67,12 +55,11 @@ Kafka 이벤트 파이프라인으로 대량의 센서 데이터를 안정적으
 | Auth | JWT (JSON Web Token) |
 | ORM | Spring Data JPA (Hibernate) |
 | Message Queue | Apache Kafka |
-| Database | PostgreSQL (GCP Cloud SQL) |
+| Database | PostgreSQL |
 | Cache | Redis *(예정)* |
 | API Docs | Swagger (springdoc-openapi) |
 | Test | JUnit5, Mockito |
-| Infra | GCP Cloud Run, GCP Artifact Registry |
-| CI/CD | GitHub Actions, Docker |
+| Container | Docker, Docker Compose |
 
 <br>
 
@@ -85,7 +72,7 @@ graph TD
     SIM[센서 시뮬레이터\nHTTP POST]:::client
     CLI[외부 클라이언트\nSwagger / 앱]:::client
 
-    subgraph API["Spring Boot API Server (GCP Cloud Run)"]
+    subgraph API["Spring Boot API Server"]
         AUTH[Auth API\nJWT + 승인제 가입]
         ADMIN[Admin API\n사용자 승인·관리]
         DEVICE[Device API\n장치 CRUD]
@@ -98,10 +85,7 @@ graph TD
         CA[Consumer\nSensorData 저장 + Alert 생성]
     end
 
-    DB[(PostgreSQL\nGCP Cloud SQL)]
-
-    GHA[GitHub Actions]
-    AR[GCP Artifact Registry]
+    DB[(PostgreSQL)]
 
     SIM -->|POST /sensor-data| SENSOR
     CLI --> AUTH
@@ -111,9 +95,6 @@ graph TD
     SENSOR --> PRODUCER
     PRODUCER --> TOPIC
     TOPIC --> CA -->|SensorData 저장 + Alert 생성| DB
-
-    GHA -->|Docker Build & Push| AR
-    AR -->|Deploy| API
 
     classDef client fill:#e8f4f8,stroke:#2196F3
 ```
@@ -247,7 +228,6 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 ### 📡 Kafka 기반 이벤트 파이프라인
 - 센서 데이터 수신 → Kafka `sensor-data` 토픽 발행
 - 단일 Consumer가 SensorData 저장 + 임계값 초과 감지 → Alert 생성을 순차 처리
-- 운영 환경(GCP Cloud Run)에서는 Kafka 비활성화 — 직접 저장 방식 사용
 
 ### ~~🤖 IoT 시뮬레이터 (인앱)~~ `삭제 예정`
 > 서버 내부 시뮬레이터는 아래와 같이 별도 Python 스크립트로 전환됩니다.
@@ -282,24 +262,23 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 - 사번 기반 로그인 + 승인제 가입
 - 6단계 ROLE 기반 접근 제어
 - Kafka 이벤트 파이프라인 (수신 → 적재 → Alert)
-- GCP Cloud Run 배포 + GitHub Actions CI/CD
 - ~~**IoT 시뮬레이터 페이지 (인앱)**~~ — 별도 Python 스크립트(`iot/simulator.py`)로 전환
 
 ### 🔜 예정
 - **인앱 시뮬레이터 코드 삭제** — `simulator/` 패키지 및 관련 API 제거
 - **대시보드 페이지** *(테스트 중)* — 장치별 센서값 라인 차트 / 알림 현황 바 차트
 - **Redis RefreshToken** 저장소 — 토큰 갱신 및 로그아웃 처리
-- **GCP VM에 Kafka 운영** — Cloud Run 외부 전용 VM 인스턴스에서 Kafka 상시 운영. 로컬·prod 모두 동일 브로커 사용 가능
-- **BigQuery 연동** — 별도 Consumer Group(`bigquery-group`) 추가로 동일 토픽을 독립 구독, 대용량 센서 데이터를 BigQuery에 적재
-- **AWS 이전 아키텍처 설계 문서** — 멀티 클라우드 전환 시나리오
+- **OLAP 스토리지 연동** — 별도 Consumer Group(`bigquery-group`) 추가로 동일 토픽을 독립 구독, 대용량 센서 데이터를 OLAP DB(BigQuery / Redshift)에 적재
+- **AWS 이전 아키텍처 설계 문서** — 멀티 클라우드 전환 시나리오 (GCP / AWS 비교)
+- **클라우드 전환 시나리오 설계 문서** — 현행 로컬 아키텍처 기준 GCP·AWS 전환 옵션 비교표
 
 ```
 현재 구조 (단일 Consumer)
 Kafka → iot-sensor-group → SensorData 저장 + Alert 생성 → PostgreSQL
 
-BigQuery 연동 후 구조 (Consumer Group 분리, 미구현)
+OLAP 연동 후 구조 (Consumer Group 분리, 미구현)
 Kafka → iot-sensor-group → SensorData 저장 + Alert 생성 → PostgreSQL  (실시간 OLTP)
-     → bigquery-group   → BigQuery INSERT               → BigQuery    (대용량 OLAP)
+     → bigquery-group   → OLAP DB INSERT               → BigQuery/Redshift (대용량 OLAP)
 ```
 
 <br>
@@ -336,24 +315,8 @@ http://localhost:8080/swagger-ui/index.html
 
 Spring Boot 기동 후 테이블이 생성된 상태에서 실행합니다.
 
-**로컬 DB**
 ```bash
 psql -U postgres -d iot_sensor_db_v2 -f iot/seed.sql
-```
-
-**Cloud SQL (Cloud SQL Auth Proxy)**
-```bash
-# 1. Proxy 기동
-cloud-sql-proxy <INSTANCE_CONNECTION_NAME> --port 5433
-
-# 2. 실행
-psql "host=127.0.0.1 port=5433 dbname=iot_sensor_db_v2 user=postgres" -f iot/seed.sql
-```
-
-**Cloud SQL (gcloud CLI)**
-```bash
-gcloud sql connect <INSTANCE_NAME> --user=postgres --database=iot_sensor_db_v2
-# 접속 후: \i iot/seed.sql
 ```
 
 > 재실행이 필요한 경우 `seed.sql` 하단의 `TRUNCATE` 주석을 해제 후 먼저 실행하세요.
@@ -379,22 +342,17 @@ pip install requests
 # 기본 실행 (장치 ID=1, 10회, 2초 간격, 임계값 80)
 python iot/simulator.py --device-id 1 --count 10 --interval 2 --threshold 80
 
-# 배포 서버 대상
-python iot/simulator.py --device-id 1 --count 20 --interval 1 --threshold 80 \
-  --base-url https://iot-sensor-platform-142990968320.asia-northeast3.run.app
 ```
 
 > seed.sql로 투입된 장치의 ID를 확인하여 `--device-id`에 지정하세요.
 
-### Kafka 동작 확인 (로컬 전용)
-
-배포 서버(Cloud Run)에서는 Kafka가 비활성화되어 있습니다. Kafka 파이프라인을 테스트하려면 로컬에서 기본 프로파일로 실행해야 합니다.
+### Kafka 동작 확인
 
 ```bash
 # Kafka + PostgreSQL 기동
 docker-compose up -d
 
-# 기본 프로파일로 실행 (Kafka 활성화)
+# 애플리케이션 실행
 ./gradlew bootRun
 ```
 
@@ -423,11 +381,11 @@ docker-compose up -d
 ### 검토 중 / 예정
 
 - **SensorType 동적 구성 검토:** 현재 SensorType(`TEMPERATURE`, `VIBRATION`, `ILLUMINANCE`, `PRESSURE`)이 Enum으로 하드코딩되어 있어 타입 추가·변경 시 빌드가 필요함. JSON/YAML 등 외부 파일로 관리하거나 CRUD API를 두는 방식이 적합한지 검토 필요. UserRole·UserStatus는 각 값마다 인가 로직·상태 전이가 코드에 묶여 있어 Enum이 적합하나, SensorType은 임계값 초과 감지 로직이 타입에 무관하게 동일하므로 외부화 여지 있음
-- **Kafka 운영 환경 통합:** 현재 prod(Cloud Run)에서는 Kafka 비활성화, 로컬에서만 동작. GCP VM에 Kafka 상시 운영 시 로컬·prod 모두 동일 브로커를 사용할 수 있어 환경 차이가 줄어듦. 이 경우 프로파일 분리의 실질적 이유는 Cloud SQL 소켓팩토리 설정 정도만 남게 됨 *(미구현, 로드맵 예정)*
+- ~~**Kafka 운영 환경 통합:** 현재 prod(Cloud Run)에서는 Kafka 비활성화, 로컬에서만 동작. GCP VM에 Kafka 상시 운영 시 로컬·prod 모두 동일 브로커를 사용할 수 있어 환경 차이가 줄어듦. 이 경우 프로파일 분리의 실질적 이유는 Cloud SQL 소켓팩토리 설정 정도만 남게 됨 *(GCP 임시 제외로 보류)*~~
 - **BigQuery 연동 시 Consumer 확장:** 기존 Consumer(`iot-sensor-group`)를 수정하지 않고 별도 Consumer Group(`bigquery-group`)을 추가해 동일 토픽을 독립 구독하는 방식으로 확장 예정. 두 그룹이 독립적으로 모든 메시지를 수신하므로 기존 코드 변경 없이 Consumer 클래스 추가만으로 확장 가능 *(미구현, 로드맵 예정)*
-- **로컬 DB vs Cloud SQL:** 로컬 개발은 로컬 DB 유지. 로컬에서 Cloud SQL 직접 연결 시 배포 데이터 오염 위험·개발 속도 저하·상시 비용 등의 이유로 분리 유지 결정
+- ~~**로컬 DB vs Cloud SQL:** 로컬 개발은 로컬 DB 유지. 로컬에서 Cloud SQL 직접 연결 시 배포 데이터 오염 위험·개발 속도 저하·상시 비용 등의 이유로 분리 유지 결정 *(GCP 임시 제외로 해당 없음)*~~
 - **Redis 도입 — RefreshToken 저장소 및 추가 활용 검토 중:** RefreshToken 저장·갱신·로그아웃 처리를 위한 주 목적 외에, 아래 용도로 추가 활용 검토 중
   - 대시보드 센서 데이터 최근 N개 캐시 — DB 조회 부하 감소
   - `POST /sensor-data` Rate Limiting — 동일 장치에서 비정상적으로 빠른 요청 차단
   - 알림 미읽음 카운트 — counter 구조로 조회 최적화
-  - GCP 환경 설정 방식: Kafka와 동일하게 환경변수(`REDIS_HOST`, `REDIS_PORT`)만 지정하는 방식으로 추상화. 로컬은 docker-compose Redis, prod는 GCP Memorystore 또는 VM 직접 설치 중 선택 예정 *(미구현, 로드맵 예정)*
+  - ~~GCP 환경 설정 방식: Kafka와 동일하게 환경변수(`REDIS_HOST`, `REDIS_PORT`)만 지정하는 방식으로 추상화. 로컬은 docker-compose Redis, prod는 GCP Memorystore 또는 VM 직접 설치 중 선택 예정 *(GCP 임시 제외로 보류)*~~
