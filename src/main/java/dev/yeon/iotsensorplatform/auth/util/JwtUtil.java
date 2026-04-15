@@ -19,13 +19,16 @@ public class JwtUtil {
 
     private final SecretKey secretKey;
     private final long expiration;
+    private final long refreshExpiration;
 
     public JwtUtil(
             @Value("${jwt.secret-key}") String secret,
-            @Value("${jwt.expiration}") long expiration
+            @Value("${jwt.expiration}") long expiration,
+            @Value("${jwt.refresh-expiration}") long refreshExpiration
     ) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expiration = expiration;
+        this.refreshExpiration = refreshExpiration;
     }
 
     public String createToken(String employeeId, String role) {
@@ -35,6 +38,16 @@ public class JwtUtil {
                 .claim(CLAIM_ROLE, role)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expiration))
+                .signWith(secretKey)
+                .compact();
+    }
+
+    public String createRefreshToken(String emplyeeId){
+        Date now = new Date();
+        return Jwts.builder()
+                .subject(emplyeeId)
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + refreshExpiration))
                 .signWith(secretKey)
                 .compact();
     }

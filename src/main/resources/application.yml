@@ -20,6 +20,12 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
 springdoc:
   swagger-ui:
     path: /swagger-ui/index.html
@@ -28,4 +34,5 @@ springdoc:
 jwt:
   secret-key: ${JWT_SECRET:iot-sensor-platform-jwt-secret-key-must-be-at-least-32}
   expiration: 3600000
+  refresh-expiration: 604800000
 

@@ -38,7 +38,7 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/sensor-data")
+                        .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/sensor-data","/auth/refresh")
                         .permitAll()
 
                         // 조직 관리 — SUPER_ADMIN만

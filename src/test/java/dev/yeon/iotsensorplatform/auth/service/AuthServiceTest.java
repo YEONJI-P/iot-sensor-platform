@@ -2,6 +2,7 @@ package dev.yeon.iotsensorplatform.auth.service;
 
 import dev.yeon.iotsensorplatform.auth.dto.LoginRequest;
 import dev.yeon.iotsensorplatform.auth.dto.RegisterRequest;
+import dev.yeon.iotsensorplatform.auth.dto.TokenResponse;
 import dev.yeon.iotsensorplatform.auth.util.JwtUtil;
 import dev.yeon.iotsensorplatform.user.entity.Role;
 import dev.yeon.iotsensorplatform.user.entity.User;
@@ -15,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import javax.swing.text.html.Option;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,6 +32,8 @@ class AuthServiceTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private JwtUtil jwtUtil;
+    @Mock
+    private RefreshTokenService refreshTokenService;
     @InjectMocks
     private AuthService authService;
 
@@ -66,11 +70,13 @@ class AuthServiceTest {
         when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(mockUser));
         when(passwordEncoder.matches("password123!", "encoded_password")).thenReturn(true);
         when(jwtUtil.createToken("EMP001", "VIEWER")).thenReturn("mock_token");
+        when(jwtUtil.createRefreshToken("EMP001")).thenReturn("mock_refresh_token");
 
-        String token = authService.login(request);
+        TokenResponse response = authService.login(request);
 
-        assertThat(token).isEqualTo("mock_token");
-        verify(jwtUtil, times(1)).createToken("EMP001", "VIEWER");
+        assertThat(response.accessToken()).isEqualTo("mock_token");
+        assertThat(response.refreshToken()).isEqualTo("mock_refresh_token");
+        verify(refreshTokenService,times(1)).save("EMP001","mock_refresh_token");
     }
 
     @Test
@@ -130,5 +136,48 @@ class AuthServiceTest {
         when(passwordEncoder.matches("password123!", "encoded_password")).thenReturn(true);
 
         assertThrows(DisabledException.class, () -> authService.login(request));
+    }
+
+    @Test
+    void refresh_success(){
+        User mockUser = User.builder().employeeId("EMP001")
+                .password("encoded_password")
+                .role(Role.VIEWER)
+                .status(UserStatus.ACTIVE).build();
+
+        when(jwtUtil.validateToken("old_refresh")).thenReturn(true);
+        when(jwtUtil.getEmployeeId("old_refresh")).thenReturn("EMP001");
+        when(refreshTokenService.validate("EMP001","old_refresh")).thenReturn(true);
+        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(mockUser));
+        when(jwtUtil.createToken("EMP001","VIEWER")).thenReturn("new_access_token");
+        when(jwtUtil.createRefreshToken("EMP001")).thenReturn("new_refresh_token");
+
+        TokenResponse response = authService.refresh("old_refresh");
+
+        assertThat(response.accessToken()).isEqualTo("new_access_token");
+        assertThat(response.refreshToken()).isEqualTo("new_refresh_token");
+        verify(refreshTokenService,times(1)).save("EMP001","new_refresh_token");
+
+    }
+
+    @Test
+    void refresh_fail_invalid_token(){
+        when(jwtUtil.validateToken("bad_token")).thenReturn(false);
+        assertThrows(IllegalArgumentException.class,()->authService.refresh("bad_token"));
+    }
+
+    @Test
+    void refresh_fail_token_mismatch(){
+        when(jwtUtil.validateToken("stolen_token")).thenReturn(true);
+        when(jwtUtil.getEmployeeId("stolen_token")).thenReturn("EMP001");
+        when(refreshTokenService.validate("EMP001","stolen_token")).thenReturn(false);
+
+        assertThrows(IllegalArgumentException.class,()->authService.refresh("stolen_token"));
+    }
+
+    @Test
+    void logout_success(){
+        authService.logout("EMP001");
+        verify(refreshTokenService,times(1)).delete("EMP001");
     }
 }

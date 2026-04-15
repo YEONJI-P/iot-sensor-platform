@@ -37,6 +37,7 @@ public class JwtFilter extends OncePerRequestFilter {
             String employeeId = jwtUtil.getEmployeeId(token);
             String role = jwtUtil.getRole(token);
 
+            // Security Context - Principal
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
                             employeeId,

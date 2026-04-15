@@ -1,6 +1,7 @@
 package dev.yeon.iotsensorplatform.auth.controller;
 
 import dev.yeon.iotsensorplatform.auth.dto.LoginRequest;
+import dev.yeon.iotsensorplatform.auth.dto.RefreshRequest;
 import dev.yeon.iotsensorplatform.auth.dto.RegisterRequest;
 import dev.yeon.iotsensorplatform.auth.dto.TokenResponse;
 import dev.yeon.iotsensorplatform.auth.service.AuthService;
@@ -9,6 +10,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -30,6 +32,19 @@ public class AuthController {
     @SecurityRequirements
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@RequestBody @Valid LoginRequest request) {
-        return ResponseEntity.ok(new TokenResponse(authService.login(request)));
+        return ResponseEntity.ok(authService.login(request));
     }
+
+    @SecurityRequirements
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenResponse> refresh(@RequestBody @Valid RefreshRequest reqeust){
+        return ResponseEntity.ok(authService.refresh(reqeust.refreshToken()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<MessageResponse> logout(@AuthenticationPrincipal String employeeId){
+        authService.logout(employeeId);
+        return ResponseEntity.ok(new MessageResponse("로그아웃 되었어요"));
+    }
+
 }
