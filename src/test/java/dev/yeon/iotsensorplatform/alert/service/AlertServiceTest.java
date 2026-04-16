@@ -18,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import javax.swing.text.html.Option;
 import java.util.List;
 import java.util.Optional;
 
@@ -129,5 +130,40 @@ class AlertServiceTest {
         List<AlertResponse> result = alertService.getAllAlertsByDeviceId("EMP001", 1L);
 
         assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void getAllAlertsByDeviceId_fail_user_not_found(){
+        when(userRepository.findByEmployeeId("NOTEXIST")).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,()->alertService.getAllAlertsByDeviceId("NOTEXIST",1L));
+    }
+
+    @Test
+    void getAllAlertsByDeviceId_fail_access_denied() {
+        User user = mockUser();
+        Device device = mockDevice();
+
+        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        doThrow(new IllegalArgumentException("접근 권한이 없어요"))
+                .when(accessControlService).assertCanAccessDevice(user, device);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> alertService.getAllAlertsByDeviceId("EMP001", 1L));
+    }
+
+    @Test
+    void getAllAlerts_returns_empty_when_no_alerts_for_accessible_devices() {
+        User user = mockUser();
+
+        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
+        when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of(1L));
+        when(alertRepository.findAllByDeviceIdInOrderByCreatedAtDesc(List.of(1L)))
+                .thenReturn(List.of());
+
+        List<AlertResponse> result = alertService.getAllAlerts("EMP001");
+
+        assertThat(result).isEmpty();
     }
 }
