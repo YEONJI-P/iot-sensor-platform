@@ -200,9 +200,10 @@
         errEl.classList.remove('d-none');
         return;
       }
-      const { token } = await res.json();
-      localStorage.setItem('jwt_token', token);
-      showHome(token);
+      const { accessToken,refreshToken } = await res.json();
+      localStorage.setItem('jwt_token', accessToken);
+      localStorage.setItem('refresh_token', refreshToken);
+      showHome(accessToken);
     } catch {
       errEl.textContent = '서버 연결 오류';
       errEl.classList.remove('d-none');
@@ -210,9 +211,22 @@
   }
 
   /* ── 로그아웃 ── */
-  function logout() {
-    localStorage.removeItem('jwt_token');
-    showLogin();
+  async function logout() {
+    const accessToken = localStorage.getItem('jwt_token');
+    try{
+      if(accessToken){
+        await fetch('/auth/logout',{
+          method:'POST',
+          headers: {'Authorization': 'Bearer ' + accessToken}
+        });
+      }
+    } catch{
+
+    } finally {
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('refresh_token');
+      showLogin();
+    }
   }
 
   document.addEventListener('keydown', e => {

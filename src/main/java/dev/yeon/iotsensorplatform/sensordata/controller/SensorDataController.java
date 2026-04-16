@@ -18,12 +18,11 @@ public class SensorDataController {
 
     private final SensorDataService sensorDataService;
 
-    // 외부 장치 또는 수동 입력 — employeeId가 있으면 MANUAL, 없으면 AUTO
+    // 외부 장치 입력
     @PostMapping
     public ResponseEntity<MessageResponse> receive(
-            @RequestBody SensorDataRequest request,
-            @AuthenticationPrincipal String employeeId) {
-        sensorDataService.receive(request, employeeId);
+            @RequestBody SensorDataRequest request) {
+        sensorDataService.receive(request);
         return ResponseEntity.ok(new MessageResponse("메시지 발행 완료"));
     }
 

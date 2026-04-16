@@ -15,7 +15,6 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
-@Profile("!prod")
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -43,7 +42,7 @@ public class SensorDataConsumer {
                 });
     }
 
-    @KafkaListener(topics = "${kafka.topic.sensor-data:sensor-data}", groupId = "iot-sensor-group")
+    @KafkaListener(topics = "${spring.kafka.topic.sensor-data:sensor-data}", groupId = "iot-sensor-group")
     public void save(String message) {
         SensorDataRequest request = parseMessage(message);
         if (request == null) return;
@@ -55,8 +54,6 @@ public class SensorDataConsumer {
         SensorData sensorData = SensorData.builder()
                 .device(device)
                 .value(request.getValue())
-                .inputType(SensorData.InputType.AUTO)
-                .createdBy(null)
                 .build();
         sensorDataRepository.save(sensorData);
         log.info("센서 데이터 저장 완료 - deviceId: {}, value: {}", request.getDeviceId(), request.getValue());

@@ -11,7 +11,6 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
-@Profile("!prod") // prod 환경이 아닐때만 Bean 생성
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -19,7 +18,7 @@ public class SensorDataProducer {
     private final KafkaTemplate<String,String> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${kafka.topic.sensor-data:sensor-data}")
+    @Value("${spring.kafka.topic.sensor-data:sensor-data}")
     private String topic;
 
     public void send(SensorDataRequest request) {

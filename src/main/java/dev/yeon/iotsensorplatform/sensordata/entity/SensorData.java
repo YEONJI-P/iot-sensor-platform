@@ -27,27 +27,14 @@ public class SensorData {
 
     private Double value;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private InputType inputType;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by")
-    private User createdBy;
-
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime recordedAt;
 
     @Builder
-    public SensorData(Device device, Double value, InputType inputType, User createdBy) {
+    public SensorData(Device device, Double value) {
         this.device = device;
         this.value = value;
-        this.inputType = inputType != null ? inputType : InputType.AUTO;
-        this.createdBy = createdBy;
     }
 
-    public enum InputType {
-        AUTO, MANUAL
-    }
 }
