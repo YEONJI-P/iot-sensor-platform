@@ -298,12 +298,28 @@ Kafka → iot-sensor-group → SensorData 저장 + Alert 생성 → PostgreSQL  
 git clone https://github.com/YEONJI-P/iot-sensor-platform.git
 cd iot-sensor-platform
 
-# 2. PostgreSQL + Kafka 실행
+# 2. 환경변수 파일 생성 (docker-compose 의 PostgreSQL 이 .env 를 요구)
+cp .env.example .env
+
+# 3. PostgreSQL + Kafka + Redis 실행
 docker-compose up -d
 
-# 3. 애플리케이션 실행
+# 4. JWT 서명 키 설정 — 기본값이 없어 미설정 시 부팅 실패 (셸 export 또는 IDE 실행 구성)
+export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
+
+# 5. 애플리케이션 실행
 ./gradlew bootRun
 ```
+
+> `.env` 는 docker-compose(Postgres) 전용이며 Spring 은 자동 로드하지 않는다. 앱이 쓰는 `JWT_SECRET` 은 위처럼 셸/IDE에 직접 주입한다.
+
+### 테스트 실행
+
+```bash
+./gradlew test
+```
+
+> 테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라(Postgres/Kafka/Redis) 없이 실행된다. 설정: `src/test/resources/application.yml`.
 
 ### Swagger UI
 
@@ -363,7 +379,7 @@ docker-compose up -d
 | `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/iot_sensor_db_v2` |
 | `DB_USERNAME` | DB 사용자명 | `postgres` |
 | `DB_PASSWORD` | DB 비밀번호 | `postgres` |
-| `JWT_SECRET` | JWT 서명 키 (32자 이상) | 개발용 기본값 |
+| `JWT_SECRET` | JWT 서명 키 (32자 이상) | **없음 (필수)** — 미설정 시 부팅 실패 |
 | `KAFKA_BOOTSTRAP_SERVERS` | Kafka 브로커 주소 | `localhost:9092` |
 
 > ~~초기 관리자 계정 자동 생성 (DataInitializer)~~ → `iot/seed.sql` 실행으로 투입. 계정: `employeeId=ADMIN001` / `password=admin1234!`
