@@ -1,0 +1,27 @@
+# 테스트 전용 설정. 실 인프라(Postgres/Redis/Kafka) 없이 컨텍스트가 뜨도록 구성.
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  kafka:
+    # 테스트에선 브로커 미기동 → 리스너 컨테이너 자동 시작 비활성 (컨텍스트 로드 시 연결 시도 방지)
+    listener:
+      auto-startup: false
+    bootstrap-servers: localhost:9092
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+jwt:
+  secret-key: test-secret-key-for-ci-only-must-be-at-least-32-bytes
+  expiration: 3600000
+  refresh-expiration: 604800000
