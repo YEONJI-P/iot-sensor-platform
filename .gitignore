@@ -37,3 +37,7 @@ out/
 ### VS Code ###
 .vscode/
 .venv/
+
+# 로컬 전용 (내부 전략 문서·AI 도구 — 추적 제외)
+docs/local/
+.claude/
