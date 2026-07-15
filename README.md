@@ -235,7 +235,7 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | POST | `/admin/zones/{id}/users` | 구역에 사용자 추가 | JWT |
 | DELETE | `/admin/zones/{id}/users/{userId}` | 구역에서 사용자 제거 | JWT |
 
-### Device (조회는 인증, 쓰기는 SYSTEM_ADMIN·MEMBER)
+### Device (조회는 인증, 쓰기는 SYSTEM_ADMIN, MEMBER)
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
@@ -288,7 +288,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 - 사번(employeeId) 기반 가입 신청, 가입 즉시 `PENDING` 상태로 저장
 - `FACTORY_ADMIN` 이상의 관리자가 승인 또는 반려(`REJECTED`) 처리. 승인 시 `ACTIVE` 전환과 함께 역할 부여, 소속 구역 배정을 한 트랜잭션에서 수행
-- `FACTORY_ADMIN`은 자신의 소속 공장 사용자만 조회·승인 가능 (`SYSTEM_ADMIN`은 전체). 부여 가능한 역할도 자기 역할 이하로 제한
+- `FACTORY_ADMIN`은 자신의 소속 공장 사용자만 조회, 승인할 수 있고 (`SYSTEM_ADMIN`은 전체), 부여 가능한 역할도 자기 역할 이하로 제한
 - `PENDING`, `REJECTED` 상태에서 로그인 시 `DisabledException`으로 차단
 - 4단계 역할 기반 접근 제어
 
@@ -314,7 +314,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 - 장치에 기대 수신 주기(`expectedIntervalSeconds`)와 마지막 수신 시각(`lastSeenAt`)을 두고, 수신마다 갱신
 - 주기 스케줄러가 기대 주기를 넘겨 침묵한 장치를 감지 (데이터가 안 오는 상황을 신호로 포착)
-- 침묵을 곧 고장으로 단정하지 않고 구역(zone) 단위로 비교: 같은 구역 장치가 동시 침묵하면 사이트 사건(계획 정지, 게이트웨이 장애)으로 보고 구역 1건으로 집계(`WARNING`), 이웃이 정상 수신 중인데 단독 침묵하면 개별 고장으로 `CRITICAL` + AX 원인진단(규격 변경 의심 vs 소스 침묵)
+- 같은 구역 장치가 동시에 침묵하면 사이트 사건(계획 정지, 게이트웨이 장애)으로 보고 구역 한 건으로 집계(`WARNING`), 이웃이 정상 수신 중인데 단독 침묵하면 개별 고장으로 `CRITICAL` + AX 원인진단
 
 ### LLM 기반 이상 설명 (AX 서비스)
 
@@ -447,7 +447,7 @@ pip install requests
 # 3. 전체 7개 채널 리플레이 (1초 간격)
 python services/simulator/simulator.py --all
 
-# 특정 채널만 / 간격·행수 조절
+# 특정 채널만 / 간격, 행수 조절
 python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 ```
 
@@ -470,20 +470,20 @@ python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 
 ### 메시지 버스 제거
 
-소비자가 하나뿐이고 타 서비스 연동도 없어 Kafka는 과설계였습니다. 수신 흐름을 동기 처리(저장, 임계값 판정, 알림 생성)로 단순화하고 제거했습니다. 다중 소비자가 실제로 필요해지면 버스 도입을 재검토합니다.
+소비자가 하나라 메시지 버스(Kafka)를 두지 않고 수신을 동기 처리(저장, 임계값 판정, 알림 생성)로 했습니다. 다중 소비자가 필요해지면 다시 검토합니다.
 
 ### 접근 제어 계층
 
 공장(Factory), 구역(Zone), 구역 소속(ZoneUser) 3계층으로 접근 범위를 계산합니다. `SYSTEM_ADMIN`은 전체, `FACTORY_ADMIN`은 소속 공장, `MEMBER`와 `VIEWER`는 소속 구역으로 범위가 좁혀지며, `VIEWER`는 읽기 전용으로 장치 변경이 차단됩니다.
 
-### freshness 오탐 억제 — 침묵은 곧 고장이 아니다
+### freshness 오탐 억제
 
-설비 센서는 정상적으로도 조용해집니다(계획 정지, 비가동, 게이트웨이 점검). 침묵을 무조건 알림으로 올리면 공장이 문을 닫을 때 장치 수만큼 알림이 쏟아집니다. 그래서 구역(zone) 단위로 비교해, 여러 장치가 동시에 침묵하면 사이트 단위 사건으로 보고 한 건으로 집계(`WARNING`)하고, 이웃이 정상 수신 중인데 혼자 침묵할 때만 개별 고장으로 `CRITICAL` 승격 + AX 원인진단을 붙입니다. 설비 가동 상태나 운영시간 모델 없이도 사이트 다운타임과 개별 장애를 구분하는 경량 휴리스틱입니다.
+센서는 정상적으로도 조용해집니다(계획 정지, 비가동, 점검). 침묵을 모두 알림으로 올리면 공장이 문을 닫을 때 장치 수만큼 알림이 쏟아집니다. 그래서 같은 구역 장치가 동시에 침묵하면 사이트 단위 사건으로 보고 한 건으로 묶고(`WARNING`), 이웃은 정상 수신 중인데 혼자 침묵할 때만 개별 고장으로 `CRITICAL` + AX 원인진단을 붙입니다.
 
-### AX 서비스 분리와 프레임워크 미사용
+### AX 분석 서비스
 
-이상 탐지는 임계값 규칙으로 충분하고, LLM은 근거 설명과 침묵 원인 진단에만 씁니다. 이 규모에서 CrewAI, LangGraph 같은 에이전트 프레임워크는 과설계라 배제하고 LLM SDK를 직접 호출합니다. LLM 호출은 수신 hot path 밖의 스케줄러에서만 일어나 수신 지연에 영향을 주지 않습니다. provider를 얇은 인터페이스로 추상화해 벤더에 종속되지 않습니다.
+이상 탐지는 임계값 규칙으로 하고, LLM은 근거 설명과 침묵 원인 진단에만 씁니다. 에이전트 프레임워크 없이 LLM API를 직접 호출합니다. 이 호출은 수신 경로 밖 스케줄러에서만 일어나 수신에 영향을 주지 않습니다. provider는 인터페이스로 분리해 교체할 수 있습니다.
 
 ### 검토 중
 
-- DeviceType 외부화 검토: 현재 DeviceType(`TEMPERATURE`, `PRESSURE`, `CURRENT`, `POWER`, `ACCELERATION`)이 Enum으로 하드코딩되어 있어 타입 추가 시 빌드가 필요합니다. 임계값 초과 감지 로직이 타입에 무관하게 동일하므로 외부 설정으로 관리할 여지가 있습니다. 반면 Role, UserStatus는 값마다 인가 로직과 상태 전이가 코드에 묶여 있어 Enum이 적합합니다.
+- DeviceType이 Enum 하드코딩이라 타입 추가 시 빌드가 필요합니다. 외부 설정화는 검토 중입니다.
