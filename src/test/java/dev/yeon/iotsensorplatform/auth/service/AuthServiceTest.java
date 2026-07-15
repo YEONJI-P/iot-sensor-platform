@@ -173,6 +173,8 @@ class AuthServiceTest {
         when(refreshTokenService.validate("EMP001","stolen_token")).thenReturn(false);
 
         assertThrows(IllegalArgumentException.class,()->authService.refresh("stolen_token"));
+        // 불일치 시 저장 토큰 삭제(강제 로그아웃)까지 수행하는지 검증
+        verify(refreshTokenService,times(1)).delete("EMP001");
     }
 
     @Test

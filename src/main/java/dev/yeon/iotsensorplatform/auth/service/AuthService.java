@@ -11,11 +11,13 @@ import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.entity.UserStatus;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -83,21 +85,16 @@ public class AuthService {
         }
 
         /*
-        탈취 이슈 발생 시나리오
-          1. 정상 사용자 A가 로그인 → Redis: refresh:EMP001 = "tokenA"
-          2. 공격자가 tokenA 탈취
-          3. 공격자가 /auth/refresh 호출 → 새 토큰 발급 + Redis: refresh:EMP001 = "tokenB"
-          4. 이후 사용자 A가 /auth/refresh 호출 (tokenA로)
-             → JWT 파싱은 통과 (아직 만료 안 됨)
-             → Redis 비교: "tokenA" ≠ "tokenB" → 불일치
-
-        - 해당 employeeId의 Redis 토큰 즉시 삭제 (양쪽 모두 강제 로그아웃)
-        - 보안 알림 발송
-        - 로그 기록
+        탈취 이슈 대응 (refresh token rotation)
+          정상 사용자 A 로그인 → Redis: refresh:EMP001 = "tokenB"(회전됨)
+          이후 A가 구 토큰 tokenA로 refresh → Redis 값과 불일치
+          → 저장된 토큰을 즉시 삭제해 양쪽(정상/공격자) 모두 강제 로그아웃시키고 재로그인 유도
          */
 
         String employeeId = jwtUtil.getEmployeeId(refreshToken);
         if(!refreshTokenService.validate(employeeId,refreshToken)){
+            refreshTokenService.delete(employeeId);
+            log.warn("refresh token 불일치 - 저장 토큰 삭제(강제 로그아웃) - employeeId: {}", employeeId);
             throw new IllegalArgumentException("로그인 정보가 일치하지 않아요");
         }
 
