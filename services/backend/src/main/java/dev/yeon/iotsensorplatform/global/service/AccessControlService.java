@@ -25,7 +25,7 @@ public class AccessControlService {
         if (user.getRole() == Role.SYSTEM_ADMIN) {
             return deviceRepository.findAll();
         }
-        if (user.getRole() == Role.ORG_ADMIN) {
+        if (user.getRole() == Role.FACTORY_ADMIN) {
             if (user.getFactory() == null) return List.of();
             return deviceRepository.findAllByZone_Factory_Id(user.getFactory().getId());
         }
@@ -40,7 +40,7 @@ public class AccessControlService {
         if (user.getRole() == Role.SYSTEM_ADMIN) {
             return deviceRepository.findAllIds();
         }
-        if (user.getRole() == Role.ORG_ADMIN) {
+        if (user.getRole() == Role.FACTORY_ADMIN) {
             if (user.getFactory() == null) return List.of();
             return deviceRepository.findIdsByFactoryId(user.getFactory().getId());
         }
@@ -52,7 +52,7 @@ public class AccessControlService {
     @Transactional(readOnly = true)
     public void assertCanAccessDevice(User user, Device device) {
         if (user.getRole() == Role.SYSTEM_ADMIN) return;
-        if (user.getRole() == Role.ORG_ADMIN) {
+        if (user.getRole() == Role.FACTORY_ADMIN) {
             if (user.getFactory() == null ||
                     device.getZone() == null ||
                     !device.getZone().getFactory().getId().equals(user.getFactory().getId())) {
@@ -76,7 +76,7 @@ public class AccessControlService {
     @Transactional(readOnly = true)
     public void assertCanManageZone(User user, Zone zone) {
         if (user.getRole() == Role.SYSTEM_ADMIN) return;
-        if (user.getRole() == Role.ORG_ADMIN) {
+        if (user.getRole() == Role.FACTORY_ADMIN) {
             if (user.getFactory() == null ||
                     !zone.getFactory().getId().equals(user.getFactory().getId())) {
                 throw new AccessDeniedException("본인 공장의 구역만 관리할 수 있어요");

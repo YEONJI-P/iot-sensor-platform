@@ -93,14 +93,14 @@ public class SecurityConfigTest {
     }
 
     @Test
-    @WithMockUser(roles = "ORG_ADMIN")
+    @WithMockUser(roles = "FACTORY_ADMIN")
     void get_sensor_data_org_admin_forbidden() throws Exception {
         mockMvc.perform(get("/sensor-data"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(roles = "ORG_ADMIN")
+    @WithMockUser(roles = "FACTORY_ADMIN")
     void get_admin_zones_org_admin_ok() throws Exception {
         mockMvc.perform(get("/admin/zones"))
                 .andExpect(status().is(not(403)));

@@ -37,8 +37,8 @@ INSERT INTO zones (factory_id, name, description, created_at) VALUES
 -- =============================================================================
 INSERT INTO users (employee_id, name, email, password, role, status, factory_id, created_at, updated_at) VALUES
     ('ADMIN001', '시스템관리자',  'admin@factory.com', crypt('admin1234!', gen_salt('bf', 10)), 'SYSTEM_ADMIN', 'ACTIVE', (SELECT id FROM factories WHERE name = '엔진시험동'), NOW(), NOW()),
-    ('MGR001',   '엔진동-관리자', 'mgr_a@factory.com', crypt('mgr1234!',   gen_salt('bf', 10)), 'ORG_ADMIN',    'ACTIVE', (SELECT id FROM factories WHERE name = '엔진시험동'), NOW(), NOW()),
-    ('MGR002',   '가공동-관리자', 'mgr_b@factory.com', crypt('mgr1234!',   gen_salt('bf', 10)), 'ORG_ADMIN',    'ACTIVE', (SELECT id FROM factories WHERE name = '가공동'),     NOW(), NOW()),
+    ('MGR001',   '엔진동-관리자', 'mgr_a@factory.com', crypt('mgr1234!',   gen_salt('bf', 10)), 'FACTORY_ADMIN',    'ACTIVE', (SELECT id FROM factories WHERE name = '엔진시험동'), NOW(), NOW()),
+    ('MGR002',   '가공동-관리자', 'mgr_b@factory.com', crypt('mgr1234!',   gen_salt('bf', 10)), 'FACTORY_ADMIN',    'ACTIVE', (SELECT id FROM factories WHERE name = '가공동'),     NOW(), NOW()),
     ('DEV001',   '설비담당자A',   'dev01@factory.com', crypt('dev1234!',   gen_salt('bf', 10)), 'MEMBER',       'ACTIVE', (SELECT id FROM factories WHERE name = '엔진시험동'), NOW(), NOW()),
     ('ANL001',   '분석담당자A',   'anl01@factory.com', crypt('anl1234!',   gen_salt('bf', 10)), 'MEMBER',       'ACTIVE', (SELECT id FROM factories WHERE name = '엔진시험동'), NOW(), NOW()),
     ('INP001',   '가공담당자B',   'inp01@factory.com', crypt('inp1234!',   gen_salt('bf', 10)), 'MEMBER',       'ACTIVE', (SELECT id FROM factories WHERE name = '가공동'),     NOW(), NOW()),
