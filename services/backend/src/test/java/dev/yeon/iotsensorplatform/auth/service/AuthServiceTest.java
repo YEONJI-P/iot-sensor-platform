@@ -39,7 +39,7 @@ class AuthServiceTest {
 
     @Test
     void register_success() {
-        RegisterRequest request = new RegisterRequest("EMP001", "홍길동", "password123!", null, null, null);
+        RegisterRequest request = new RegisterRequest("EMP001", "홍길동", "password123!", null, null);
         when(userRepository.existsByEmployeeId("EMP001")).thenReturn(false);
         when(passwordEncoder.encode("password123!")).thenReturn("encoded_password");
 
@@ -50,7 +50,7 @@ class AuthServiceTest {
 
     @Test
     void register_employeeId_duplicate() {
-        RegisterRequest request = new RegisterRequest("EMP001", "홍길동", "password123!", null, null, null);
+        RegisterRequest request = new RegisterRequest("EMP001", "홍길동", "password123!", null, null);
         when(userRepository.existsByEmployeeId("EMP001")).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> authService.register(request));

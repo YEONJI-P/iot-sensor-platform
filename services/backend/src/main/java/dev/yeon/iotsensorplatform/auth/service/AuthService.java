@@ -48,7 +48,6 @@ public class AuthService {
                 .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .department(request.getDepartment())
                 .factory(org)
                 .role(Role.VIEWER)
                 .status(UserStatus.PENDING)

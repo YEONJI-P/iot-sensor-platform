@@ -33,8 +33,6 @@ public class User {
 
     private String password;
 
-    private String department;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "factory_id")
     private Factory factory;
@@ -56,12 +54,11 @@ public class User {
 
     @Builder
     public User(String employeeId, String name, String email, String password,
-                String department, Factory factory, Role role, UserStatus status) {
+                Factory factory, Role role, UserStatus status) {
         this.employeeId = employeeId;
         this.name = name;
         this.email = email;
         this.password = password;
-        this.department = department;
         this.factory = factory;
         this.role = role;
         this.status = status;

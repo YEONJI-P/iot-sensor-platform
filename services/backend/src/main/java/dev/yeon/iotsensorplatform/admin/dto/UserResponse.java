@@ -14,7 +14,6 @@ public class UserResponse {
     private final String employeeId;
     private final String name;
     private final String email;
-    private final String department;
     private final Long factoryId;
     private final String factoryName;
     private final Role role;
@@ -27,7 +26,6 @@ public class UserResponse {
         this.employeeId = user.getEmployeeId();
         this.name = user.getName();
         this.email = user.getEmail();
-        this.department = user.getDepartment();
         this.factoryId = user.getFactory() != null ? user.getFactory().getId() : null;
         this.factoryName = user.getFactory() != null ? user.getFactory().getName() : null;
         this.role = user.getRole();

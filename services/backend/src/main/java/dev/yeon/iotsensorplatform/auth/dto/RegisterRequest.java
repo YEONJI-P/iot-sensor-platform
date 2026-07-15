@@ -27,9 +27,6 @@ public class RegisterRequest {
     @Schema(description = "이메일 (선택)", example = "hong@company.com")
     private String email;
 
-    @Schema(description = "부서 (선택)", example = "개발팀")
-    private String department;
-
     @Schema(description = "공장 ID (선택)", example = "1")
     private Long factoryId;
 }
