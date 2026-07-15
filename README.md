@@ -1,6 +1,6 @@
-# 🏭 IoT Sensor Platform
+# IoT Sensor Platform
 
-> 공장/설비 센서 데이터를 실시간 수집·적재하고 이상 감지 시 알림을 발행하는 IoT 모니터링 백엔드 플랫폼
+> 제조 설비 센서 데이터를 수집하고 이상 발생 시 근거와 함께 알림을 생성하는 센서 시계열 수집, 모니터링 백엔드
 
 <br>
 
@@ -8,127 +8,152 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot_3.x-6DB33F?style=flat-square&logo=springboot&logoColor=white)
 ![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?style=flat-square&logo=springsecurity&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white)
-![Kafka](https://img.shields.io/badge/Apache_Kafka-231F20?style=flat-square&logo=apachekafka&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis_(예정)-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)
 
 <br>
 
-📂 **GitHub:** https://github.com/YEONJI-P/iot-sensor-platform
+GitHub: https://github.com/YEONJI-P/iot-sensor-platform
 
 <br>
 
 ---
 
-## 📋 목차
+## 목차
 
 1. [프로젝트 소개](#1-프로젝트-소개)
-2. [기술 스택](#2-기술-스택)
-3. [시스템 아키텍처](#3-시스템-아키텍처)
-4. [ERD](#4-erd)
-5. [API 명세](#5-api-명세)
-6. [주요 기능](#6-주요-기능)
-7. [확장 로드맵](#7-확장-로드맵)
-8. [실행 방법](#8-실행-방법)
+2. [범위와 경계](#2-범위와-경계)
+3. [기술 스택](#3-기술-스택)
+4. [시스템 아키텍처](#4-시스템-아키텍처)
+5. [ERD](#5-erd)
+6. [API 명세](#6-api-명세)
+7. [주요 기능](#7-주요-기능)
+8. [확장 로드맵](#8-확장-로드맵)
+9. [실행 방법](#9-실행-방법)
+10. [설계 메모](#10-설계-메모)
 
 ---
 
 ## 1. 프로젝트 소개
 
-IoT Sensor Platform은 제조 설비·공장 환경에서 발생하는 센서 데이터를 실시간으로 수집하고, 이상 징후 발생 시 자동으로 알림을 생성하는 **IoT 모니터링 백엔드 플랫폼**입니다.
+제조 설비, 공장 환경에서 발생하는 센서 데이터를 수집하고, 임계값을 벗어난 이상 징후가 보이면 근거와 함께 알림을 생성하는 모니터링 백엔드입니다. 수집한 센서 시계열과 알림 이력은 영속 저장되어 사후 조회할 수 있습니다.
 
-사번(employeeId) 기반의 **승인제 회원 관리**와 6단계 **역할 기반 접근 제어(RBAC)** 를 통해 조직 내 권한을 세밀하게 관리할 수 있습니다.
-Kafka 이벤트 파이프라인으로 대량의 센서 데이터를 안정적으로 처리합니다.
-
-<br>
+사번(employeeId) 기반의 승인제 회원 관리와 4단계 역할 기반 접근 제어(RBAC)를 통해, 공장, 구역 단위로 접근 범위를 제한합니다.
 
 ---
 
-## 2. 기술 스택
+## 2. 범위와 경계
+
+이 프로젝트는 게이트웨이가 HTTP/JSON으로 전달한 센서 데이터를 받아 저장하고 감시하는 백엔드입니다. 현장 프로토콜(Modbus, OPC-UA)의 수집과 변환은 범위 밖입니다.
+
+```mermaid
+graph LR
+    PLC[현장 설비<br>PLC / 센서]
+    GW[엣지 게이트웨이<br>프로토콜 변환]
+    API[이 프로젝트<br>수집 + 모니터링 백엔드]
+
+    PLC -->|Modbus / OPC-UA| GW
+    GW -->|HTTP / JSON| API
+```
+
+실제 실시간 센서 대신, 저장된 센서 시계열을 시간 순으로 흘려보내 수신을 재현합니다.
+
+---
+
+## 3. 기술 스택
 
 | 영역 | 기술 |
 |---|---|
 | Language | Java 17 |
 | Framework | Spring Boot 3.x, Spring Security |
-| Auth | JWT (JSON Web Token) |
+| Auth | JWT (JSON Web Token), Redis Refresh Token |
 | ORM | Spring Data JPA (Hibernate) |
-| Message Queue | Apache Kafka |
 | Database | PostgreSQL |
-| Cache | Redis *(예정)* |
 | API Docs | Swagger (springdoc-openapi) |
-| Test | JUnit5, Mockito |
+| Test | JUnit5, Mockito, H2 |
 | Container | Docker, Docker Compose |
-
-<br>
+| CI | GitHub Actions |
 
 ---
 
-## 3. 시스템 아키텍처
+## 4. 시스템 아키텍처
+
+센서 데이터 수신은 별도 메시지 버스 없이 동기 처리합니다. 수신 요청이 들어오면 한 트랜잭션 안에서 센서 데이터를 저장하고, 임계값 초과를 판정해 알림을 생성합니다.
 
 ```mermaid
 graph TD
-    SIM[센서 시뮬레이터\nHTTP POST]:::client
-    CLI[외부 클라이언트\nSwagger / 앱]:::client
+    SIM[센서 시뮬레이터 / 게이트웨이]
+    CLI[클라이언트<br>Swagger, 대시보드]
 
-    subgraph API["Spring Boot API Server"]
-        AUTH[Auth API\nJWT + 승인제 가입]
-        ADMIN[Admin API\n사용자 승인·관리]
-        DEVICE[Device API\n장치 CRUD]
-        SENSOR[Sensor Data API\n데이터 수신]
-        PRODUCER[Kafka Producer]
-    end
-
-    subgraph KAFKA["Apache Kafka (로컬 환경)"]
-        TOPIC[Topic: sensor-data]
-        CA[Consumer\nSensorData 저장 + Alert 생성]
+    subgraph API[Spring Boot API Server]
+        AUTH[Auth<br>JWT, 승인제 가입]
+        ADMIN[Admin<br>사용자 승인, 공장/구역 관리]
+        DEVICE[Device<br>장치 CRUD]
+        SENSOR[Sensor Data<br>수신, 임계값 판정, 알림 생성]
     end
 
     DB[(PostgreSQL)]
+    REDIS[(Redis<br>Refresh Token)]
 
     SIM -->|POST /sensor-data| SENSOR
     CLI --> AUTH
     CLI --> ADMIN
     CLI --> DEVICE
-    CLI --> SENSOR
-    SENSOR --> PRODUCER
-    PRODUCER --> TOPIC
-    TOPIC --> CA -->|SensorData 저장 + Alert 생성| DB
-
-    classDef client fill:#e8f4f8,stroke:#2196F3
+    SENSOR -->|저장 + 임계값 초과 시 알림| DB
+    AUTH --> REDIS
 ```
-
-<br>
 
 ---
 
-## 4. ERD
+## 5. ERD
 
 ```mermaid
 erDiagram
+    factories {
+        bigint id PK
+        varchar name
+        varchar description
+        timestamp created_at
+    }
+
+    zones {
+        bigint id PK
+        bigint factory_id FK
+        varchar name
+        varchar description
+        timestamp created_at
+    }
+
+    zone_users {
+        bigint id PK
+        bigint zone_id FK
+        bigint user_id FK
+        timestamp created_at
+    }
+
     users {
         bigint id PK
         varchar employee_id UK "NOT NULL"
-        varchar email "NULLABLE"
-        varchar password
         varchar name "NOT NULL"
+        varchar email "NULLABLE, UNIQUE"
+        varchar password
         varchar department "NULLABLE"
-        varchar role "SUPER_ADMIN/USER_ADMIN/DEVICE_MANAGER/DATA_INPUTTER/DATA_ANALYST/VIEWER"
+        bigint factory_id FK "NULLABLE"
+        varchar role "SYSTEM_ADMIN/ORG_ADMIN/MEMBER/VIEWER"
         varchar status "PENDING/ACTIVE/REJECTED"
-        bigint organization_id "NULLABLE"
         timestamp created_at
         timestamp updated_at
     }
 
-    devices {
+    device {
         bigint id PK
-        bigint user_id FK
+        bigint zone_id FK
         varchar name
-        varchar type "TEMPERATURE/VIBRATION/ILLUMINANCE"
+        varchar type "TEMPERATURE/VIBRATION/ILLUMINANCE/PRESSURE"
         varchar location
         double threshold_value
-        timestamp created_at
     }
 
     sensor_data {
@@ -147,16 +172,18 @@ erDiagram
         timestamp created_at
     }
 
-    users ||--o{ devices : "등록"
-    devices ||--o{ sensor_data : "수집"
-    devices ||--o{ alerts : "발생"
+    factories ||--o{ zones : "구역 보유"
+    factories ||--o{ users : "소속"
+    zones ||--o{ zone_users : "소속 사용자"
+    users ||--o{ zone_users : "소속 구역"
+    zones ||--o{ device : "설치"
+    device ||--o{ sensor_data : "수집"
+    device ||--o{ alerts : "발생"
 ```
-
-<br>
 
 ---
 
-## 5. API 명세
+## 6. API 명세
 
 Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
@@ -165,18 +192,25 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
 | POST | `/auth/register` | 가입 신청 (status=PENDING) | 불필요 |
-| POST | `/auth/login` | 로그인 — ACTIVE 상태만 허용 | 불필요 |
+| POST | `/auth/login` | 로그인, ACTIVE 상태만 허용 | 불필요 |
+| POST | `/auth/refresh` | Access Token 재발급 | 불필요 |
 
-### Admin `USER_ADMIN 이상`
+### Admin (ORG_ADMIN 이상)
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
 | GET | `/admin/users` | 전체 사용자 목록 | JWT |
 | GET | `/admin/users/pending` | 승인 대기 목록 | JWT |
-| PATCH | `/admin/users/{id}/approve` | 가입 승인 → ACTIVE | JWT |
-| PATCH | `/admin/users/{id}/reject` | 가입 반려 → REJECTED | JWT |
+| PATCH | `/admin/users/{id}/approve` | 가입 승인, ACTIVE 전환 | JWT |
+| PATCH | `/admin/users/{id}/reject` | 가입 반려, REJECTED 전환 | JWT |
+| GET, POST | `/admin/factories` | 공장 조회, 등록 (SYSTEM_ADMIN) | JWT |
+| PUT, DELETE | `/admin/factories/{id}` | 공장 수정, 삭제 (SYSTEM_ADMIN) | JWT |
+| GET, POST | `/admin/zones` | 구역 조회, 등록 | JWT |
+| PUT, DELETE | `/admin/zones/{id}` | 구역 수정, 삭제 | JWT |
+| POST | `/admin/zones/{id}/users` | 구역에 사용자 추가 | JWT |
+| DELETE | `/admin/zones/{id}/users/{userId}` | 구역에서 사용자 제거 | JWT |
 
-### Device `인증 필요`
+### Device (인증 필요, 쓰기는 MEMBER 이상)
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
@@ -189,7 +223,7 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
-| POST | `/sensor-data` | 센서 데이터 수신 (장치 → 서버) | 불필요 |
+| POST | `/sensor-data` | 센서 데이터 수신 (게이트웨이, 장치 to 서버) | 불필요 |
 | GET | `/sensor-data` | 전체 센서 데이터 조회 | JWT |
 | GET | `/sensor-data/{deviceId}` | 장치별 센서 데이터 조회 | JWT |
 
@@ -200,96 +234,83 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | GET | `/alerts` | 전체 알림 조회 | JWT |
 | GET | `/alerts/{deviceId}` | 장치별 알림 조회 | JWT |
 
-### ~~Simulator~~ `삭제 예정`
-
-> ~~⚠️ 시뮬레이터는 포트폴리오 시연 목적의 테스트용 기능입니다. 실제 IoT 센서의 동작을 재현하기 위해 랜덤 센서값을 자동 생성·전송하며, 프로덕션 환경에서의 사용을 목적으로 하지 않습니다.~~
-
-> 🔧 **인앱 시뮬레이터는 서버에서 분리 예정입니다.** 서버 내부에 시뮬레이터를 두는 구조 대신, 별도 Python 스크립트(`iot/simulator.py`)가 실제 IoT 센서처럼 `POST /sensor-data`를 직접 호출하는 방식으로 전환합니다. 아래 API는 해당 전환 완료 후 제거됩니다.
-
-| Method | Endpoint | 설명 | 인증 |
-|---|---|---|---|
-| ~~GET~~ | ~~`/simulator/devices`~~ | ~~시뮬레이션 가능한 장치 목록~~ | ~~JWT~~ |
-| ~~POST~~ | ~~`/simulator/start`~~ | ~~데이터 자동 생성 시작~~ | ~~JWT~~ |
-| ~~POST~~ | ~~`/simulator/stop`~~ | ~~데이터 자동 생성 중단~~ | ~~JWT~~ |
-
-<br>
-
 ---
 
-## 6. 주요 기능
+## 7. 주요 기능
 
-### 👤 승인제 사용자 관리
-- **사번(employeeId)** 기반 가입 신청 — 가입 즉시 `PENDING` 상태로 저장
-- `USER_ADMIN` 이상의 관리자가 승인(`ACTIVE`) 또는 반려(`REJECTED`) 처리
-- `PENDING` / `REJECTED` 상태에서 로그인 시 `DisabledException`으로 차단
-- **6단계 ROLE 기반 접근 제어**: `SUPER_ADMIN` → `USER_ADMIN` → `DEVICE_MANAGER` → `DATA_INPUTTER` → `DATA_ANALYST` → `VIEWER`
-- ~~앱 최초 기동 시 `SUPER_ADMIN` 계정 자동 생성 (`ADMIN001`) — `DataInitializer`~~ → `iot/seed.sql`로 대체 (PostgreSQL native query로 초기 데이터 일괄 투입)
+### 승인제 사용자 관리와 접근 제어
 
-### 📡 Kafka 기반 이벤트 파이프라인
-- 센서 데이터 수신 → Kafka `sensor-data` 토픽 발행
-- 단일 Consumer가 SensorData 저장 + 임계값 초과 감지 → Alert 생성을 순차 처리
+- 사번(employeeId) 기반 가입 신청, 가입 즉시 `PENDING` 상태로 저장
+- `ORG_ADMIN` 이상의 관리자가 승인(`ACTIVE`) 또는 반려(`REJECTED`) 처리
+- `PENDING`, `REJECTED` 상태에서 로그인 시 `DisabledException`으로 차단
+- 4단계 역할 기반 접근 제어
 
-### ~~🤖 IoT 시뮬레이터 (인앱)~~ `삭제 예정`
-> 서버 내부 시뮬레이터는 아래와 같이 별도 Python 스크립트로 전환됩니다.
+  | 역할 | 범위 |
+  |---|---|
+  | `SYSTEM_ADMIN` | 전체 공장, 장치 |
+  | `ORG_ADMIN` | 소속 공장의 구역, 사용자 관리 |
+  | `MEMBER` | 소속 구역 읽기, 쓰기 (장치 관리) |
+  | `VIEWER` | 소속 구역 읽기 전용 (장치 변경 불가) |
 
-~~- 등록된 장치 선택 후 전송 간격·횟수 설정~~
-~~- 랜덤 센서값 자동 생성 및 `/sensor-data` 엔드포인트로 자동 전송~~
-~~- 시뮬레이션 진행 상태 실시간 로그 출력~~
-~~- 실제 IoT 센서 환경 재현을 위한 포트폴리오 전용 테스트 기능~~
+- 공장(Factory), 구역(Zone) 계층과 구역 소속 관계로 접근 범위를 계산하는 `AccessControlService`
+- 초기 데이터는 `iot/seed.sql`(PostgreSQL) 일괄 투입
 
-### 🤖 IoT 시뮬레이터 (외부 스크립트) `iot/simulator.py`
-- 실제 IoT 센서처럼 서버 외부에서 `POST /sensor-data`를 직접 호출
+### 센서 데이터 수신과 알림
+
+- `POST /sensor-data` 수신 시 한 트랜잭션에서 센서 데이터 저장, 임계값 초과 판정, 초과 시 알림 생성
+- 별도 메시지 버스 없이 동기 처리 (설계 근거는 아래 설계 메모 참고)
+- 수집한 센서 시계열과 알림 이력을 영속 저장하고 목록, 상세로 재조회
+
+### 인증
+
+- JWT 기반 stateless 인증, Redis에 Refresh Token 저장
+- Refresh Token 회전, 불일치 시 저장 토큰을 삭제해 강제 로그아웃 처리
+
+### 센서 시뮬레이터 (`iot/simulator.py`)
+
+- 실제 센서처럼 서버 외부에서 `POST /sensor-data`를 직접 호출
 - 장치 ID, 전송 간격(초), 횟수를 CLI 인자로 지정
-- 임계값 기준 랜덤 센서값 생성 (정상값 80% / 초과값 20%)
-- 인증 없이 동작 (센서 데이터 수신 엔드포인트는 public)
+- 임계값 기준 랜덤 센서값 생성 (정상값 80%, 초과값 20%)
 
-### 📊 대시보드 *(구현 완료 — 테스트 진행 중)*
+### 정적 데모 대시보드
 
-> ⚠️ 코드 구현은 완료된 상태이며 현재 테스트 중입니다. 정식 기능으로 안정화되기 전까지 일부 동작이 변경될 수 있습니다.
-
-- 장치별 센서값 라인 차트 시각화
-- 알림 발생 현황 바 차트
-- JWT 인증 기반 접근 제어
-
-<br>
+- 장치별 센서값 라인 차트, 알림 현황 시각화 (정적 데모)
+- 실시간 갱신(SSE)은 로드맵 예정 항목
 
 ---
 
-## 7. 확장 로드맵
+## 8. 확장 로드맵
 
-### ✅ 완료
-- JWT 인증 / 인가
-- 사번 기반 로그인 + 승인제 가입
-- 6단계 ROLE 기반 접근 제어
-- Kafka 이벤트 파이프라인 (수신 → 적재 → Alert)
-- ~~**IoT 시뮬레이터 페이지 (인앱)**~~ — 별도 Python 스크립트(`iot/simulator.py`)로 전환
+### 완료
 
-### 🔜 예정
-- **인앱 시뮬레이터 코드 삭제** — `simulator/` 패키지 및 관련 API 제거
-- **대시보드 페이지** *(테스트 중)* — 장치별 센서값 라인 차트 / 알림 현황 바 차트
-- **Redis RefreshToken** 저장소 — 토큰 갱신 및 로그아웃 처리
-- **OLAP 스토리지 연동** — 별도 Consumer Group(`bigquery-group`) 추가로 동일 토픽을 독립 구독, 대용량 센서 데이터를 OLAP DB(BigQuery / Redshift)에 적재
-- **AWS 이전 아키텍처 설계 문서** — 멀티 클라우드 전환 시나리오 (GCP / AWS 비교)
-- **클라우드 전환 시나리오 설계 문서** — 현행 로컬 아키텍처 기준 GCP·AWS 전환 옵션 비교표
+- JWT 인증, 인가, 사번 기반 로그인, 승인제 가입
+- 4단계 역할 기반 접근 제어, 공장, 구역 계층 접근 제어
+- 동기 센서 수신 파이프라인 (수신, 저장, 임계값 판정, 알림)
+- Redis Refresh Token 저장, 회전
+- 외부 시뮬레이터 스크립트
 
-```
-현재 구조 (단일 Consumer)
-Kafka → iot-sensor-group → SensorData 저장 + Alert 생성 → PostgreSQL
+### 예정 (진행 방향)
 
-OLAP 연동 후 구조 (Consumer Group 분리, 미구현)
-Kafka → iot-sensor-group → SensorData 저장 + Alert 생성 → PostgreSQL  (실시간 OLTP)
-     → bigquery-group   → OLAP DB INSERT               → BigQuery/Redshift (대용량 OLAP)
-```
+- 이상 판정 로직 전략화 (`AnomalyDetector` 인터페이스로 분리)
+- 알림 스키마 확장 (severity, 근거, 권고 필드 추가)
+- 장치 freshness 감지 (기대 수신 주기 초과 시 알림)
+- SSE 기반 실시간 대시보드
+- LLM 기반 이상 근거, 원인 진단 (Python 서비스 연동)
+- 실측 공개 센서 시계열(CNC, 터보팬) 리플레이로 시뮬레이터 데이터 교체
 
-<br>
+### 향후
+
+- MQTT 수신 경로 도입 (엣지 게이트웨이와의 표준 연동)
+- 대용량 시계열 저장소(TimescaleDB) 검토
 
 ---
 
-## 8. 실행 방법
+## 9. 실행 방법
 
 ### 사전 요구사항
+
 - Java 17
-- Docker & Docker Compose (PostgreSQL, Kafka 로컬 실행)
+- Docker, Docker Compose (PostgreSQL, Redis 로컬 실행)
 
 ### 로컬 실행
 
@@ -301,17 +322,17 @@ cd iot-sensor-platform
 # 2. 환경변수 파일 생성 (docker-compose 의 PostgreSQL 이 .env 를 요구)
 cp .env.example .env
 
-# 3. PostgreSQL + Kafka + Redis 실행
+# 3. PostgreSQL, Redis 실행
 docker-compose up -d
 
-# 4. JWT 서명 키 설정 — 기본값이 없어 미설정 시 부팅 실패 (셸 export 또는 IDE 실행 구성)
+# 4. JWT 서명 키 설정, 기본값이 없어 미설정 시 부팅 실패 (셸 export 또는 IDE 실행 구성)
 export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 
 # 5. 애플리케이션 실행
 ./gradlew bootRun
 ```
 
-> `.env` 는 docker-compose(Postgres) 전용이며 Spring 은 자동 로드하지 않는다. 앱이 쓰는 `JWT_SECRET` 은 위처럼 셸/IDE에 직접 주입한다.
+> `.env` 는 docker-compose(Postgres) 전용이며 Spring 은 자동 로드하지 않습니다. 앱이 쓰는 `JWT_SECRET` 은 위처럼 셸이나 IDE에 직접 주입합니다.
 
 ### 테스트 실행
 
@@ -319,7 +340,7 @@ export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 ./gradlew test
 ```
 
-> 테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라(Postgres/Kafka/Redis) 없이 실행된다. 설정: `src/test/resources/application.yml`.
+> 테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라(Postgres, Redis) 없이 실행됩니다. 설정은 `src/test/resources/application.yml`.
 
 ### Swagger UI
 
@@ -337,19 +358,19 @@ psql -U postgres -d iot_sensor_db_v2 -f iot/seed.sql
 
 > 재실행이 필요한 경우 `seed.sql` 하단의 `TRUNCATE` 주석을 해제 후 먼저 실행하세요.
 
-**투입되는 샘플 계정**
+투입되는 샘플 계정
 
 | employeeId | 이름 | Role | password |
 |---|---|---|---|
-| `ADMIN001` | 슈퍼관리자 | SUPER_ADMIN | `admin1234!` |
-| `MGR001` | 공장A-관리자 | USER_ADMIN | `mgr1234!` |
-| `MGR002` | 공장B-관리자 | USER_ADMIN | `mgr1234!` |
-| `DEV001` | 장치담당자A | DEVICE_MANAGER | `dev1234!` |
-| `INP001` | 데이터입력자A1 | DATA_INPUTTER | `inp1234!` |
-| `ANL001` | 분석담당자A | DATA_ANALYST | `anl1234!` |
+| `ADMIN001` | 슈퍼관리자 | SYSTEM_ADMIN | `admin1234!` |
+| `MGR001` | 공장A-관리자 | ORG_ADMIN | `mgr1234!` |
+| `MGR002` | 공장B-관리자 | ORG_ADMIN | `mgr1234!` |
+| `DEV001` | 장치담당자A | MEMBER | `dev1234!` |
+| `INP001` | 데이터입력자A1 | MEMBER | `inp1234!` |
+| `ANL001` | 분석담당자A | MEMBER | `anl1234!` |
 | `VWR001` | 열람자A | VIEWER | `vwr1234!` |
 
-### IoT 시뮬레이터 실행 (`iot/simulator.py`)
+### 센서 시뮬레이터 실행 (`iot/simulator.py`)
 
 ```bash
 # 의존성 설치
@@ -357,20 +378,9 @@ pip install requests
 
 # 기본 실행 (장치 ID=1, 10회, 2초 간격, 임계값 80)
 python iot/simulator.py --device-id 1 --count 10 --interval 2 --threshold 80
-
 ```
 
 > seed.sql로 투입된 장치의 ID를 확인하여 `--device-id`에 지정하세요.
-
-### Kafka 동작 확인
-
-```bash
-# Kafka + PostgreSQL 기동
-docker-compose up -d
-
-# 애플리케이션 실행
-./gradlew bootRun
-```
 
 ### 환경변수
 
@@ -379,29 +389,22 @@ docker-compose up -d
 | `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/iot_sensor_db_v2` |
 | `DB_USERNAME` | DB 사용자명 | `postgres` |
 | `DB_PASSWORD` | DB 비밀번호 | `postgres` |
-| `JWT_SECRET` | JWT 서명 키 (32자 이상) | **없음 (필수)** — 미설정 시 부팅 실패 |
-| `KAFKA_BOOTSTRAP_SERVERS` | Kafka 브로커 주소 | `localhost:9092` |
+| `JWT_SECRET` | JWT 서명 키 (32자 이상) | 없음 (필수), 미설정 시 부팅 실패 |
+| `REDIS_HOST` | Redis 호스트 | `localhost` |
+| `REDIS_PORT` | Redis 포트 | `6379` |
 
-> ~~초기 관리자 계정 자동 생성 (DataInitializer)~~ → `iot/seed.sql` 실행으로 투입. 계정: `employeeId=ADMIN001` / `password=admin1234!`
+---
 
+## 10. 설계 메모
 
-## 9. 설계 메모
+### 메시지 버스 제거
 
-### 완료된 결정
+소비자가 하나뿐이고 타 서비스 연동도 없어 Kafka는 과설계였습니다. 수신 흐름을 동기 처리(저장, 임계값 판정, 알림 생성)로 단순화하고 제거했습니다. 다중 소비자가 실제로 필요해지면 버스 도입을 재검토합니다.
 
-- **인앱 시뮬레이터 분리:** 서버 내부 `simulator/` 패키지를 삭제하고, 별도 Python 스크립트(`iot/simulator.py`)가 `POST /sensor-data`를 직접 호출하는 방식으로 전환. 실제 외부 센서 환경에 가까운 구조로 변경
-- **본질에 집중하기:** 시뮬레이터 같은 부수적인 기능은 쳐내고, 데이터 관리·트래픽 처리에 집중하는 구조로 변경
-- **초기 데이터 투입 방식 변경:** `DataInitializer`(Spring Boot 기동 시 자동 생성)를 삭제하고 `iot/seed.sql`(PostgreSQL native query)로 대체. SUPER_ADMIN 포함 전체 샘플 데이터를 SQL로 일괄 투입
-- **Consumer 실제 구조 확인:** README 아키텍처 다이어그램에서 Consumer A/B 2개로 표현했으나, 실제 코드는 단일 `@KafkaListener` 안에서 SensorData 저장과 Alert 생성을 순차 처리하는 구조. 다이어그램을 실제 구조에 맞게 수정
+### 접근 제어 계층
 
-### 검토 중 / 예정
+공장(Factory), 구역(Zone), 구역 소속(ZoneUser) 3계층으로 접근 범위를 계산합니다. `SYSTEM_ADMIN`은 전체, `ORG_ADMIN`은 소속 공장, `MEMBER`와 `VIEWER`는 소속 구역으로 범위가 좁혀지며, `VIEWER`는 읽기 전용으로 장치 변경이 차단됩니다.
 
-- **SensorType 동적 구성 검토:** 현재 SensorType(`TEMPERATURE`, `VIBRATION`, `ILLUMINANCE`, `PRESSURE`)이 Enum으로 하드코딩되어 있어 타입 추가·변경 시 빌드가 필요함. JSON/YAML 등 외부 파일로 관리하거나 CRUD API를 두는 방식이 적합한지 검토 필요. UserRole·UserStatus는 각 값마다 인가 로직·상태 전이가 코드에 묶여 있어 Enum이 적합하나, SensorType은 임계값 초과 감지 로직이 타입에 무관하게 동일하므로 외부화 여지 있음
-- ~~**Kafka 운영 환경 통합:** 현재 prod(Cloud Run)에서는 Kafka 비활성화, 로컬에서만 동작. GCP VM에 Kafka 상시 운영 시 로컬·prod 모두 동일 브로커를 사용할 수 있어 환경 차이가 줄어듦. 이 경우 프로파일 분리의 실질적 이유는 Cloud SQL 소켓팩토리 설정 정도만 남게 됨 *(GCP 임시 제외로 보류)*~~
-- **BigQuery 연동 시 Consumer 확장:** 기존 Consumer(`iot-sensor-group`)를 수정하지 않고 별도 Consumer Group(`bigquery-group`)을 추가해 동일 토픽을 독립 구독하는 방식으로 확장 예정. 두 그룹이 독립적으로 모든 메시지를 수신하므로 기존 코드 변경 없이 Consumer 클래스 추가만으로 확장 가능 *(미구현, 로드맵 예정)*
-- ~~**로컬 DB vs Cloud SQL:** 로컬 개발은 로컬 DB 유지. 로컬에서 Cloud SQL 직접 연결 시 배포 데이터 오염 위험·개발 속도 저하·상시 비용 등의 이유로 분리 유지 결정 *(GCP 임시 제외로 해당 없음)*~~
-- **Redis 도입 — RefreshToken 저장소 및 추가 활용 검토 중:** RefreshToken 저장·갱신·로그아웃 처리를 위한 주 목적 외에, 아래 용도로 추가 활용 검토 중
-  - 대시보드 센서 데이터 최근 N개 캐시 — DB 조회 부하 감소
-  - `POST /sensor-data` Rate Limiting — 동일 장치에서 비정상적으로 빠른 요청 차단
-  - 알림 미읽음 카운트 — counter 구조로 조회 최적화
-  - ~~GCP 환경 설정 방식: Kafka와 동일하게 환경변수(`REDIS_HOST`, `REDIS_PORT`)만 지정하는 방식으로 추상화. 로컬은 docker-compose Redis, prod는 GCP Memorystore 또는 VM 직접 설치 중 선택 예정 *(GCP 임시 제외로 보류)*~~
+### 검토 중
+
+- SensorType 외부화 검토: 현재 SensorType(`TEMPERATURE`, `VIBRATION`, `ILLUMINANCE`, `PRESSURE`)이 Enum으로 하드코딩되어 있어 타입 추가 시 빌드가 필요합니다. 임계값 초과 감지 로직이 타입에 무관하게 동일하므로 외부 설정으로 관리할 여지가 있습니다. 반면 Role, UserStatus는 값마다 인가 로직과 상태 전이가 코드에 묶여 있어 Enum이 적합합니다.
