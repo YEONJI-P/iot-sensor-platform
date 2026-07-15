@@ -41,29 +41,29 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/sensor-data","/auth/refresh")
                         .permitAll()
 
-                        // 조직 관리 — SUPER_ADMIN만
+                        // 조직 관리 — SYSTEM_ADMIN만
                         .requestMatchers("/admin/organizations/**")
-                        .hasRole("SUPER_ADMIN")
+                        .hasRole("SYSTEM_ADMIN")
 
-                        // 그룹 관리 — SUPER_ADMIN, USER_ADMIN
+                        // 그룹 관리 — SYSTEM_ADMIN, ORG_ADMIN
                         .requestMatchers("/admin/groups/**")
-                        .hasAnyRole("SUPER_ADMIN", "USER_ADMIN")
+                        .hasAnyRole("SYSTEM_ADMIN", "ORG_ADMIN")
 
-                        // 기존 어드민 — SUPER_ADMIN, USER_ADMIN
+                        // 기존 어드민 — SYSTEM_ADMIN, ORG_ADMIN
                         .requestMatchers("/admin/**")
-                        .hasAnyRole("SUPER_ADMIN", "USER_ADMIN")
+                        .hasAnyRole("SYSTEM_ADMIN", "ORG_ADMIN")
 
-                        // 대시보드 API — DEVICE_MANAGER, DATA_ANALYST, VIEWER
+                        // 대시보드 API — 운영 역할(MEMBER, VIEWER)
                         .requestMatchers("/dashboard/**")
-                        .hasAnyRole("DEVICE_MANAGER", "DATA_ANALYST", "VIEWER")
+                        .hasAnyRole("MEMBER", "VIEWER")
 
-                        // 센서 데이터 조회 — USER_ADMIN 제외 (운영 데이터 불필요)
+                        // 센서 데이터 조회 — ORG_ADMIN 제외 (운영 데이터 불필요)
                         .requestMatchers(HttpMethod.GET, "/sensor-data", "/sensor-data/**")
-                        .hasAnyRole("SUPER_ADMIN", "DEVICE_MANAGER", "DATA_INPUTTER", "DATA_ANALYST", "VIEWER")
+                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
 
-                        // 알림 조회 — USER_ADMIN 제외
+                        // 알림 조회 — ORG_ADMIN 제외
                         .requestMatchers(HttpMethod.GET, "/alerts", "/alerts/**")
-                        .hasAnyRole("SUPER_ADMIN", "DEVICE_MANAGER", "DATA_INPUTTER", "DATA_ANALYST", "VIEWER")
+                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
 
                         // 나머지 인증 필요
                         .anyRequest().authenticated()

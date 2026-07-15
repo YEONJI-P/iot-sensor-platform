@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Optional;
 
@@ -39,7 +40,17 @@ class DeviceServiceTest {
                 .employeeId("DEV001")
                 .name("장치담당자")
                 .password("encoded_password")
-                .role(Role.DEVICE_MANAGER)
+                .role(Role.MEMBER)
+                .status(UserStatus.ACTIVE)
+                .build();
+    }
+
+    private User viewerUser() {
+        return User.builder()
+                .employeeId("VWR001")
+                .name("열람자")
+                .password("encoded_password")
+                .role(Role.VIEWER)
                 .status(UserStatus.ACTIVE)
                 .build();
     }
@@ -140,5 +151,20 @@ class DeviceServiceTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> deviceService.delete(1L, "DEV001"));
+    }
+
+    @Test
+    void register_viewer_forbidden() {
+        User viewer = viewerUser();
+        DeviceRegisterRequest request = new DeviceRegisterRequest(
+                "온도센서1", Device.DeviceType.TEMPERATURE, "공장1층", 80.0, 1L);
+
+        when(userRepository.findByEmployeeId("VWR001")).thenReturn(Optional.of(viewer));
+        doThrow(new AccessDeniedException("열람 전용 계정은 장치를 변경할 수 없어요"))
+                .when(accessControlService).assertCanMutateDevice(viewer);
+
+        assertThrows(AccessDeniedException.class,
+                () -> deviceService.register(request, "VWR001"));
+        verify(deviceRepository, never()).save(any(Device.class));
     }
 }

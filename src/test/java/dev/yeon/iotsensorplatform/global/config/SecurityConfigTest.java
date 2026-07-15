@@ -73,8 +73,8 @@ public class SecurityConfigTest {
     // -- 역할 제한
 
     @Test
-    @WithMockUser(roles = "SUPER_ADMIN")
-    void get_admin_organization_with_super_admin() throws Exception {
+    @WithMockUser(roles = "SYSTEM_ADMIN")
+    void get_admin_organization_with_system_admin() throws Exception {
         mockMvc.perform(get("/admin/organizations"))
                 .andExpect(status().is(not(403)));
     }
@@ -87,15 +87,15 @@ public class SecurityConfigTest {
     }
 
     @Test
-    @WithMockUser(roles = "USER_ADMIN")
-    void get_sensor_data_user_admin_forbidden() throws Exception {
+    @WithMockUser(roles = "ORG_ADMIN")
+    void get_sensor_data_org_admin_forbidden() throws Exception {
         mockMvc.perform(get("/sensor-data"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(roles = "USER_ADMIN")
-    void get_admin_groups_user_admin_ok() throws Exception {
+    @WithMockUser(roles = "ORG_ADMIN")
+    void get_admin_groups_org_admin_ok() throws Exception {
         mockMvc.perform(get("/admin/groups"))
                 .andExpect(status().is(not(403)));
     }

@@ -54,14 +54,14 @@ INSERT INTO org_groups (organization_id, name, description, created_at) VALUES
 -- 3. Users  (password: BCrypt strength=10)
 -- =============================================================================
 INSERT INTO users (employee_id, name, email, password, role, status, organization_id, created_at, updated_at) VALUES
-    ('ADMIN001', '슈퍼관리자',    'admin@factory.com',  crypt('admin1234!', gen_salt('bf', 10)), 'SUPER_ADMIN',    'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
-    ('MGR001',   '공장A-관리자', 'mgr_a@factory.com',  crypt('mgr1234!',   gen_salt('bf', 10)), 'USER_ADMIN',     'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
-    ('MGR002',   '공장B-관리자', 'mgr_b@factory.com',  crypt('mgr1234!',   gen_salt('bf', 10)), 'USER_ADMIN',     'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장B'), NOW(), NOW()),
-    ('DEV001',   '장치담당자A',  'dev01@factory.com',  crypt('dev1234!',   gen_salt('bf', 10)), 'DEVICE_MANAGER', 'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
-    ('INP001',   '데이터입력자A1','inp01@factory.com', crypt('inp1234!',   gen_salt('bf', 10)), 'DATA_INPUTTER',  'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
-    ('INP002',   '데이터입력자A2','inp02@factory.com', crypt('inp1234!',   gen_salt('bf', 10)), 'DATA_INPUTTER',  'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
-    ('INP003',   '데이터입력자B1','inp03@factory.com', crypt('inp1234!',   gen_salt('bf', 10)), 'DATA_INPUTTER',  'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장B'), NOW(), NOW()),
-    ('ANL001',   '분석담당자A',  'anl01@factory.com',  crypt('anl1234!',   gen_salt('bf', 10)), 'DATA_ANALYST',   'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
+    ('ADMIN001', '슈퍼관리자',    'admin@factory.com',  crypt('admin1234!', gen_salt('bf', 10)), 'SYSTEM_ADMIN',    'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
+    ('MGR001',   '공장A-관리자', 'mgr_a@factory.com',  crypt('mgr1234!',   gen_salt('bf', 10)), 'ORG_ADMIN',     'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
+    ('MGR002',   '공장B-관리자', 'mgr_b@factory.com',  crypt('mgr1234!',   gen_salt('bf', 10)), 'ORG_ADMIN',     'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장B'), NOW(), NOW()),
+    ('DEV001',   '장치담당자A',  'dev01@factory.com',  crypt('dev1234!',   gen_salt('bf', 10)), 'MEMBER', 'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
+    ('INP001',   '데이터입력자A1','inp01@factory.com', crypt('inp1234!',   gen_salt('bf', 10)), 'MEMBER',  'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
+    ('INP002',   '데이터입력자A2','inp02@factory.com', crypt('inp1234!',   gen_salt('bf', 10)), 'MEMBER',  'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
+    ('INP003',   '데이터입력자B1','inp03@factory.com', crypt('inp1234!',   gen_salt('bf', 10)), 'MEMBER',  'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장B'), NOW(), NOW()),
+    ('ANL001',   '분석담당자A',  'anl01@factory.com',  crypt('anl1234!',   gen_salt('bf', 10)), 'MEMBER',   'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
     ('VWR001',   '열람자A',      'vwr01@factory.com',  crypt('vwr1234!',   gen_salt('bf', 10)), 'VIEWER',         'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장A'), NOW(), NOW()),
     ('VWR002',   '열람자B',      'vwr02@factory.com',  crypt('vwr1234!',   gen_salt('bf', 10)), 'VIEWER',         'ACTIVE', (SELECT id FROM organizations WHERE name = '스마트공장B'), NOW(), NOW());
 

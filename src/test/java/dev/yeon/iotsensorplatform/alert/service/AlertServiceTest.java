@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import javax.swing.text.html.Option;
 import java.util.List;
@@ -146,10 +147,10 @@ class AlertServiceTest {
 
         when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
-        doThrow(new IllegalArgumentException("접근 권한이 없어요"))
+        doThrow(new AccessDeniedException("접근 권한이 없어요"))
                 .when(accessControlService).assertCanAccessDevice(user, device);
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(AccessDeniedException.class,
                 () -> alertService.getAllAlertsByDeviceId("EMP001", 1L));
     }
 

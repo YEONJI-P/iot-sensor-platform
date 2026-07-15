@@ -28,6 +28,7 @@ public class DeviceService {
     @Transactional
     public DeviceResponse register(DeviceRegisterRequest request, String employeeId) {
         User user = getUser(employeeId);
+        accessControlService.assertCanMutateDevice(user);
         OrgGroup group = orgGroupRepository.findById(request.getGroupId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 그룹이에요"));
         accessControlService.assertCanManageGroup(user, group);
@@ -46,6 +47,7 @@ public class DeviceService {
     @Transactional
     public DeviceResponse update(Long deviceId, DeviceUpdateRequest request, String employeeId) {
         User user = getUser(employeeId);
+        accessControlService.assertCanMutateDevice(user);
         Device device = getDevice(deviceId);
         accessControlService.assertCanAccessDevice(user, device);
 
@@ -65,6 +67,7 @@ public class DeviceService {
     @Transactional
     public void delete(Long deviceId, String employeeId) {
         User user = getUser(employeeId);
+        accessControlService.assertCanMutateDevice(user);
         Device device = getDevice(deviceId);
         accessControlService.assertCanAccessDevice(user, device);
         deviceRepository.delete(device);
