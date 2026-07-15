@@ -1,6 +1,13 @@
 package dev.yeon.iotsensorplatform.admin.service;
 
+import dev.yeon.iotsensorplatform.admin.dto.ApproveRequest;
 import dev.yeon.iotsensorplatform.admin.dto.UserResponse;
+import dev.yeon.iotsensorplatform.factory.entity.Factory;
+import dev.yeon.iotsensorplatform.factory.entity.Zone;
+import dev.yeon.iotsensorplatform.factory.entity.ZoneUser;
+import dev.yeon.iotsensorplatform.factory.repository.ZoneRepository;
+import dev.yeon.iotsensorplatform.factory.repository.ZoneUserRepository;
+import dev.yeon.iotsensorplatform.global.service.AccessControlService;
 import dev.yeon.iotsensorplatform.user.entity.Role;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.entity.UserStatus;
@@ -17,6 +24,9 @@ import java.util.List;
 public class AdminService {
 
     private final UserRepository userRepository;
+    private final ZoneRepository zoneRepository;
+    private final ZoneUserRepository zoneUserRepository;
+    private final AccessControlService accessControlService;
 
     @Transactional(readOnly = true)
     public List<UserResponse> getPendingUsers(String employeeId) {
@@ -36,14 +46,30 @@ public class AdminService {
         return users.stream().map(UserResponse::new).toList();
     }
 
+    // 승인 = 상태 ACTIVE + 역할 부여 + 구역 배정을 한 트랜잭션에서.
     @Transactional
-    public void approveUser(Long id, String employeeId) {
+    public void approveUser(Long id, ApproveRequest request, String employeeId) {
+        User caller = getCaller(employeeId);
         User target = getUser(id);
-        assertCanManage(getCaller(employeeId), target);
+        assertCanManage(caller, target);
         if (target.getStatus() != UserStatus.PENDING) {
             throw new IllegalArgumentException("대기 중인 사용자만 승인할 수 있어요");
         }
-        target.approve();
+        assertCanGrantRole(caller, request.role());
+
+        // 배정할 구역 검증(관리 권한 + 동일 공장). 구역이 있으면 사용자 공장도 그 공장으로 맞춘다.
+        List<Zone> zones = request.zoneIds().stream().map(this::getZone).toList();
+        Factory factory = validateZonesSameFactory(caller, zones);
+
+        target.approve(request.role());
+        if (factory != null) {
+            target.assignFactory(factory);
+        }
+        for (Zone zone : zones) {
+            if (!zoneUserRepository.existsByZoneIdAndUserId(zone.getId(), target.getId())) {
+                zoneUserRepository.save(ZoneUser.builder().zone(zone).user(target).build());
+            }
+        }
     }
 
     @Transactional
@@ -54,6 +80,32 @@ public class AdminService {
             throw new IllegalArgumentException("대기 중인 사용자만 반려할 수 있어요");
         }
         target.reject();
+    }
+
+    // 권한 상승 차단: FACTORY_ADMIN은 VIEWER/MEMBER까지만, SYSTEM_ADMIN은 FACTORY_ADMIN까지.
+    // (SYSTEM_ADMIN 부여는 승인 경로로 불가 — seed 전용)
+    private void assertCanGrantRole(User caller, Role role) {
+        boolean allowed = isSystemAdmin(caller)
+                ? (role == Role.VIEWER || role == Role.MEMBER || role == Role.FACTORY_ADMIN)
+                : (role == Role.VIEWER || role == Role.MEMBER);
+        if (!allowed) {
+            throw new AccessDeniedException("부여할 수 없는 역할이에요");
+        }
+    }
+
+    // 각 구역에 대한 관리 권한을 확인(SYSTEM_ADMIN=전체, FACTORY_ADMIN=자기 공장)하고,
+    // 모든 구역이 같은 공장인지 검증한 뒤 그 공장을 반환. 구역이 없으면 null.
+    private Factory validateZonesSameFactory(User caller, List<Zone> zones) {
+        Factory factory = null;
+        for (Zone zone : zones) {
+            accessControlService.assertCanManageZone(caller, zone);
+            if (factory == null) {
+                factory = zone.getFactory();
+            } else if (!factory.getId().equals(zone.getFactory().getId())) {
+                throw new IllegalArgumentException("서로 다른 공장의 구역은 함께 배정할 수 없어요");
+            }
+        }
+        return factory;
     }
 
     // FACTORY_ADMIN은 자기 공장 소속 사용자만 관리 가능. SYSTEM_ADMIN은 전체.
@@ -78,6 +130,11 @@ public class AdminService {
             throw new AccessDeniedException("소속 공장이 없어 사용자 관리 권한이 없어요");
         }
         return caller.getFactory().getId();
+    }
+
+    private Zone getZone(Long id) {
+        return zoneRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 구역이에요 - id " + id));
     }
 
     private User getCaller(String employeeId) {

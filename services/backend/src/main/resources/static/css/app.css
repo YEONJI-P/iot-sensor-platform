@@ -212,6 +212,14 @@ a { color: var(--brand); text-decoration: none; }
 .empty { text-align: center; color: var(--text-faint); padding: 2.4rem 1rem; font-size: .9rem; }
 .noaccess { max-width: 460px; margin: 4rem auto; text-align: center; }
 
+/* ── 모달 ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; z-index: 80; padding: 1rem; }
+.modal-box { width: 440px; max-width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.3rem 1.4rem; }
+.modal-box h3 { font-size: 1.02rem; margin-bottom: 1.1rem; }
+.zone-picker { max-height: 190px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .55rem .65rem; display: flex; flex-direction: column; gap: .4rem; background: var(--bg); }
+.zone-picker label { display: flex; align-items: center; gap: .5rem; font-size: .88rem; color: var(--text); cursor: pointer; }
+.modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.2rem; }
+
 /* ── 그리드 유틸 ── */
 .grid { display: grid; gap: 1.1rem; }
 .g-2 { grid-template-columns: repeat(2, 1fr); }

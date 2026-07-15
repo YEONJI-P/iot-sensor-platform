@@ -64,8 +64,13 @@ public class User {
         this.status = status;
     }
 
-    public void approve() {
+    public void approve(Role role) {
         this.status = UserStatus.ACTIVE;
+        this.role = role;
+    }
+
+    public void assignFactory(Factory factory) {
+        this.factory = factory;
     }
 
     public void reject() {

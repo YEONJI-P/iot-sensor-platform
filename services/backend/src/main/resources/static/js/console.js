@@ -176,18 +176,77 @@
         <tbody>${rows}</tbody></table>`;
 
       listNode.querySelectorAll('button[data-act]').forEach(btn => {
-        btn.addEventListener('click', () => doAction(btn.dataset.act, btn.dataset.id));
+        const id = btn.dataset.id;
+        btn.addEventListener('click', () => {
+          if (btn.dataset.act === 'approve') {
+            openApproveModal(users.find(u => String(u.id) === String(id)));
+          } else {
+            reject(id);
+          }
+        });
       });
     }
 
-    async function doAction(act, id) {
-      const path = act === 'approve' ? 'approve' : 'reject';
-      const label = act === 'approve' ? '승인' : '반려';
+    async function reject(id) {
       try {
-        const msg = await apiMutate(`/admin/users/${id}/${path}`, 'PATCH', undefined, `${label} 처리되었습니다.`);
+        const msg = await apiMutate(`/admin/users/${id}/reject`, 'PATCH', undefined, '반려 처리되었습니다.');
         toast(msg);
         load();
       } catch (e) { toast(e.message, true); }
+    }
+
+    /* 승인 = 역할 부여 + 구역 배정. 부여 가능 역할은 호출자 역할로 제한(백엔드도 검증). */
+    async function openApproveModal(user) {
+      if (!user) return;
+      const grantable = Auth.getRole() === 'SYSTEM_ADMIN'
+        ? ['VIEWER', 'MEMBER', 'FACTORY_ADMIN']
+        : ['VIEWER', 'MEMBER'];
+
+      let zones = [];
+      try { zones = (await apiGet('/admin/zones')) || []; }
+      catch (e) { toast(e.message, true); return; }
+      // 대상 사용자 공장으로 필터(공장 미지정이면 전체 노출, 백엔드가 동일 공장 강제)
+      if (user.factoryId != null) {
+        zones = zones.filter(z => String(z.factoryId) === String(user.factoryId));
+      }
+
+      const roleOpts = grantable
+        .map(r => `<option value="${r}">${(Auth.ROLE_LABEL[r] || {}).text || r}</option>`).join('');
+      const zoneRows = zones.length
+        ? zones.map(z => `<label><input type="checkbox" value="${z.id}"/> ${escapeHtml(z.name)}
+             <span class="faint mono" style="font-size:.72rem;">${escapeHtml(z.factoryName)}</span></label>`).join('')
+        : '<div class="faint" style="font-size:.85rem;">배정 가능한 구역이 없습니다. 역할만 부여합니다.</div>';
+
+      const overlay = el('div', 'modal-overlay');
+      const box = el('div', 'modal-box');
+      box.innerHTML = `
+        <h3>승인 — ${escapeHtml(user.name)} <span class="faint mono">${escapeHtml(user.employeeId)}</span></h3>
+        <div class="field">
+          <label>부여 역할</label>
+          <select class="input" id="apRole">${roleOpts}</select>
+        </div>
+        <div class="field">
+          <label>구역 배정 <span class="faint">(복수 선택 가능)</span></label>
+          <div class="zone-picker" id="apZones">${zoneRows}</div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost btn-sm" id="apCancel">취소</button>
+          <button class="btn btn-primary btn-sm" id="apConfirm">승인 확정</button>
+        </div>`;
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+
+      const close = () => overlay.remove();
+      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+      $('#apCancel', box).addEventListener('click', close);
+      $('#apConfirm', box).addEventListener('click', async () => {
+        const role = $('#apRole', box).value;
+        const zoneIds = Array.from(box.querySelectorAll('#apZones input:checked')).map(c => Number(c.value));
+        try {
+          const msg = await apiMutate(`/admin/users/${user.id}/approve`, 'PATCH', { role, zoneIds }, '승인 처리되었습니다.');
+          toast(msg); close(); load();
+        } catch (e) { toast(e.message, true); }
+      });
     }
 
     pendingOnly.addEventListener('change', load);

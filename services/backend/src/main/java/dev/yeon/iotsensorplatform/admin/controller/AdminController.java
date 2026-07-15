@@ -1,8 +1,10 @@
 package dev.yeon.iotsensorplatform.admin.controller;
 
+import dev.yeon.iotsensorplatform.admin.dto.ApproveRequest;
 import dev.yeon.iotsensorplatform.admin.dto.UserResponse;
 import dev.yeon.iotsensorplatform.admin.service.AdminService;
 import dev.yeon.iotsensorplatform.global.dto.MessageResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,11 +31,12 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getAllUsers(employeeId));
     }
 
-    // PATCH /admin/users/{id}/approve — 승인
+    // PATCH /admin/users/{id}/approve — 승인 (역할 부여 + 구역 배정)
     @PatchMapping("/users/{id}/approve")
     public ResponseEntity<MessageResponse> approveUser(@PathVariable Long id,
+                                                       @RequestBody @Valid ApproveRequest request,
                                                        @AuthenticationPrincipal String employeeId) {
-        adminService.approveUser(id, employeeId);
+        adminService.approveUser(id, request, employeeId);
         return ResponseEntity.ok(new MessageResponse("승인됐어요"));
     }
 
