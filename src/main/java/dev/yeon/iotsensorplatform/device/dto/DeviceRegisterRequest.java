@@ -18,5 +18,5 @@ public class DeviceRegisterRequest {
     private String location;
     private Double thresholdValue;
     @NotNull
-    private Long groupId;
+    private Long zoneId;
 }

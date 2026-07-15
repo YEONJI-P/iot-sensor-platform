@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 
 @Getter
 @NoArgsConstructor
-public class GroupUserRequest {
+public class ZoneUserRequest {
     @NotNull
     private Long userId;
 }

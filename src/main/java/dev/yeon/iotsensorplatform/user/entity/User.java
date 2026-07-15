@@ -1,6 +1,6 @@
 package dev.yeon.iotsensorplatform.user.entity;
 
-import dev.yeon.iotsensorplatform.organization.entity.Organization;
+import dev.yeon.iotsensorplatform.factory.entity.Factory;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -36,8 +36,8 @@ public class User {
     private String department;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id")
-    private Organization organization;
+    @JoinColumn(name = "factory_id")
+    private Factory factory;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -56,13 +56,13 @@ public class User {
 
     @Builder
     public User(String employeeId, String name, String email, String password,
-                String department, Organization organization, Role role, UserStatus status) {
+                String department, Factory factory, Role role, UserStatus status) {
         this.employeeId = employeeId;
         this.name = name;
         this.email = email;
         this.password = password;
         this.department = department;
-        this.organization = organization;
+        this.factory = factory;
         this.role = role;
         this.status = status;
     }

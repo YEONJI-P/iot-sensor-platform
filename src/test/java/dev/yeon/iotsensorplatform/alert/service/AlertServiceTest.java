@@ -6,8 +6,8 @@ import dev.yeon.iotsensorplatform.alert.repository.AlertRepository;
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
 import dev.yeon.iotsensorplatform.global.service.AccessControlService;
-import dev.yeon.iotsensorplatform.organization.entity.OrgGroup;
-import dev.yeon.iotsensorplatform.organization.entity.Organization;
+import dev.yeon.iotsensorplatform.factory.entity.Zone;
+import dev.yeon.iotsensorplatform.factory.entity.Factory;
 import dev.yeon.iotsensorplatform.user.entity.Role;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.entity.UserStatus;
@@ -49,12 +49,12 @@ class AlertServiceTest {
     }
 
     private Device mockDevice() {
-        OrgGroup group = OrgGroup.builder()
-                .organization(Organization.builder().name("테스트조직").build())
+        Zone zone = Zone.builder()
+                .factory(Factory.builder().name("테스트공장").build())
                 .name("1구역")
                 .build();
         return Device.builder()
-                .group(group)
+                .zone(zone)
                 .name("온도센서1")
                 .type(Device.DeviceType.TEMPERATURE)
                 .location("공장1층")

@@ -2,8 +2,8 @@ package dev.yeon.iotsensorplatform.global.service;
 
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
-import dev.yeon.iotsensorplatform.organization.entity.OrgGroup;
-import dev.yeon.iotsensorplatform.organization.repository.GroupUserRepository;
+import dev.yeon.iotsensorplatform.factory.entity.Zone;
+import dev.yeon.iotsensorplatform.factory.repository.ZoneUserRepository;
 import dev.yeon.iotsensorplatform.user.entity.Role;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +18,7 @@ import java.util.List;
 public class AccessControlService {
 
     private final DeviceRepository deviceRepository;
-    private final GroupUserRepository groupUserRepository;
+    private final ZoneUserRepository zoneUserRepository;
 
     @Transactional(readOnly = true)
     public List<Device> getAccessibleDevices(User user) {
@@ -26,12 +26,12 @@ public class AccessControlService {
             return deviceRepository.findAll();
         }
         if (user.getRole() == Role.ORG_ADMIN) {
-            if (user.getOrganization() == null) return List.of();
-            return deviceRepository.findAllByGroup_Organization_Id(user.getOrganization().getId());
+            if (user.getFactory() == null) return List.of();
+            return deviceRepository.findAllByZone_Factory_Id(user.getFactory().getId());
         }
-        List<Long> groupIds = getGroupIds(user);
-        if (groupIds.isEmpty()) return List.of();
-        return deviceRepository.findAllByGroupIdIn(groupIds);
+        List<Long> zoneIds = getZoneIds(user);
+        if (zoneIds.isEmpty()) return List.of();
+        return deviceRepository.findAllByZoneIdIn(zoneIds);
     }
 
     @Transactional(readOnly = true)
@@ -40,13 +40,13 @@ public class AccessControlService {
             return deviceRepository.findAllIds();
         }
         if (user.getRole() == Role.ORG_ADMIN) {
-            if (user.getOrganization() == null) return List.of();
-            return deviceRepository.findAllByGroup_Organization_Id(user.getOrganization().getId())
+            if (user.getFactory() == null) return List.of();
+            return deviceRepository.findAllByZone_Factory_Id(user.getFactory().getId())
                     .stream().map(Device::getId).toList();
         }
-        List<Long> groupIds = getGroupIds(user);
-        if (groupIds.isEmpty()) return List.of();
-        return deviceRepository.findAllByGroupIdIn(groupIds)
+        List<Long> zoneIds = getZoneIds(user);
+        if (zoneIds.isEmpty()) return List.of();
+        return deviceRepository.findAllByZoneIdIn(zoneIds)
                 .stream().map(Device::getId).toList();
     }
 
@@ -54,15 +54,15 @@ public class AccessControlService {
     public void assertCanAccessDevice(User user, Device device) {
         if (user.getRole() == Role.SYSTEM_ADMIN) return;
         if (user.getRole() == Role.ORG_ADMIN) {
-            if (user.getOrganization() == null ||
-                    device.getGroup() == null ||
-                    !device.getGroup().getOrganization().getId().equals(user.getOrganization().getId())) {
+            if (user.getFactory() == null ||
+                    device.getZone() == null ||
+                    !device.getZone().getFactory().getId().equals(user.getFactory().getId())) {
                 throw new AccessDeniedException("접근 권한이 없는 장치예요");
             }
             return;
         }
-        List<Long> groupIds = getGroupIds(user);
-        if (device.getGroup() == null || !groupIds.contains(device.getGroup().getId())) {
+        List<Long> zoneIds = getZoneIds(user);
+        if (device.getZone() == null || !zoneIds.contains(device.getZone().getId())) {
             throw new AccessDeniedException("접근 권한이 없는 장치예요");
         }
     }
@@ -75,24 +75,24 @@ public class AccessControlService {
     }
 
     @Transactional(readOnly = true)
-    public void assertCanManageGroup(User user, OrgGroup group) {
+    public void assertCanManageZone(User user, Zone zone) {
         if (user.getRole() == Role.SYSTEM_ADMIN) return;
         if (user.getRole() == Role.ORG_ADMIN) {
-            if (user.getOrganization() == null ||
-                    !group.getOrganization().getId().equals(user.getOrganization().getId())) {
-                throw new AccessDeniedException("본인 조직의 그룹만 관리할 수 있어요");
+            if (user.getFactory() == null ||
+                    !zone.getFactory().getId().equals(user.getFactory().getId())) {
+                throw new AccessDeniedException("본인 공장의 구역만 관리할 수 있어요");
             }
             return;
         }
-        // MEMBER — 자기 그룹만
-        boolean inGroup = groupUserRepository.existsByGroupIdAndUserId(group.getId(), user.getId());
-        if (!inGroup) {
-            throw new AccessDeniedException("소속된 그룹만 관리할 수 있어요");
+        // MEMBER — 자기 구역만
+        boolean inZone = zoneUserRepository.existsByZoneIdAndUserId(zone.getId(), user.getId());
+        if (!inZone) {
+            throw new AccessDeniedException("소속된 구역만 관리할 수 있어요");
         }
     }
 
-    private List<Long> getGroupIds(User user) {
-        return groupUserRepository.findAllByUserId(user.getId())
-                .stream().map(gu -> gu.getGroup().getId()).toList();
+    private List<Long> getZoneIds(User user) {
+        return zoneUserRepository.findAllByUserId(user.getId())
+                .stream().map(gu -> gu.getZone().getId()).toList();
     }
 }

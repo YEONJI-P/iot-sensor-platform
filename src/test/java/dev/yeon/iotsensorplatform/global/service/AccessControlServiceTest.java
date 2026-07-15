@@ -1,7 +1,7 @@
 package dev.yeon.iotsensorplatform.global.service;
 
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
-import dev.yeon.iotsensorplatform.organization.repository.GroupUserRepository;
+import dev.yeon.iotsensorplatform.factory.repository.ZoneUserRepository;
 import dev.yeon.iotsensorplatform.user.entity.Role;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.entity.UserStatus;
@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class AccessControlServiceTest {
 
     @Mock DeviceRepository deviceRepository;
-    @Mock GroupUserRepository groupUserRepository;
+    @Mock ZoneUserRepository zoneUserRepository;
 
     @InjectMocks
     AccessControlService accessControlService;

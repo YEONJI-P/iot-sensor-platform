@@ -7,8 +7,8 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 
 public interface DeviceRepository extends JpaRepository<Device, Long> {
-    List<Device> findAllByGroupIdIn(List<Long> groupIds);
-    List<Device> findAllByGroup_Organization_Id(Long organizationId);
+    List<Device> findAllByZoneIdIn(List<Long> zoneIds);
+    List<Device> findAllByZone_Factory_Id(Long factoryId);
 
     @Query("SELECT d.id FROM Device d")
     List<Long> findAllIds();

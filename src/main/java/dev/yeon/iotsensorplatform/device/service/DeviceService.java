@@ -6,8 +6,8 @@ import dev.yeon.iotsensorplatform.device.dto.DeviceUpdateRequest;
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
 import dev.yeon.iotsensorplatform.global.service.AccessControlService;
-import dev.yeon.iotsensorplatform.organization.entity.OrgGroup;
-import dev.yeon.iotsensorplatform.organization.repository.OrgGroupRepository;
+import dev.yeon.iotsensorplatform.factory.entity.Zone;
+import dev.yeon.iotsensorplatform.factory.repository.ZoneRepository;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,19 +22,19 @@ public class DeviceService {
 
     private final UserRepository userRepository;
     private final DeviceRepository deviceRepository;
-    private final OrgGroupRepository orgGroupRepository;
+    private final ZoneRepository zoneRepository;
     private final AccessControlService accessControlService;
 
     @Transactional
     public DeviceResponse register(DeviceRegisterRequest request, String employeeId) {
         User user = getUser(employeeId);
         accessControlService.assertCanMutateDevice(user);
-        OrgGroup group = orgGroupRepository.findById(request.getGroupId())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 그룹이에요"));
-        accessControlService.assertCanManageGroup(user, group);
+        Zone zone = zoneRepository.findById(request.getZoneId())
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 구역이에요"));
+        accessControlService.assertCanManageZone(user, zone);
 
         Device device = Device.builder()
-                .group(group)
+                .zone(zone)
                 .name(request.getName())
                 .type(request.getType())
                 .location(request.getLocation())

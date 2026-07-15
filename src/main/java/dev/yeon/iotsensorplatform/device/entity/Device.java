@@ -1,6 +1,6 @@
 package dev.yeon.iotsensorplatform.device.entity;
 
-import dev.yeon.iotsensorplatform.organization.entity.OrgGroup;
+import dev.yeon.iotsensorplatform.factory.entity.Zone;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,8 +16,8 @@ public class Device {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "group_id")
-    private OrgGroup group;
+    @JoinColumn(name = "zone_id")
+    private Zone zone;
 
     private String name;
 
@@ -29,8 +29,8 @@ public class Device {
     private Double thresholdValue;
 
     @Builder
-    public Device(OrgGroup group, String name, DeviceType type, String location, Double thresholdValue) {
-        this.group = group;
+    public Device(Zone zone, String name, DeviceType type, String location, Double thresholdValue) {
+        this.zone = zone;
         this.name = name;
         this.type = type;
         this.location = location;

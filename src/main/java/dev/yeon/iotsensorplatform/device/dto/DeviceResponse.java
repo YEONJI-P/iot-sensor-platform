@@ -14,8 +14,8 @@ public class DeviceResponse {
     private Device.DeviceType deviceType;
     private String location;
     private Double thresholdValue;
-    private Long groupId;
-    private String groupName;
+    private Long zoneId;
+    private String zoneName;
 
     public static DeviceResponse from(Device device) {
         return new DeviceResponse(
@@ -24,8 +24,8 @@ public class DeviceResponse {
                 device.getType(),
                 device.getLocation(),
                 device.getThresholdValue(),
-                device.getGroup() != null ? device.getGroup().getId() : null,
-                device.getGroup() != null ? device.getGroup().getName() : null
+                device.getZone() != null ? device.getZone().getId() : null,
+                device.getZone() != null ? device.getZone().getName() : null
         );
     }
 }

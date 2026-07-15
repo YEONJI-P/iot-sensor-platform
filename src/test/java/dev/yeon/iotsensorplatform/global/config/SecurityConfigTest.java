@@ -1,8 +1,8 @@
 package dev.yeon.iotsensorplatform.global.config;
 
 import dev.yeon.iotsensorplatform.admin.service.AdminService;
-import dev.yeon.iotsensorplatform.admin.service.OrgGroupService;
-import dev.yeon.iotsensorplatform.admin.service.OrganizationService;
+import dev.yeon.iotsensorplatform.admin.service.ZoneService;
+import dev.yeon.iotsensorplatform.admin.service.FactoryService;
 import dev.yeon.iotsensorplatform.alert.service.AlertService;
 import dev.yeon.iotsensorplatform.auth.filter.JwtFilter;
 import dev.yeon.iotsensorplatform.auth.service.AuthService;
@@ -46,9 +46,9 @@ public class SecurityConfigTest {
     @MockitoBean
     AdminService adminService;
     @MockitoBean
-    OrgGroupService orgGroupService;
+    ZoneService zoneService;
     @MockitoBean
-    OrganizationService organizationService;
+    FactoryService factoryService;
     @MockitoBean
     AccessControlService accessControlService;
     @MockitoBean
@@ -74,8 +74,8 @@ public class SecurityConfigTest {
 
     @Test
     @WithMockUser(roles = "SYSTEM_ADMIN")
-    void get_admin_organization_with_system_admin() throws Exception {
-        mockMvc.perform(get("/admin/organizations"))
+    void get_admin_factory_with_system_admin() throws Exception {
+        mockMvc.perform(get("/admin/factories"))
                 .andExpect(status().is(not(403)));
     }
 
@@ -95,15 +95,15 @@ public class SecurityConfigTest {
 
     @Test
     @WithMockUser(roles = "ORG_ADMIN")
-    void get_admin_groups_org_admin_ok() throws Exception {
-        mockMvc.perform(get("/admin/groups"))
+    void get_admin_zones_org_admin_ok() throws Exception {
+        mockMvc.perform(get("/admin/zones"))
                 .andExpect(status().is(not(403)));
     }
 
     @Test
     @WithMockUser(roles = "VIEWER")
-    void get_admin_groups_viewer_forbidden() throws Exception {
-        mockMvc.perform(get("/admin/groups"))
+    void get_admin_zones_viewer_forbidden() throws Exception {
+        mockMvc.perform(get("/admin/zones"))
                 .andExpect(status().isForbidden());
     }
 }

@@ -1,4 +1,4 @@
-package dev.yeon.iotsensorplatform.organization.entity;
+package dev.yeon.iotsensorplatform.factory.entity;
 
 import dev.yeon.iotsensorplatform.user.entity.User;
 import jakarta.persistence.*;
@@ -13,18 +13,18 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor
-@Table(name = "group_users",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"group_id", "user_id"}))
+@Table(name = "zone_users",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"zone_id", "user_id"}))
 @EntityListeners(AuditingEntityListener.class)
-public class GroupUser {
+public class ZoneUser {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "group_id", nullable = false)
-    private OrgGroup group;
+    @JoinColumn(name = "zone_id", nullable = false)
+    private Zone zone;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -35,8 +35,8 @@ public class GroupUser {
     private LocalDateTime createdAt;
 
     @Builder
-    public GroupUser(OrgGroup group, User user) {
-        this.group = group;
+    public ZoneUser(Zone zone, User user) {
+        this.zone = zone;
         this.user = user;
     }
 }

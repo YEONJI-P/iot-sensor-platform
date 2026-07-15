@@ -1,4 +1,4 @@
-package dev.yeon.iotsensorplatform.organization.entity;
+package dev.yeon.iotsensorplatform.factory.entity;
 
 import jakarta.persistence.*;
 import lombok.Builder;
@@ -12,9 +12,9 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor
-@Table(name = "organizations")
+@Table(name = "factories")
 @EntityListeners(AuditingEntityListener.class)
-public class Organization {
+public class Factory {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -30,7 +30,7 @@ public class Organization {
     private LocalDateTime createdAt;
 
     @Builder
-    public Organization(String name, String description) {
+    public Factory(String name, String description) {
         this.name = name;
         this.description = description;
     }

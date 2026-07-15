@@ -4,8 +4,8 @@ import dev.yeon.iotsensorplatform.auth.dto.LoginRequest;
 import dev.yeon.iotsensorplatform.auth.dto.RegisterRequest;
 import dev.yeon.iotsensorplatform.auth.dto.TokenResponse;
 import dev.yeon.iotsensorplatform.auth.util.JwtUtil;
-import dev.yeon.iotsensorplatform.organization.entity.Organization;
-import dev.yeon.iotsensorplatform.organization.repository.OrganizationRepository;
+import dev.yeon.iotsensorplatform.factory.entity.Factory;
+import dev.yeon.iotsensorplatform.factory.repository.FactoryRepository;
 import dev.yeon.iotsensorplatform.user.entity.Role;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.entity.UserStatus;
@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final OrganizationRepository organizationRepository;
+    private final FactoryRepository factoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final RefreshTokenService refreshTokenService;
@@ -36,9 +36,9 @@ public class AuthService {
             throw new IllegalArgumentException("이미 사용 중인 이메일이에요");
         }
 
-        Organization org = null;
-        if (request.getOrganizationId() != null) {
-            org = organizationRepository.findById(request.getOrganizationId()).orElse(null);
+        Factory org = null;
+        if (request.getFactoryId() != null) {
+            org = factoryRepository.findById(request.getFactoryId()).orElse(null);
         }
 
         User user = User.builder()
@@ -47,7 +47,7 @@ public class AuthService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .department(request.getDepartment())
-                .organization(org)
+                .factory(org)
                 .role(Role.VIEWER)
                 .status(UserStatus.PENDING)
                 .build();

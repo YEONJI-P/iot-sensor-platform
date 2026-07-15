@@ -5,9 +5,9 @@ import dev.yeon.iotsensorplatform.device.dto.DeviceUpdateRequest;
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
 import dev.yeon.iotsensorplatform.global.service.AccessControlService;
-import dev.yeon.iotsensorplatform.organization.entity.OrgGroup;
-import dev.yeon.iotsensorplatform.organization.entity.Organization;
-import dev.yeon.iotsensorplatform.organization.repository.OrgGroupRepository;
+import dev.yeon.iotsensorplatform.factory.entity.Zone;
+import dev.yeon.iotsensorplatform.factory.entity.Factory;
+import dev.yeon.iotsensorplatform.factory.repository.ZoneRepository;
 import dev.yeon.iotsensorplatform.user.entity.Role;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.entity.UserStatus;
@@ -29,7 +29,7 @@ class DeviceServiceTest {
 
     @Mock DeviceRepository deviceRepository;
     @Mock UserRepository userRepository;
-    @Mock OrgGroupRepository orgGroupRepository;
+    @Mock ZoneRepository zoneRepository;
     @Mock AccessControlService accessControlService;
 
     @InjectMocks
@@ -55,14 +55,14 @@ class DeviceServiceTest {
                 .build();
     }
 
-    private OrgGroup mockGroup() {
-        Organization org = Organization.builder().name("테스트조직").build();
-        return OrgGroup.builder().organization(org).name("1구역").build();
+    private Zone mockZone() {
+        Factory org = Factory.builder().name("테스트공장").build();
+        return Zone.builder().factory(org).name("1구역").build();
     }
 
-    private Device mockDevice(OrgGroup group) {
+    private Device mockDevice(Zone zone) {
         return Device.builder()
-                .group(group)
+                .zone(zone)
                 .name("온도센서1")
                 .type(Device.DeviceType.TEMPERATURE)
                 .location("공장1층")
@@ -73,13 +73,13 @@ class DeviceServiceTest {
     @Test
     void register_success() {
         User user = mockUser();
-        OrgGroup group = mockGroup();
+        Zone zone = mockZone();
         DeviceRegisterRequest request = new DeviceRegisterRequest(
                 "온도센서1", Device.DeviceType.TEMPERATURE, "공장1층", 80.0, 1L);
 
         when(userRepository.findByEmployeeId("DEV001")).thenReturn(Optional.of(user));
-        when(orgGroupRepository.findById(1L)).thenReturn(Optional.of(group));
-        doNothing().when(accessControlService).assertCanManageGroup(user, group);
+        when(zoneRepository.findById(1L)).thenReturn(Optional.of(zone));
+        doNothing().when(accessControlService).assertCanManageZone(user, zone);
 
         deviceService.register(request, "DEV001");
 
@@ -87,13 +87,13 @@ class DeviceServiceTest {
     }
 
     @Test
-    void register_fail_group_not_found() {
+    void register_fail_zone_not_found() {
         User user = mockUser();
         DeviceRegisterRequest request = new DeviceRegisterRequest(
                 "온도센서1", Device.DeviceType.TEMPERATURE, "공장1층", 80.0, 99L);
 
         when(userRepository.findByEmployeeId("DEV001")).thenReturn(Optional.of(user));
-        when(orgGroupRepository.findById(99L)).thenReturn(Optional.empty());
+        when(zoneRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class,
                 () -> deviceService.register(request, "DEV001"));
@@ -102,8 +102,8 @@ class DeviceServiceTest {
     @Test
     void update_success() {
         User user = mockUser();
-        OrgGroup group = mockGroup();
-        Device device = mockDevice(group);
+        Zone zone = mockZone();
+        Device device = mockDevice(zone);
         DeviceUpdateRequest request = new DeviceUpdateRequest(
                 "온도센서1_update", Device.DeviceType.TEMPERATURE, "공장2층", 75.0);
 
@@ -131,8 +131,8 @@ class DeviceServiceTest {
     @Test
     void delete_success() {
         User user = mockUser();
-        OrgGroup group = mockGroup();
-        Device device = mockDevice(group);
+        Zone zone = mockZone();
+        Device device = mockDevice(zone);
 
         when(userRepository.findByEmployeeId("DEV001")).thenReturn(Optional.of(user));
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));

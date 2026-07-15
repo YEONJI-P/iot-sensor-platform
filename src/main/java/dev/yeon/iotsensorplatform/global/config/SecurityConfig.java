@@ -41,12 +41,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/sensor-data","/auth/refresh")
                         .permitAll()
 
-                        // 조직 관리 — SYSTEM_ADMIN만
-                        .requestMatchers("/admin/organizations/**")
+                        // 공장 관리 — SYSTEM_ADMIN만
+                        .requestMatchers("/admin/factories/**")
                         .hasRole("SYSTEM_ADMIN")
 
-                        // 그룹 관리 — SYSTEM_ADMIN, ORG_ADMIN
-                        .requestMatchers("/admin/groups/**")
+                        // 구역 관리 — SYSTEM_ADMIN, ORG_ADMIN
+                        .requestMatchers("/admin/zones/**")
                         .hasAnyRole("SYSTEM_ADMIN", "ORG_ADMIN")
 
                         // 기존 어드민 — SYSTEM_ADMIN, ORG_ADMIN
