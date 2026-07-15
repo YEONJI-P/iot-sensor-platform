@@ -10,6 +10,8 @@
 ![JWT](https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Python](https://img.shields.io/badge/Python_3.11-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)
 
@@ -71,8 +73,10 @@ graph LR
 | Auth | JWT (JSON Web Token), Redis Refresh Token |
 | ORM | Spring Data JPA (Hibernate) |
 | Database | PostgreSQL |
+| Realtime | Server-Sent Events (SSE) |
+| AI Service | Python 3.11, FastAPI, uv |
 | API Docs | Swagger (springdoc-openapi) |
-| Test | JUnit5, Mockito, H2 |
+| Test | JUnit5, Mockito, H2, pytest |
 | Container | Docker, Docker Compose |
 | CI | GitHub Actions |
 
@@ -80,7 +84,9 @@ graph LR
 
 ## 4. 시스템 아키텍처
 
-센서 데이터 수신은 별도 메시지 버스 없이 동기 처리합니다. 수신 요청이 들어오면 한 트랜잭션 안에서 센서 데이터를 저장하고, 임계값 초과를 판정해 알림을 생성합니다.
+센서 데이터 수신은 별도 메시지 버스 없이 동기 처리합니다. 수신 요청이 들어오면 한 트랜잭션 안에서 센서 데이터를 저장하고, 장치의 마지막 수신 시각을 갱신하고, 임계값 초과를 판정해 알림을 생성합니다. 저장과 알림 이벤트는 트랜잭션 커밋 후 SSE로 대시보드에 실시간 전달됩니다.
+
+주기 스케줄러 두 개가 수신 경로 밖에서 동작합니다. 하나는 기대 수신 주기를 넘긴 침묵 장치를 감지하고, 다른 하나는 생성된 알림의 근거와 권고를 채우기 위해 별도 Python 분석 서비스(AX)를 HTTP로 호출합니다. 이상 탐지는 규칙 기반이고, 설명과 진단만 LLM이 담당합니다.
 
 ```mermaid
 graph TD
@@ -92,8 +98,11 @@ graph TD
         ADMIN[Admin<br>사용자 승인, 공장/구역 관리]
         DEVICE[Device<br>장치 CRUD]
         SENSOR[Sensor Data<br>수신, 임계값 판정, 알림 생성]
+        SSE[SSE<br>대시보드 실시간 스트림]
+        SCHED[스케줄러<br>freshness 감지, 알림 근거 보강]
     end
 
+    AX[AX 분석 서비스<br>Python, FastAPI]
     DB[(PostgreSQL)]
     REDIS[(Redis<br>Refresh Token)]
 
@@ -101,7 +110,11 @@ graph TD
     CLI --> AUTH
     CLI --> ADMIN
     CLI --> DEVICE
+    CLI -->|GET /dashboard/stream| SSE
     SENSOR -->|저장 + 임계값 초과 시 알림| DB
+    SENSOR -->|커밋 후 이벤트| SSE
+    SCHED -->|HTTP 요청-응답| AX
+    SCHED --> DB
     AUTH --> REDIS
 ```
 
@@ -154,6 +167,8 @@ erDiagram
         varchar type "TEMPERATURE/PRESSURE/CURRENT/POWER/ACCELERATION"
         varchar location
         double threshold_value
+        int expected_interval_seconds "NULLABLE"
+        timestamp last_seen_at "NULLABLE"
     }
 
     sensor_data {
@@ -169,6 +184,17 @@ erDiagram
         double sensor_value
         double threshold_value
         varchar message
+        varchar severity "INFO/WARNING/CRITICAL"
+        varchar evidence "NULLABLE, LLM 보강"
+        varchar recommendation "NULLABLE, LLM 보강"
+        timestamp created_at
+    }
+
+    failed_readings {
+        bigint id PK
+        bigint device_id "장치 없음도 기록"
+        double value
+        varchar reason "INVALID_REQUEST/DEVICE_NOT_FOUND"
         timestamp created_at
     }
 
@@ -236,6 +262,25 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | GET | `/alerts/recent?deviceId=&limit=` | 장치별 최근 알림 (대시보드) | JWT |
 | GET | `/alerts/daily-count?deviceId=&days=` | 장치별 일자별 알림 수 (대시보드) | JWT |
 
+### 실시간 스트림 (SSE)
+
+| Method | Endpoint | 설명 | 인증 |
+|---|---|---|---|
+| GET | `/dashboard/stream?token=` | 접근 범위 내 센서, 알림 이벤트 실시간 스트림 | 쿼리 토큰 |
+
+> EventSource가 헤더를 못 실어 Access Token을 쿼리로 받습니다. 구독자는 자신의 접근 가능 장치로 이벤트가 필터링됩니다.
+
+### AX 분석 서비스 (Python, `http://localhost:8000`)
+
+Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐지는 Spring의 규칙이 담당하고, 이 서비스는 설명과 진단만 생성합니다.
+
+| Method | Endpoint | 설명 |
+|---|---|---|
+| POST | `/ax/explain-anomaly` | 알림 근거(evidence)와 권고(recommendation) 생성 |
+| POST | `/ax/diagnose-freshness` | 장치 침묵 원인 진단 |
+
+> LLM provider는 인터페이스로 추상화됩니다. 기본값은 키가 필요 없는 `echo`이고, 환경변수로 `gemini`로 교체할 수 있습니다.
+
 ---
 
 ## 7. 주요 기능
@@ -259,25 +304,39 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
 ### 센서 데이터 수신과 알림
 
-- `POST /sensor-data` 수신 시 한 트랜잭션에서 센서 데이터 저장, 임계값 초과 판정, 초과 시 알림 생성
+- `POST /sensor-data` 수신 시 한 트랜잭션에서 센서 데이터 저장, 장치 수신 시각 갱신, 임계값 초과 판정, 초과 시 알림 생성
 - 별도 메시지 버스 없이 동기 처리 (설계 근거는 아래 설계 메모 참고)
-- 수집한 센서 시계열과 알림 이력을 영속 저장하고 목록, 상세로 재조회
+- 이상 판정은 `AnomalyDetector` 전략 인터페이스로 분리(현재 `ThresholdDetector`), 판정 로직 교체 가능
+- 검증 실패, 미등록 장치 요청은 조용히 버리지 않고 `failed_readings`에 사유와 함께 적재
+- 알림은 severity(INFO/WARNING/CRITICAL)와 근거(evidence), 권고(recommendation) 필드를 가지며, 근거와 권고는 AX 서비스가 사후 보강
+
+### 장치 freshness 감지
+
+- 장치에 기대 수신 주기(`expectedIntervalSeconds`)와 마지막 수신 시각(`lastSeenAt`)을 두고, 수신마다 갱신
+- 주기 스케줄러가 기대 주기를 넘겨 침묵한 장치를 감지 (데이터가 안 오는 상황을 신호로 포착)
+
+### LLM 기반 이상 설명 (AX 서비스)
+
+- 별도 Python/FastAPI 서비스가 알림 근거, 권고와 침묵 원인 진단을 생성
+- 탐지는 규칙, 설명과 진단만 LLM이 담당
+- provider 추상화로 LLM 교체 가능(기본 `echo`, `gemini` 선택)
 
 ### 인증
 
 - JWT 기반 stateless 인증, Redis에 Refresh Token 저장
 - Refresh Token 회전, 불일치 시 저장 토큰을 삭제해 강제 로그아웃 처리
+- Access, Refresh 토큰에 `type` 클레임을 두어 Refresh 토큰으로는 API에 접근 불가
 
 ### 센서 시뮬레이터 (`services/simulator/simulator.py`)
 
 - 실제 센서처럼 서버 외부에서 `POST /sensor-data`를 직접 호출
-- 장치 ID, 전송 간격(초), 횟수를 CLI 인자로 지정
-- 임계값 기준 랜덤 센서값 생성 (정상값 80%, 초과값 20%)
+- 공개 실측 시계열(C-MAPSS 엔진, CNC 밀링)을 시간 순으로 리플레이, seed의 device 채널과 1:1 매핑
+- 대상 채널, 전송 간격(초), 행 수를 CLI 인자로 지정
 
-### 정적 데모 대시보드
+### 실시간 대시보드
 
-- 장치별 센서값 라인 차트, 알림 현황 시각화 (정적 데모)
-- 실시간 갱신(SSE)은 로드맵 예정 항목
+- 장치별 센서값 라인 차트, 알림 현황 시각화
+- SSE(`/dashboard/stream`) 구독으로 수신, 알림 이벤트를 실시간 반영
 
 ---
 
@@ -288,20 +347,17 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 - JWT 인증, 인가, 사번 기반 로그인, 승인제 가입
 - 4단계 역할 기반 접근 제어, 공장, 구역 계층 접근 제어
 - 동기 센서 수신 파이프라인 (수신, 저장, 임계값 판정, 알림)
-- Redis Refresh Token 저장, 회전
-- 외부 시뮬레이터 스크립트
-
-### 예정 (진행 방향)
-
 - 이상 판정 로직 전략화 (`AnomalyDetector` 인터페이스로 분리)
-- 알림 스키마 확장 (severity, 근거, 권고 필드 추가)
+- 알림 스키마 확장 (severity, 근거, 권고 필드)와 실패 수신 적재
 - 장치 freshness 감지 (기대 수신 주기 초과 시 알림)
-- SSE 기반 실시간 대시보드
-- LLM 기반 이상 근거, 원인 진단 (Python 서비스 연동)
-- 실측 공개 센서 시계열(CNC, 터보팬) 리플레이로 시뮬레이터 데이터 교체
+- SSE 기반 실시간 대시보드 (접근 범위 스코핑)
+- LLM 기반 이상 근거, 원인 진단 (Python 분석 서비스 HTTP 연동)
+- 실측 공개 센서 시계열(C-MAPSS 엔진, CNC 밀링) 리플레이로 시뮬레이터 데이터 교체
+- Redis Refresh Token 저장, 회전
 
 ### 향후
 
+- AX provider Gemini 실호출 (현재 기본 `echo`, 키 주입 시 전환)
 - MQTT 수신 경로 도입 (엣지 게이트웨이와의 표준 연동)
 - 대용량 시계열 저장소(TimescaleDB) 검토
 
@@ -417,6 +473,10 @@ python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 ### 접근 제어 계층
 
 공장(Factory), 구역(Zone), 구역 소속(ZoneUser) 3계층으로 접근 범위를 계산합니다. `SYSTEM_ADMIN`은 전체, `ORG_ADMIN`은 소속 공장, `MEMBER`와 `VIEWER`는 소속 구역으로 범위가 좁혀지며, `VIEWER`는 읽기 전용으로 장치 변경이 차단됩니다.
+
+### AX 서비스 분리와 프레임워크 미사용
+
+이상 탐지는 임계값 규칙으로 충분하고, LLM은 근거 설명과 침묵 원인 진단에만 씁니다. 이 규모에서 CrewAI, LangGraph 같은 에이전트 프레임워크는 과설계라 배제하고 LLM SDK를 직접 호출합니다. LLM 호출은 수신 hot path 밖의 스케줄러에서만 일어나 수신 지연에 영향을 주지 않습니다. provider를 얇은 인터페이스로 추상화해 벤더에 종속되지 않습니다.
 
 ### 검토 중
 

@@ -47,7 +47,9 @@ cd services/backend && ./gradlew bootRun
 - PostgreSQL, 주 데이터베이스
 - Redis, Refresh Token 저장소
 - JWT (jjwt), stateless 인증
+- SSE (SseEmitter), 대시보드 실시간 스트림
 - Swagger/OpenAPI, `/swagger-ui/index.html` 에서 API 문서 확인
+- AX 분석 서비스 (services/ax): Python 3.11, FastAPI, uv. Spring이 HTTP로 호출하는 별도 프로세스
 
 메시지 버스(Kafka)는 제거됨. 소비자가 하나뿐이라 과설계였고, 수신을 동기 처리로 단순화 (설계 근거는 README 설계 메모 참고).
 
@@ -60,19 +62,29 @@ cd services/backend && ./gradlew bootRun
 | `user/` | 사용자 엔티티, 역할(Role), 상태(UserStatus) |
 | `factory/` | 공장(Factory), 구역(Zone), 구역 소속(ZoneUser) 조직 계층 |
 | `admin/` | 사용자 승인과 관리, 공장/구역 관리 |
-| `device/` | 센서 장치 CRUD (채널=Device. TEMPERATURE, PRESSURE, CURRENT, POWER, ACCELERATION) |
-| `sensordata/` | 센서 데이터 동기 수신, 저장, 임계값 판정 |
-| `alert/` | 임계값 초과 시 알림 생성과 조회 |
+| `device/` | 센서 장치 CRUD (채널=Device. TEMPERATURE, PRESSURE, CURRENT, POWER, ACCELERATION), freshness 스케줄러 |
+| `sensordata/` | 센서 데이터 동기 수신, 저장, 임계값 판정, 이상 판정 전략(AnomalyDetector), 실패 적재(failure) |
+| `alert/` | 임계값 초과 시 알림 생성과 조회, 근거 보강 스케줄러 |
+| `sse/` | 대시보드 실시간 스트림. 커밋 후 이벤트(AFTER_COMMIT) 브로드캐스트, 구독자 접근 범위 필터 |
+| `ax/` | AX 서비스 HTTP 클라이언트(AxClient/HttpAxClient), DTO, 설정(ax.base-url/enabled) |
 | `global/` | 공통 예외 처리, 접근 제어(AccessControlService), 공유 설정 |
+
+Python 분석 서비스는 `services/ax/` (FastAPI). 엔드포인트 `POST /ax/explain-anomaly`, `POST /ax/diagnose-freshness`. provider 추상화(기본 echo, gemini 선택). 탐지는 Spring 규칙, 설명과 진단만 LLM.
 
 ### 데이터 흐름
 ```
 POST /sensor-data
   → SensorDataController
   → SensorDataService.receive() (한 트랜잭션)
-      ├─ SensorData 저장 (PostgreSQL)
-      └─ 임계값 초과 여부 확인 → Alert 생성
+      ├─ 검증 실패 / 미등록 장치 → FailedReading 적재
+      ├─ SensorData 저장 (PostgreSQL) + device.markSeen()
+      ├─ AnomalyDetector 판정 → 초과 시 Alert 생성
+      └─ 커밋 후(AFTER_COMMIT) SseBroadcastEvent 발행 → 대시보드 push
 ```
+
+수신 경로 밖 스케줄러:
+- FreshnessScheduler: 기대 주기 초과한 침묵 장치 감지
+- AlertEnrichmentScheduler: ax.enabled 시 AX 호출로 Alert evidence/recommendation 보강 (HTTP는 트랜잭션 밖)
 
 ### 역할과 접근 제어
 4단계 역할: `SYSTEM_ADMIN`(전체), `ORG_ADMIN`(소속 공장), `MEMBER`(소속 구역 읽기/쓰기), `VIEWER`(소속 구역 읽기 전용).
