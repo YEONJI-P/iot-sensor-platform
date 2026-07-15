@@ -151,7 +151,7 @@ erDiagram
         bigint id PK
         bigint zone_id FK
         varchar name
-        varchar type "TEMPERATURE/VIBRATION/ILLUMINANCE/PRESSURE"
+        varchar type "TEMPERATURE/PRESSURE/CURRENT/POWER/ACCELERATION"
         varchar location
         double threshold_value
     }
@@ -364,13 +364,14 @@ psql -U postgres -d iot_sensor_db_v2 -f iot/seed.sql
 
 | employeeId | 이름 | Role | password |
 |---|---|---|---|
-| `ADMIN001` | 슈퍼관리자 | SYSTEM_ADMIN | `admin1234!` |
-| `MGR001` | 공장A-관리자 | ORG_ADMIN | `mgr1234!` |
-| `MGR002` | 공장B-관리자 | ORG_ADMIN | `mgr1234!` |
-| `DEV001` | 장치담당자A | MEMBER | `dev1234!` |
-| `INP001` | 데이터입력자A1 | MEMBER | `inp1234!` |
+| `ADMIN001` | 시스템관리자 | SYSTEM_ADMIN | `admin1234!` |
+| `MGR001` | 엔진동-관리자 | ORG_ADMIN | `mgr1234!` |
+| `MGR002` | 가공동-관리자 | ORG_ADMIN | `mgr1234!` |
+| `DEV001` | 설비담당자A | MEMBER | `dev1234!` |
 | `ANL001` | 분석담당자A | MEMBER | `anl1234!` |
+| `INP001` | 가공담당자B | MEMBER | `inp1234!` |
 | `VWR001` | 열람자A | VIEWER | `vwr1234!` |
+| `VWR002` | 열람자B | VIEWER | `vwr1234!` |
 
 ### 센서 시뮬레이터 실행 (`iot/simulator.py`)
 

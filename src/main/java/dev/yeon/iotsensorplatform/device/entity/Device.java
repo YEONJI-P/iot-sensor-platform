@@ -56,6 +56,6 @@ public class Device {
     }
 
     public enum DeviceType {
-        TEMPERATURE, VIBRATION, ILLUMINANCE, PRESSURE
+        TEMPERATURE, PRESSURE, CURRENT, POWER, ACCELERATION
     }
 }

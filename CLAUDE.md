@@ -50,7 +50,7 @@ export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 | `user/` | 사용자 엔티티, 역할(Role), 상태(UserStatus) |
 | `factory/` | 공장(Factory), 구역(Zone), 구역 소속(ZoneUser) 조직 계층 |
 | `admin/` | 사용자 승인과 관리, 공장/구역 관리 |
-| `device/` | 센서 장치 CRUD (TEMPERATURE, VIBRATION, ILLUMINANCE, PRESSURE) |
+| `device/` | 센서 장치 CRUD (채널=Device. TEMPERATURE, PRESSURE, CURRENT, POWER, ACCELERATION) |
 | `sensordata/` | 센서 데이터 동기 수신, 저장, 임계값 판정 |
 | `alert/` | 임계값 초과 시 알림 생성과 조회 |
 | `global/` | 공통 예외 처리, 접근 제어(AccessControlService), 공유 설정 |
