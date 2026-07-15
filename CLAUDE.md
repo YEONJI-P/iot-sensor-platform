@@ -87,7 +87,7 @@ POST /sensor-data
 - AlertEnrichmentScheduler: ax.enabled 시 AX 호출로 Alert evidence/recommendation 보강 (HTTP는 트랜잭션 밖)
 
 ### 역할과 접근 제어
-4단계 역할: `SYSTEM_ADMIN`(전체), `ORG_ADMIN`(소속 공장), `MEMBER`(소속 구역 읽기/쓰기), `VIEWER`(소속 구역 읽기 전용).
+4단계 역할: `SYSTEM_ADMIN`(전체), `FACTORY_ADMIN`(소속 공장), `MEMBER`(소속 구역 읽기/쓰기), `VIEWER`(소속 구역 읽기 전용).
 `AccessControlService`가 공장/구역/구역소속 계층으로 접근 범위를 계산하며, 권한 부족은 `AccessDeniedException`(403)으로 처리.
 
 ### 인증 흐름

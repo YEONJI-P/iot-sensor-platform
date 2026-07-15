@@ -152,9 +152,8 @@ erDiagram
         varchar name "NOT NULL"
         varchar email "NULLABLE, UNIQUE"
         varchar password
-        varchar department "NULLABLE"
         bigint factory_id FK "NULLABLE"
-        varchar role "SYSTEM_ADMIN/ORG_ADMIN/MEMBER/VIEWER"
+        varchar role "SYSTEM_ADMIN/FACTORY_ADMIN/MEMBER/VIEWER"
         varchar status "PENDING/ACTIVE/REJECTED"
         timestamp created_at
         timestamp updated_at
@@ -221,7 +220,7 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | POST | `/auth/login` | 로그인, ACTIVE 상태만 허용 | 불필요 |
 | POST | `/auth/refresh` | Access Token 재발급 | 불필요 |
 
-### Admin (ORG_ADMIN 이상)
+### Admin (FACTORY_ADMIN 이상)
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
@@ -288,14 +287,14 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 ### 승인제 사용자 관리와 접근 제어
 
 - 사번(employeeId) 기반 가입 신청, 가입 즉시 `PENDING` 상태로 저장
-- `ORG_ADMIN` 이상의 관리자가 승인(`ACTIVE`) 또는 반려(`REJECTED`) 처리
+- `FACTORY_ADMIN` 이상의 관리자가 승인(`ACTIVE`) 또는 반려(`REJECTED`) 처리
 - `PENDING`, `REJECTED` 상태에서 로그인 시 `DisabledException`으로 차단
 - 4단계 역할 기반 접근 제어
 
   | 역할 | 범위 |
   |---|---|
   | `SYSTEM_ADMIN` | 전체 공장, 장치 |
-  | `ORG_ADMIN` | 소속 공장의 구역, 사용자 관리 |
+  | `FACTORY_ADMIN` | 소속 공장의 구역, 사용자 관리 |
   | `MEMBER` | 소속 구역 읽기, 쓰기 (장치 관리) |
   | `VIEWER` | 소속 구역 읽기 전용 (장치 변경 불가) |
 
@@ -423,8 +422,8 @@ psql -U postgres -d iot_sensor_db -f services/simulator/seed.sql
 | employeeId | 이름 | Role | password |
 |---|---|---|---|
 | `ADMIN001` | 시스템관리자 | SYSTEM_ADMIN | `admin1234!` |
-| `MGR001` | 엔진동-관리자 | ORG_ADMIN | `mgr1234!` |
-| `MGR002` | 가공동-관리자 | ORG_ADMIN | `mgr1234!` |
+| `MGR001` | 엔진동-관리자 | FACTORY_ADMIN | `mgr1234!` |
+| `MGR002` | 가공동-관리자 | FACTORY_ADMIN | `mgr1234!` |
 | `DEV001` | 설비담당자A | MEMBER | `dev1234!` |
 | `ANL001` | 분석담당자A | MEMBER | `anl1234!` |
 | `INP001` | 가공담당자B | MEMBER | `inp1234!` |
@@ -472,7 +471,7 @@ python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 
 ### 접근 제어 계층
 
-공장(Factory), 구역(Zone), 구역 소속(ZoneUser) 3계층으로 접근 범위를 계산합니다. `SYSTEM_ADMIN`은 전체, `ORG_ADMIN`은 소속 공장, `MEMBER`와 `VIEWER`는 소속 구역으로 범위가 좁혀지며, `VIEWER`는 읽기 전용으로 장치 변경이 차단됩니다.
+공장(Factory), 구역(Zone), 구역 소속(ZoneUser) 3계층으로 접근 범위를 계산합니다. `SYSTEM_ADMIN`은 전체, `FACTORY_ADMIN`은 소속 공장, `MEMBER`와 `VIEWER`는 소속 구역으로 범위가 좁혀지며, `VIEWER`는 읽기 전용으로 장치 변경이 차단됩니다.
 
 ### AX 서비스 분리와 프레임워크 미사용
 
