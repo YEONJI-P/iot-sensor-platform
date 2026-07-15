@@ -53,6 +53,10 @@ public class SecurityConfig {
                         .requestMatchers("/admin/**")
                         .hasAnyRole("SYSTEM_ADMIN", "ORG_ADMIN")
 
+                        // SSE 스트림 — 토큰 쿼리파라미터로 컨트롤러에서 직접 인증
+                        .requestMatchers(HttpMethod.GET, "/dashboard/stream")
+                        .permitAll()
+
                         // 대시보드 API — 운영 역할(MEMBER, VIEWER)
                         .requestMatchers("/dashboard/**")
                         .hasAnyRole("MEMBER", "VIEWER")

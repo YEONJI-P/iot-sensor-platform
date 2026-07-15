@@ -43,4 +43,9 @@ public class Alert {
         this.evidence = evidence;
         this.recommendation = recommendation;
     }
+
+    public void enrich(String evidence, String recommendation) {
+        this.evidence = evidence;
+        this.recommendation = recommendation;
+    }
 }

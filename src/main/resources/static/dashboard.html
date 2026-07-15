@@ -428,9 +428,97 @@
       hour: '2-digit', minute: '2-digit' });
   }
 
+  /* ── SSE 실시간 스트림 (폴링과 병행) ── */
+  let dashboardSse = null;
+
+  function initSse() {
+    const token = localStorage.getItem('jwt_token');
+    if (!token) return;               // 토큰 없거나 로그아웃 상태면 열지 않음
+    if (dashboardSse) return;         // 중복 연결 방지
+
+    // EventSource는 헤더를 실을 수 없어 토큰을 쿼리파라미터로 전달
+    dashboardSse = new EventSource('/dashboard/stream?token=' + encodeURIComponent(token));
+
+    dashboardSse.addEventListener('connected', () => {
+      console.log('[SSE] connected');
+    });
+
+    dashboardSse.addEventListener('sensor-data', (e) => {
+      let d;
+      try { d = JSON.parse(e.data); } catch { return; }
+      // 현재 선택된 장치와 일치할 때만 라이브 차트에 반영
+      const selected = document.getElementById('deviceSelect').value;
+      if (!selected || String(d.deviceId) !== String(selected)) return;
+      appendSensorPoint(d);
+    });
+
+    dashboardSse.addEventListener('alert', (e) => {
+      let a;
+      try { a = JSON.parse(e.data); } catch { return; }
+      prependAlertRow(a);
+    });
+
+    dashboardSse.onerror = (e) => {
+      // 재연결은 EventSource 기본 동작에 위임, 로그만 남김
+      console.warn('[SSE] error / reconnecting…', e);
+    };
+  }
+
+  /* ── 라이브 센서 점 append (loadSensorData 렌더링 방식 재사용) ── */
+  function appendSensorPoint(d) {
+    const ds = sensorChart.data.datasets[0];
+    sensorChart.data.labels.push(formatTime(d.recordedAt));
+    ds.data.push(d.value);
+
+    // 임계값 초과 시 점 색상 (기존 loadSensorData와 동일 규칙)
+    if (!Array.isArray(ds.pointBackgroundColor)) ds.pointBackgroundColor = [];
+    ds.pointBackgroundColor.push(
+      currentThreshold && d.value > currentThreshold ? '#ef4444' : '#3b82f6'
+    );
+
+    // 최근 50개만 유지
+    while (ds.data.length > 50) {
+      sensorChart.data.labels.shift();
+      ds.data.shift();
+      if (Array.isArray(ds.pointBackgroundColor)) ds.pointBackgroundColor.shift();
+    }
+
+    // 임계값 기준선 데이터셋 길이 동기화 (기존 구조 재사용)
+    if (sensorChart.data.datasets.length > 1) {
+      sensorChart.data.datasets[1].data = ds.data.map(() => currentThreshold);
+    }
+    sensorChart.update();
+  }
+
+  /* ── 라이브 알림 prepend (loadRecentAlerts 행 마크업 재사용) ── */
+  function prependAlertRow(a) {
+    const tbody = document.getElementById('alertTableBody');
+    // placeholder(안내/알림없음) 행 제거
+    const first = tbody.querySelector('td[colspan]');
+    if (first) tbody.innerHTML = '';
+
+    const exceed = a.sensorValue > a.thresholdValue;
+    const extra = [a.evidence, a.recommendation].filter(Boolean).join(' · ');
+    const messageCell = extra
+      ? `${a.message}<div class="text-secondary small mt-1">${extra}</div>`
+      : a.message;
+
+    const tr = document.createElement('tr');
+    tr.className = exceed ? 'exceed-row' : '';
+    tr.innerHTML = `
+        <td class="text-secondary">•</td>
+        <td>${a.deviceId}</td>
+        <td class="${exceed ? 'text-danger fw-bold' : ''}">${a.sensorValue?.toFixed(1)}</td>
+        <td>${a.thresholdValue?.toFixed(1)}</td>
+        <td style="max-width:240px;" title="${a.message}">${messageCell}</td>
+        <td class="text-secondary small">${formatDatetime(a.createdAt)}</td>`;
+    tbody.insertBefore(tr, tbody.firstChild);
+  }
+
   /* ── 초기화 ── */
   initCharts();
   loadDevices();
+  initSse();
 </script>
 </body>
 </html>

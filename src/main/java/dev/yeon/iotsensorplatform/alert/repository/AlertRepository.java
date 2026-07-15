@@ -14,6 +14,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     List<Alert> findAllByDeviceIdOrderByCreatedAtDesc(Long deviceId);
     Page<Alert> findByDeviceIdIn(List<Long> deviceIds, Pageable pageable);
+    List<Alert> findTop20ByEvidenceIsNullOrderByCreatedAtDesc();
 
     @Query(value = """
             SELECT *
