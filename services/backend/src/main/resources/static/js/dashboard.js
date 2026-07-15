@@ -336,9 +336,12 @@
 
   function alertRowHtml(a) {
     const exceed = isExceed(a);
-    const lampCls = exceed ? 'lamp alarm' : 'lamp warn';
+    // 램프/행 강조는 severity 우선(freshness 알림은 sensorValue가 없어 임계 비교로는 약하게 보임).
+    const critical = a.severity === 'CRITICAL';
+    const lampCls = critical ? 'lamp alarm' : (a.severity === 'WARNING' ? 'lamp warn' : 'lamp ok');
+    const rowCls = (critical || exceed) ? 'row-alarm' : '';
     const evi = eviHtml(a);
-    return `<tr class="${exceed ? 'row-alarm' : ''}">
+    return `<tr class="${rowCls}">
       <td><span class="${lampCls}"></span></td>
       <td class="mono dim">${escapeHtml(String(a.deviceId ?? ''))}</td>
       <td class="num ${exceed ? 'cell-alarm' : ''}">${fmtNum(a.sensorValue)}</td>
