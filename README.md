@@ -235,7 +235,7 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | POST | `/admin/zones/{id}/users` | 구역에 사용자 추가 | JWT |
 | DELETE | `/admin/zones/{id}/users/{userId}` | 구역에서 사용자 제거 | JWT |
 
-### Device (조회는 인증, 쓰기는 SYSTEM_ADMIN, MEMBER)
+### Device (조회는 인증, 쓰기는 SYSTEM_ADMIN, FACTORY_ADMIN, MEMBER)
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
@@ -278,7 +278,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 | POST | `/ax/explain-anomaly` | 알림 근거(evidence)와 권고(recommendation) 생성 |
 | POST | `/ax/diagnose-freshness` | 장치 침묵 원인 진단 |
 
-> LLM provider는 인터페이스로 추상화됩니다. 기본값은 키가 필요 없는 `echo`이고, 환경변수로 `gemini`로 교체할 수 있습니다.
+> LLM provider는 인터페이스로 분리돼 있습니다. 기본값은 키가 필요 없는 `echo`이고, 환경변수로 `gemini`로 교체할 수 있습니다.
 
 ---
 
@@ -295,7 +295,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
   | 역할 | 범위 |
   |---|---|
   | `SYSTEM_ADMIN` | 전체 공장, 장치 |
-  | `FACTORY_ADMIN` | 소속 공장의 구역, 사용자 관리 |
+  | `FACTORY_ADMIN` | 소속 공장의 구역, 장치, 사용자 관리 |
   | `MEMBER` | 소속 구역 읽기, 쓰기 (장치 관리) |
   | `VIEWER` | 소속 구역 읽기 전용 (장치 변경 불가) |
 
@@ -320,7 +320,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 - 별도 Python/FastAPI 서비스가 알림 근거, 권고와 침묵 원인 진단을 생성
 - 탐지는 규칙, 설명과 진단만 LLM이 담당
-- provider 추상화로 LLM 교체 가능(기본 `echo`, `gemini` 선택)
+- provider를 인터페이스로 분리해 LLM 교체 가능(기본 `echo`, `gemini` 선택)
 
 ### 인증
 
@@ -424,14 +424,13 @@ psql -U postgres -d sensor_monitor_db -f services/simulator/seed.sql
 
 | employeeId | 이름 | Role | password |
 |---|---|---|---|
-| `ADMIN001` | 시스템관리자 | SYSTEM_ADMIN | `admin1234!` |
-| `MGR001` | 엔진동-관리자 | FACTORY_ADMIN | `mgr1234!` |
-| `MGR002` | 가공동-관리자 | FACTORY_ADMIN | `mgr1234!` |
-| `DEV001` | 설비담당자A | MEMBER | `dev1234!` |
-| `ANL001` | 분석담당자A | MEMBER | `anl1234!` |
-| `INP001` | 가공담당자B | MEMBER | `inp1234!` |
-| `VWR001` | 열람자A | VIEWER | `vwr1234!` |
-| `VWR002` | 열람자B | VIEWER | `vwr1234!` |
+| `SYSTEM` | 시스템 관리자 | SYSTEM_ADMIN | `admin1234!` |
+| `ENG-ADMIN` | 엔진동 관리자 | FACTORY_ADMIN | `admin1234!` |
+| `CNC-ADMIN` | 가공동 관리자 | FACTORY_ADMIN | `admin1234!` |
+| `ENG-OP` | 엔진동 설비담당 | MEMBER | `op1234!` |
+| `CNC-OP` | 가공동 설비담당 | MEMBER | `op1234!` |
+| `ENG-VIEW` | 엔진동 열람 | VIEWER | `view1234!` |
+| `CNC-VIEW` | 가공동 열람 | VIEWER | `view1234!` |
 
 ### 센서 시뮬레이터 실행 (`services/simulator/simulator.py`)
 

@@ -84,7 +84,7 @@
     { key: 'users',    label: '사용자 승인', roles: ['SYSTEM_ADMIN', 'FACTORY_ADMIN'], render: renderUsers },
     { key: 'factories',label: '공장',        roles: ['SYSTEM_ADMIN'],              render: renderFactories },
     { key: 'zones',    label: '구역',        roles: ['SYSTEM_ADMIN', 'FACTORY_ADMIN'], render: renderZones },
-    { key: 'devices',  label: '장치',        roles: ['SYSTEM_ADMIN', 'MEMBER'],    render: renderDevices },
+    { key: 'devices',  label: '장치',        roles: ['SYSTEM_ADMIN', 'FACTORY_ADMIN', 'MEMBER'], render: renderDevices },
   ];
 
   const role = Auth.getRole();

@@ -68,14 +68,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/alerts", "/alerts/**")
                         .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
 
-                        // 장치 변경(등록·수정·삭제) — 장치 운영 주체(SYSTEM_ADMIN, MEMBER)만.
-                        // FACTORY_ADMIN은 사용자·구역 관리 담당이라 장치 운영에서 제외. VIEWER는 읽기 전용.
+                        // 장치 변경(등록·수정·삭제) — SYSTEM_ADMIN, 소속 공장 FACTORY_ADMIN, 소속 구역 MEMBER.
+                        // 세부 범위(공장/구역)는 서비스 계층에서 스코핑. VIEWER는 읽기 전용.
                         .requestMatchers(HttpMethod.POST, "/devices")
-                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER")
                         .requestMatchers(HttpMethod.PUT, "/devices/**")
-                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER")
                         .requestMatchers(HttpMethod.DELETE, "/devices/**")
-                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER")
 
                         // 나머지 인증 필요
                         .anyRequest().authenticated()
