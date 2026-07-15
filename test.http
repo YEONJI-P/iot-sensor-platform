@@ -1,56 +1,73 @@
-### 회원가입
-POST http://localhost:8080/auth/signup
+@host = http://localhost:8080
+
+### 회원가입 (승인 대기 상태로 생성됨 — 로그인하려면 관리자 승인 필요)
+POST {{host}}/auth/register
 Content-Type: application/json
 
 {
-  "email": "test@test.com",
-  "password": "password123"
+  "employeeId": "EMP999",
+  "name": "테스트사용자",
+  "password": "password123!",
+  "email": "test@factory.com",
+  "department": "생산팀",
+  "factoryId": 1
 }
 
-### 로그인
-POST http://localhost:8080/auth/login
+### 로그인 — MEMBER 계정(seed: DEV001) → accessToken 캡처
+# @name login
+POST {{host}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "test@test.com",
-  "password": "password123"
+  "employeeId": "DEV001",
+  "password": "dev1234!"
 }
 
-### 디바이스 등록
-POST http://localhost:8080/devices
+> {% client.global.set("token", response.body.accessToken); %}
+
+### 토큰 재발급
+POST {{host}}/auth/refresh
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+
+{
+  "refreshToken": "{{login.response.body.refreshToken}}"
+}
+
+### 디바이스 등록 (MEMBER 이상, 소속 구역만)
+POST {{host}}/devices
+Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
   "name": "온도센서1",
   "type": "TEMPERATURE",
-  "location": "공장1층",
-  "thresholdValue": 80.0
+  "location": "1구역-생산-01",
+  "thresholdValue": 80.0,
+  "zoneId": 1
 }
 
 ### 내 디바이스 목록
-GET http://localhost:8080/devices
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+GET {{host}}/devices
+Authorization: Bearer {{token}}
 
 ### 디바이스 수정
-PUT http://localhost:8080/devices/1
+PUT {{host}}/devices/1
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+Authorization: Bearer {{token}}
 
 {
   "name": "온도센서1-수정",
   "type": "TEMPERATURE",
-  "location": "공장2층",
+  "location": "1구역-생산-02",
   "thresholdValue": 90.0
 }
 
 ### 디바이스 삭제
-DELETE http://localhost:8080/devices/1
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+DELETE {{host}}/devices/1
+Authorization: Bearer {{token}}
 
-
-### 센서 데이터 전송
-POST http://localhost:8080/sensor-data
+### 센서 데이터 전송 (무인증 — 게이트웨이/장치 → 서버)
+POST {{host}}/sensor-data
 Content-Type: application/json
 
 {
@@ -59,17 +76,41 @@ Content-Type: application/json
 }
 
 ### 전체 센서 데이터 조회
-GET http://localhost:8080/sensor-data
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+GET {{host}}/sensor-data
+Authorization: Bearer {{token}}
 
 ### 특정 디바이스 센서 데이터 조회
-GET http://localhost:8080/sensor-data/1
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+GET {{host}}/sensor-data/1
+Authorization: Bearer {{token}}
 
 ### 전체 Alert 조회
-GET http://localhost:8080/alerts
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+GET {{host}}/alerts
+Authorization: Bearer {{token}}
 
 ### 특정 디바이스 Alert 조회
-GET http://localhost:8080/alerts/1
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzc0MTcwMjE2LCJleHAiOjE3NzQxNzM4MTZ9.Uq9EiPzrSLNLWdNFe4jazBhg23zSlhK01q2GLQ8wor1PtZ3PDN8h9IKKmaO2A5UG
+GET {{host}}/alerts/1
+Authorization: Bearer {{token}}
+
+### ── 관리자 (seed: ADMIN001 = SYSTEM_ADMIN) ──
+# @name adminLogin
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "employeeId": "ADMIN001",
+  "password": "admin1234!"
+}
+
+> {% client.global.set("adminToken", response.body.accessToken); %}
+
+### 공장 목록 (SYSTEM_ADMIN)
+GET {{host}}/admin/factories
+Authorization: Bearer {{adminToken}}
+
+### 구역 목록 (SYSTEM_ADMIN, ORG_ADMIN)
+GET {{host}}/admin/zones
+Authorization: Bearer {{adminToken}}
+
+### 가입 승인 대기 사용자 목록
+GET {{host}}/admin/users/pending
+Authorization: Bearer {{adminToken}}
