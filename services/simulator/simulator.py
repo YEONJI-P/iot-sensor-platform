@@ -1,10 +1,10 @@
 """
 IoT Sensor Simulator — 실측 데이터 리플레이
-저장된 공개 센서 시계열(iot/data/)을 시간 순으로 한 행씩 흘려보내(리플레이)
+저장된 공개 센서 시계열(services/simulator/data/)을 시간 순으로 한 행씩 흘려보내(리플레이)
 POST /sensor-data 로 전송해 실시간 수신을 재현한다.
 
-데이터는 먼저 내려받아야 한다:  bash iot/data/download.sh
-장치(device_id)별 매핑은 iot/seed.sql 의 device 삽입 순서와 일치한다(방식 A: 채널=Device).
+데이터는 먼저 내려받아야 한다:  bash services/simulator/data/download.sh
+장치(device_id)별 매핑은 services/simulator/seed.sql 의 device 삽입 순서와 일치한다(방식 A: 채널=Device).
 """
 
 import argparse
@@ -109,7 +109,7 @@ def worker(preset: dict, interval: float, limit: int, base_url: str):
     try:
         series = load_series(preset)
     except FileNotFoundError:
-        print(f"[장치 {device_id}:{label}] 데이터 파일 없음 — 먼저 'bash iot/data/download.sh' 실행")
+        print(f"[장치 {device_id}:{label}] 데이터 파일 없음 — 먼저 'bash services/simulator/data/download.sh' 실행")
         return
 
     if limit > 0:
@@ -135,10 +135,10 @@ def worker(preset: dict, interval: float, limit: int, base_url: str):
 # 4. main
 #
 # 사용 예시:
-#   bash iot/data/download.sh            # 데이터 먼저 내려받기
-#   python iot/simulator.py --all        # 7개 채널 전체 리플레이
-#   python iot/simulator.py --devices 1 2 --interval 0.5 --limit 100
-#   python iot/simulator.py --all --base-url http://localhost:8080
+#   bash services/simulator/data/download.sh            # 데이터 먼저 내려받기
+#   python services/simulator/simulator.py --all        # 7개 채널 전체 리플레이
+#   python services/simulator/simulator.py --devices 1 2 --interval 0.5 --limit 100
+#   python services/simulator/simulator.py --all --base-url http://localhost:8080
 # =============================================================================
 
 def main():

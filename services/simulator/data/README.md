@@ -5,7 +5,7 @@
 ## 다운로드
 
 ```bash
-bash iot/data/download.sh
+bash services/simulator/data/download.sh
 ```
 
 ## 출처

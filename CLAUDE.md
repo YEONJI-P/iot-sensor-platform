@@ -2,33 +2,43 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 저장소 구조 (모노레포)
+
+중립 루트 + 서비스별 도메인 폴더. 루트는 어떤 서비스도 소유하지 않는다.
+
+```
+services/
+├── backend/     Spring Boot API (build.gradle·gradlew·src, 이 안에서 gradle 실행)
+├── ax/          FastAPI AI 분석 서비스 (uv, 자체 Dockerfile)
+└── simulator/   Python 시뮬레이터 + seed.sql + data(리플레이용 실측 CSV)
+docs/ · docker-compose.yml · .github/ · README.md  ← 루트(프로젝트 공통)
+```
+
+gradle 명령은 반드시 `services/backend/`에서 실행한다.
+
 ## Commands
 
 ### 로컬 개발 환경 시작
 ```bash
-# 의존 서비스 시작 (PostgreSQL + Redis)
+# 의존 서비스 시작 (PostgreSQL + Redis) — 루트에서
 docker-compose up -d
 
 # JWT 서명 키 주입 (기본값 없음, 미설정 시 부팅 실패)
 export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 
-# 애플리케이션 실행
-./gradlew bootRun
+# 애플리케이션 실행 (services/backend/)
+cd services/backend && ./gradlew bootRun
 ```
 
-### 빌드
+### 빌드 / 테스트 (services/backend/ 에서)
 ```bash
 ./gradlew build          # 전체 빌드 (테스트 포함)
 ./gradlew build -x test  # 테스트 제외 빌드
-```
-
-### 테스트
-```bash
 ./gradlew test                                       # 전체 테스트
 ./gradlew test --tests AuthServiceTest               # 특정 클래스
 ./gradlew test --tests AuthServiceTest.login_success # 특정 메서드
 ```
-테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라 없이 실행됩니다 (`src/test/resources/application.yml`).
+테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라 없이 실행됩니다 (`services/backend/src/test/resources/application.yml`).
 
 ## 아키텍처
 

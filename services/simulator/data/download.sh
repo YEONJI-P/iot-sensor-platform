@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 공개 센서 시계열 데이터를 iot/data/ 로 내려받는다. 저장소에는 커밋하지 않는다(.gitignore).
+# 공개 센서 시계열 데이터를 services/simulator/data/ 로 내려받는다. 저장소에는 커밋하지 않는다(.gitignore).
 # 시뮬레이터가 이 CSV들을 시간 순으로 리플레이해 실시간 수신을 재현한다.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -19,4 +19,4 @@ done
 curl -fsSL "$CNC_BASE/train.csv" -o cnc_train.csv
 echo "받음: cnc_train.csv (실험별 라벨)"
 
-echo "완료 — iot/data/ 에 저장됨"
+echo "완료 — services/simulator/data/ 에 저장됨"

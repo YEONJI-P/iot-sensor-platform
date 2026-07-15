@@ -3,13 +3,13 @@
 -- =============================================================================
 -- 대상: factories, zones, users, zone_users, device
 -- 방식 A(채널=Device): 실측 데이터의 센서 채널 하나를 Device 하나로 등록한다.
---   Device ID(삽입 순서)는 iot/simulator.py 의 리플레이 매핑과 일치해야 한다.
+--   Device ID(삽입 순서)는 services/simulator/simulator.py 의 리플레이 매핑과 일치해야 한다.
 -- 비밀번호: pgcrypto의 BCrypt(strength=10) — Spring BCryptPasswordEncoder 호환
 --
 -- 실행 전: 테이블이 생성된 상태(Spring Boot 기동 후)여야 하며, 중복 실행은
 --   UNIQUE 제약 위반이 난다. 재실행은 하단 TRUNCATE 주석을 먼저 실행한다.
 --
---   psql -U postgres -d iot_sensor_db -f iot/seed.sql
+--   psql -U postgres -d iot_sensor_db -f services/simulator/seed.sql
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

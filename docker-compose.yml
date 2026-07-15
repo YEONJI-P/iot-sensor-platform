@@ -17,7 +17,7 @@ services:
       - "6379:6379"
 
   ax:
-    build: ./ax
+    build: ./services/ax
     container_name: iot-ax
     ports:
       - "8000:8000"

@@ -255,7 +255,7 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
   | `VIEWER` | 소속 구역 읽기 전용 (장치 변경 불가) |
 
 - 공장(Factory), 구역(Zone) 계층과 구역 소속 관계로 접근 범위를 계산하는 `AccessControlService`
-- 초기 데이터는 `iot/seed.sql`(PostgreSQL) 일괄 투입
+- 초기 데이터는 `services/simulator/seed.sql`(PostgreSQL) 일괄 투입
 
 ### 센서 데이터 수신과 알림
 
@@ -268,7 +268,7 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 - JWT 기반 stateless 인증, Redis에 Refresh Token 저장
 - Refresh Token 회전, 불일치 시 저장 토큰을 삭제해 강제 로그아웃 처리
 
-### 센서 시뮬레이터 (`iot/simulator.py`)
+### 센서 시뮬레이터 (`services/simulator/simulator.py`)
 
 - 실제 센서처럼 서버 외부에서 `POST /sensor-data`를 직접 호출
 - 장치 ID, 전송 간격(초), 횟수를 CLI 인자로 지정
@@ -330,7 +330,8 @@ docker-compose up -d
 # 4. JWT 서명 키 설정, 기본값이 없어 미설정 시 부팅 실패 (셸 export 또는 IDE 실행 구성)
 export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 
-# 5. 애플리케이션 실행
+# 5. 애플리케이션 실행 (Spring은 services/backend/)
+cd services/backend
 ./gradlew bootRun
 ```
 
@@ -339,10 +340,11 @@ export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 ### 테스트 실행
 
 ```bash
+cd services/backend
 ./gradlew test
 ```
 
-> 테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라(Postgres, Redis) 없이 실행됩니다. 설정은 `src/test/resources/application.yml`.
+> 테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라(Postgres, Redis) 없이 실행됩니다. 설정은 `services/backend/src/test/resources/application.yml`.
 
 ### Swagger UI
 
@@ -350,12 +352,12 @@ export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 http://localhost:8080/swagger-ui/index.html
 ```
 
-### 초기 데이터 투입 (`iot/seed.sql`)
+### 초기 데이터 투입 (`services/simulator/seed.sql`)
 
 Spring Boot 기동 후 테이블이 생성된 상태에서 실행합니다.
 
 ```bash
-psql -U postgres -d iot_sensor_db -f iot/seed.sql
+psql -U postgres -d iot_sensor_db -f services/simulator/seed.sql
 ```
 
 > 재실행이 필요한 경우 `seed.sql` 하단의 `TRUNCATE` 주석을 해제 후 먼저 실행하세요.
@@ -373,22 +375,22 @@ psql -U postgres -d iot_sensor_db -f iot/seed.sql
 | `VWR001` | 열람자A | VIEWER | `vwr1234!` |
 | `VWR002` | 열람자B | VIEWER | `vwr1234!` |
 
-### 센서 시뮬레이터 실행 (`iot/simulator.py`)
+### 센서 시뮬레이터 실행 (`services/simulator/simulator.py`)
 
 실측 공개 데이터(C-MAPSS, CNC)를 시간 순으로 리플레이해 `POST /sensor-data`로 전송합니다. seed의 device(채널)와 1:1로 매핑됩니다.
 
 ```bash
 # 1. 데이터 내려받기 (최초 1회)
-bash iot/data/download.sh
+bash services/simulator/data/download.sh
 
 # 2. 의존성 설치
 pip install requests
 
 # 3. 전체 7개 채널 리플레이 (1초 간격)
-python iot/simulator.py --all
+python services/simulator/simulator.py --all
 
 # 특정 채널만 / 간격·행수 조절
-python iot/simulator.py --devices 1 6 --interval 0.5 --limit 100
+python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 ```
 
 > device id는 seed.sql의 device 삽입 순서와 일치합니다(1~4 = C-MAPSS 엔진, 5~7 = CNC 밀링).
