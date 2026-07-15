@@ -23,7 +23,7 @@ public class SensorDataController {
     public ResponseEntity<MessageResponse> receive(
             @RequestBody SensorDataRequest request) {
         sensorDataService.receive(request);
-        return ResponseEntity.ok(new MessageResponse("메시지 발행 완료"));
+        return ResponseEntity.ok(new MessageResponse("센서 데이터 수신 완료"));
     }
 
     @GetMapping

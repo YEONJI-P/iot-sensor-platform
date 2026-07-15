@@ -1,10 +1,12 @@
 package dev.yeon.iotsensorplatform.sensordata.service;
 
+import dev.yeon.iotsensorplatform.alert.entity.Alert;
+import dev.yeon.iotsensorplatform.alert.repository.AlertRepository;
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
 import dev.yeon.iotsensorplatform.global.service.AccessControlService;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataRequest;
-import dev.yeon.iotsensorplatform.sensordata.kafka.SensorDataProducer;
+import dev.yeon.iotsensorplatform.sensordata.entity.SensorData;
 import dev.yeon.iotsensorplatform.sensordata.repository.SensorDataRepository;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -22,8 +24,8 @@ import static org.mockito.Mockito.*;
 class SensorDataServiceTest {
 
     @Mock DeviceRepository deviceRepository;
-    @Mock SensorDataProducer sensorDataProducer;
-    @Mock SensorDataRepository sensorDataRepository; // GET Test
+    @Mock SensorDataRepository sensorDataRepository;
+    @Mock AlertRepository alertRepository;
     @Mock AccessControlService accessControlService; // GET Test
     @Mock UserRepository userRepository; // GET Test
 
@@ -48,7 +50,31 @@ class SensorDataServiceTest {
 
         sensorDataService.receive(request);
 
-        verify(sensorDataProducer,times(1)).send(request);
+        verify(sensorDataRepository, times(1)).save(any(SensorData.class));
+    }
+
+    @Test
+    void receive_below_threshold_no_alert() {
+        Device device = mockDevice(80.0);
+        SensorDataRequest request = new SensorDataRequest(1L, 50.0);
+
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+
+        sensorDataService.receive(request);
+
+        verify(alertRepository, never()).save(any());
+    }
+
+    @Test
+    void receive_above_threshold_creates_alert() {
+        Device device = mockDevice(80.0);
+        SensorDataRequest request = new SensorDataRequest(1L, 100.0);
+
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+
+        sensorDataService.receive(request);
+
+        verify(alertRepository, times(1)).save(any(Alert.class));
     }
 
     @Test
@@ -57,7 +83,7 @@ class SensorDataServiceTest {
         when(deviceRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> sensorDataService.receive(request));
-        verify(sensorDataProducer,never()).send(any());
+        verify(sensorDataRepository, never()).save(any());
     }
 
 
