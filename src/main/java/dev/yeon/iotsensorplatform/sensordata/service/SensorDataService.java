@@ -1,5 +1,6 @@
 package dev.yeon.iotsensorplatform.sensordata.service;
 
+import dev.yeon.iotsensorplatform.alert.dto.AlertResponse;
 import dev.yeon.iotsensorplatform.alert.entity.Alert;
 import dev.yeon.iotsensorplatform.alert.entity.AlertSeverity;
 import dev.yeon.iotsensorplatform.alert.repository.AlertRepository;
@@ -13,6 +14,7 @@ import dev.yeon.iotsensorplatform.sensordata.entity.SensorData;
 import dev.yeon.iotsensorplatform.sensordata.failure.FailedReading;
 import dev.yeon.iotsensorplatform.sensordata.failure.FailedReadingRepository;
 import dev.yeon.iotsensorplatform.sensordata.repository.SensorDataRepository;
+import dev.yeon.iotsensorplatform.sse.SseService;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class SensorDataService {
     private final AlertRepository alertRepository;
     private final FailedReadingRepository failedReadingRepository;
     private final AnomalyDetector anomalyDetector;
+    private final SseService sseService;
     private final AccessControlService accessControlService;
     private final UserRepository userRepository;
 
@@ -59,6 +62,7 @@ public class SensorDataService {
         sensorDataRepository.save(sensorData);
         device.markSeen(LocalDateTime.now());
         log.info("센서 데이터 저장 완료 - deviceId: {}, value: {}", request.getDeviceId(), request.getValue());
+        sseService.broadcast("sensor-data", SensorDataResponse.from(sensorData));
 
         if (anomalyDetector.isAnomaly(device, request.getValue())) {
             Alert alert = Alert.builder()
@@ -71,6 +75,7 @@ public class SensorDataService {
                     .build();
             alertRepository.save(alert);
             log.warn("Alert 생성 - device: {}, value: {}", device.getName(), request.getValue());
+            sseService.broadcast("alert", AlertResponse.from(alert));
         }
     }
 

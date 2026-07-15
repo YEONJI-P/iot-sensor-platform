@@ -12,6 +12,7 @@ import dev.yeon.iotsensorplatform.global.security.CustomAccessDeniedHandler;
 import dev.yeon.iotsensorplatform.global.security.CustomAuthenticationEntryPoint;
 import dev.yeon.iotsensorplatform.global.service.AccessControlService;
 import dev.yeon.iotsensorplatform.sensordata.service.SensorDataService;
+import dev.yeon.iotsensorplatform.sse.SseService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -51,6 +52,8 @@ public class SecurityConfigTest {
     FactoryService factoryService;
     @MockitoBean
     AccessControlService accessControlService;
+    @MockitoBean
+    SseService sseService;
     @MockitoBean
     JwtUtil jwtUtil;
 
