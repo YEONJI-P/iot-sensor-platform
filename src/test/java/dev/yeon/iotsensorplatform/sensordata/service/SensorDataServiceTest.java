@@ -11,7 +11,6 @@ import dev.yeon.iotsensorplatform.sensordata.entity.SensorData;
 import dev.yeon.iotsensorplatform.sensordata.failure.FailedReading;
 import dev.yeon.iotsensorplatform.sensordata.failure.FailedReadingRepository;
 import dev.yeon.iotsensorplatform.sensordata.repository.SensorDataRepository;
-import dev.yeon.iotsensorplatform.sse.SseService;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +32,7 @@ class SensorDataServiceTest {
     @Mock AlertRepository alertRepository;
     @Mock FailedReadingRepository failedReadingRepository;
     @Mock AnomalyDetector anomalyDetector;
-    @Mock SseService sseService;
+    @Mock org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock AccessControlService accessControlService; // GET Test
     @Mock UserRepository userRepository; // GET Test
 

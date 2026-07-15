@@ -14,11 +14,12 @@ import dev.yeon.iotsensorplatform.sensordata.entity.SensorData;
 import dev.yeon.iotsensorplatform.sensordata.failure.FailedReading;
 import dev.yeon.iotsensorplatform.sensordata.failure.FailedReadingRepository;
 import dev.yeon.iotsensorplatform.sensordata.repository.SensorDataRepository;
-import dev.yeon.iotsensorplatform.sse.SseService;
+import dev.yeon.iotsensorplatform.sse.SseBroadcastEvent;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -37,7 +38,7 @@ public class SensorDataService {
     private final AlertRepository alertRepository;
     private final FailedReadingRepository failedReadingRepository;
     private final AnomalyDetector anomalyDetector;
-    private final SseService sseService;
+    private final ApplicationEventPublisher eventPublisher;
     private final AccessControlService accessControlService;
     private final UserRepository userRepository;
 
@@ -62,7 +63,9 @@ public class SensorDataService {
         sensorDataRepository.save(sensorData);
         device.markSeen(LocalDateTime.now());
         log.info("센서 데이터 저장 완료 - deviceId: {}, value: {}", request.getDeviceId(), request.getValue());
-        sseService.broadcast("sensor-data", SensorDataResponse.from(sensorData));
+        // 실시간 전송은 커밋 후에 (SseBroadcastListener). 저장 트랜잭션 안에서 I/O를 하지 않는다.
+        eventPublisher.publishEvent(
+                new SseBroadcastEvent("sensor-data", device.getId(), SensorDataResponse.from(sensorData)));
 
         if (anomalyDetector.isAnomaly(device, request.getValue())) {
             Alert alert = Alert.builder()
@@ -75,7 +78,8 @@ public class SensorDataService {
                     .build();
             alertRepository.save(alert);
             log.warn("Alert 생성 - device: {}, value: {}", device.getName(), request.getValue());
-            sseService.broadcast("alert", AlertResponse.from(alert));
+            eventPublisher.publishEvent(
+                    new SseBroadcastEvent("alert", device.getId(), AlertResponse.from(alert)));
         }
     }
 

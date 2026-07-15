@@ -6,11 +6,13 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 대시보드 실시간 전송(SSE) 관리.
- * 구독자 emitter를 보관하고, 수신 이벤트를 연결된 모든 클라이언트로 broadcast 한다.
+ * 구독 시점의 접근 가능 device 집합을 emitter에 바인딩하고, 이벤트의 deviceId가
+ * 그 집합에 있을 때만 전송한다 — REST 조회와 동일한 접근 범위를 실시간 채널에도 적용.
  * 메시지 버스 없이 인프로세스 메서드 호출로만 동작한다.
  */
 @Slf4j
@@ -19,30 +21,41 @@ public class SseService {
 
     private static final long TIMEOUT = 30 * 60 * 1000L; // 30분
 
-    private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final List<Subscriber> subscribers = new CopyOnWriteArrayList<>();
 
-    public SseEmitter subscribe() {
+    /** 구독자와 그가 볼 수 있는 device 범위 */
+    private record Subscriber(SseEmitter emitter, Set<Long> deviceIds) {
+    }
+
+    public SseEmitter subscribe(Set<Long> deviceIds) {
         SseEmitter emitter = new SseEmitter(TIMEOUT);
-        emitters.add(emitter);
-        emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(() -> emitters.remove(emitter));
-        emitter.onError(e -> emitters.remove(emitter));
-        try {
-            emitter.send(SseEmitter.event().name("connected").data("ok"));
-        } catch (IOException e) {
-            emitters.remove(emitter);
-        }
+        Subscriber subscriber = new Subscriber(emitter, deviceIds);
+        subscribers.add(subscriber);
+        emitter.onCompletion(() -> subscribers.remove(subscriber));
+        emitter.onTimeout(() -> subscribers.remove(subscriber));
+        emitter.onError(e -> subscribers.remove(subscriber));
+        send(subscriber, "connected", "ok");
         return emitter;
     }
 
-    /** 연결된 모든 구독자에게 이벤트를 전송한다. 실패한 emitter는 제거한다. */
-    public void broadcast(String event, Object data) {
-        for (SseEmitter emitter : emitters) {
+    /** deviceId 이벤트를 그 장치에 접근 가능한 구독자에게만 전송한다. */
+    public void broadcast(String event, Long deviceId, Object data) {
+        for (Subscriber subscriber : subscribers) {
+            if (deviceId != null && !subscriber.deviceIds().contains(deviceId)) {
+                continue;
+            }
+            send(subscriber, event, data);
+        }
+    }
+
+    private void send(Subscriber subscriber, String event, Object data) {
+        // SseEmitter.send는 단일 emitter 기준 스레드 세이프하지 않으므로 emitter별로 직렬화한다.
+        synchronized (subscriber.emitter()) {
             try {
-                emitter.send(SseEmitter.event().name(event).data(data));
+                subscriber.emitter().send(SseEmitter.event().name(event).data(data));
             } catch (IOException e) {
-                emitter.completeWithError(e);
-                emitters.remove(emitter);
+                subscribers.remove(subscriber);
+                subscriber.emitter().completeWithError(e);
             }
         }
     }
