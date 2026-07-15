@@ -13,4 +13,10 @@ public interface DeviceRepository extends JpaRepository<Device, Long> {
 
     @Query("SELECT d.id FROM Device d")
     List<Long> findAllIds();
+
+    @Query("SELECT d.id FROM Device d WHERE d.zone.factory.id = :factoryId")
+    List<Long> findIdsByFactoryId(Long factoryId);
+
+    @Query("SELECT d.id FROM Device d WHERE d.zone.id IN :zoneIds")
+    List<Long> findIdsByZoneIdIn(List<Long> zoneIds);
 }

@@ -17,6 +17,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
 import javax.swing.text.html.Option;
@@ -25,6 +29,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,34 +81,38 @@ class AlertServiceTest {
         User user = mockUser();
         Device device = mockDevice();
         Alert alert = mockAlert(device);
+        Pageable pageable = PageRequest.of(0, 50);
 
         when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
         when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of(1L));
-        when(alertRepository.findAllByDeviceIdInOrderByCreatedAtDesc(List.of(1L))).thenReturn(List.of(alert));
+        when(alertRepository.findByDeviceIdIn(eq(List.of(1L)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(alert)));
 
-        List<AlertResponse> result = alertService.getAllAlerts("EMP001");
+        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", pageable);
 
-        assertThat(result).hasSize(1);
+        assertThat(result.getContent()).hasSize(1);
     }
 
     @Test
     void getAllAlerts_returns_empty_when_no_accessible_devices() {
         User user = mockUser();
+        Pageable pageable = PageRequest.of(0, 50);
 
         when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
         when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of());
 
-        List<AlertResponse> result = alertService.getAllAlerts("EMP001");
+        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", pageable);
 
         assertThat(result).isEmpty();
-        verify(alertRepository, never()).findAllByDeviceIdInOrderByCreatedAtDesc(any());
+        verify(alertRepository, never()).findByDeviceIdIn(any(), any());
     }
 
     @Test
     void getAllAlerts_fail_user_not_found() {
         when(userRepository.findByEmployeeId("NOTEXIST")).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class, () -> alertService.getAllAlerts("NOTEXIST"));
+        assertThrows(IllegalArgumentException.class,
+                () -> alertService.getAllAlerts("NOTEXIST", PageRequest.of(0, 50)));
     }
 
     @Test
@@ -157,13 +166,14 @@ class AlertServiceTest {
     @Test
     void getAllAlerts_returns_empty_when_no_alerts_for_accessible_devices() {
         User user = mockUser();
+        Pageable pageable = PageRequest.of(0, 50);
 
         when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
         when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of(1L));
-        when(alertRepository.findAllByDeviceIdInOrderByCreatedAtDesc(List.of(1L)))
-                .thenReturn(List.of());
+        when(alertRepository.findByDeviceIdIn(eq(List.of(1L)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
 
-        List<AlertResponse> result = alertService.getAllAlerts("EMP001");
+        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", pageable);
 
         assertThat(result).isEmpty();
     }

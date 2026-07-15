@@ -36,18 +36,17 @@ public class AccessControlService {
 
     @Transactional(readOnly = true)
     public List<Long> getAccessibleDeviceIds(User user) {
+        // id만 필요하므로 전 경로에서 id 프로젝션으로 조회 (엔티티 전량로드 회피)
         if (user.getRole() == Role.SYSTEM_ADMIN) {
             return deviceRepository.findAllIds();
         }
         if (user.getRole() == Role.ORG_ADMIN) {
             if (user.getFactory() == null) return List.of();
-            return deviceRepository.findAllByZone_Factory_Id(user.getFactory().getId())
-                    .stream().map(Device::getId).toList();
+            return deviceRepository.findIdsByFactoryId(user.getFactory().getId());
         }
         List<Long> zoneIds = getZoneIds(user);
         if (zoneIds.isEmpty()) return List.of();
-        return deviceRepository.findAllByZoneIdIn(zoneIds)
-                .stream().map(Device::getId).toList();
+        return deviceRepository.findIdsByZoneIdIn(zoneIds);
     }
 
     @Transactional(readOnly = true)

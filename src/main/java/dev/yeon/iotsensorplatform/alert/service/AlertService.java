@@ -9,6 +9,8 @@ import dev.yeon.iotsensorplatform.global.service.AccessControlService;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,12 +28,12 @@ public class AlertService {
     private final AccessControlService accessControlService;
 
     @Transactional(readOnly = true)
-    public List<AlertResponse> getAllAlerts(String employeeId) {
+    public Page<AlertResponse> getAllAlerts(String employeeId, Pageable pageable) {
         User user = getUser(employeeId);
         List<Long> deviceIds = accessControlService.getAccessibleDeviceIds(user);
-        if (deviceIds.isEmpty()) return List.of();
-        return alertRepository.findAllByDeviceIdInOrderByCreatedAtDesc(deviceIds)
-                .stream().map(AlertResponse::from).toList();
+        if (deviceIds.isEmpty()) return Page.empty(pageable);
+        return alertRepository.findByDeviceIdIn(deviceIds, pageable)
+                .map(AlertResponse::from);
     }
 
     @Transactional(readOnly = true)

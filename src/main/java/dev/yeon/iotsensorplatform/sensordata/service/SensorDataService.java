@@ -17,6 +17,8 @@ import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,12 +85,12 @@ public class SensorDataService {
     }
 
     @Transactional(readOnly = true)
-    public List<SensorDataResponse> getAllSensorData(String employeeId) {
+    public Page<SensorDataResponse> getAllSensorData(String employeeId, Pageable pageable) {
         User user = getUser(employeeId);
         List<Long> deviceIds = accessControlService.getAccessibleDeviceIds(user);
-        if (deviceIds.isEmpty()) return List.of();
-        return sensorDataRepository.findAllByDeviceIdInOrderByRecordedAtDesc(deviceIds)
-                .stream().map(SensorDataResponse::from).toList();
+        if (deviceIds.isEmpty()) return Page.empty(pageable);
+        return sensorDataRepository.findByDeviceIdIn(deviceIds, pageable)
+                .map(SensorDataResponse::from);
     }
 
     @Transactional(readOnly = true)

@@ -5,6 +5,10 @@ import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataRequest;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataResponse;
 import dev.yeon.iotsensorplatform.sensordata.service.SensorDataService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -27,9 +31,10 @@ public class SensorDataController {
     }
 
     @GetMapping
-    public ResponseEntity<List<SensorDataResponse>> getAllSensorData(
-            @AuthenticationPrincipal String employeeId) {
-        return ResponseEntity.ok(sensorDataService.getAllSensorData(employeeId));
+    public ResponseEntity<Page<SensorDataResponse>> getAllSensorData(
+            @AuthenticationPrincipal String employeeId,
+            @PageableDefault(size = 50, sort = "recordedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(sensorDataService.getAllSensorData(employeeId, pageable));
     }
 
     @GetMapping("/{deviceId}")

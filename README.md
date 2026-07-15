@@ -224,15 +224,17 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
 | POST | `/sensor-data` | 센서 데이터 수신 (게이트웨이, 장치 to 서버) | 불필요 |
-| GET | `/sensor-data` | 전체 센서 데이터 조회 | JWT |
+| GET | `/sensor-data` | 전체 센서 데이터 조회 (페이지네이션, `?page=&size=&sort=`) | JWT |
 | GET | `/sensor-data/{deviceId}` | 장치별 센서 데이터 조회 | JWT |
 
 ### Alert
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
-| GET | `/alerts` | 전체 알림 조회 | JWT |
+| GET | `/alerts` | 전체 알림 조회 (페이지네이션, `?page=&size=&sort=`) | JWT |
 | GET | `/alerts/{deviceId}` | 장치별 알림 조회 | JWT |
+| GET | `/alerts/recent?deviceId=&limit=` | 장치별 최근 알림 (대시보드) | JWT |
+| GET | `/alerts/daily-count?deviceId=&days=` | 장치별 일자별 알림 수 (대시보드) | JWT |
 
 ---
 

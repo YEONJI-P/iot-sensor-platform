@@ -4,6 +4,10 @@ import dev.yeon.iotsensorplatform.alert.dto.AlertResponse;
 import dev.yeon.iotsensorplatform.alert.dto.DailyAlertCountResponse;
 import dev.yeon.iotsensorplatform.alert.service.AlertService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -18,8 +22,10 @@ public class AlertController {
     private final AlertService alertService;
 
     @GetMapping
-    public ResponseEntity<List<AlertResponse>> getAllAlerts(@AuthenticationPrincipal String employeeId) {
-        return ResponseEntity.ok(alertService.getAllAlerts(employeeId));
+    public ResponseEntity<Page<AlertResponse>> getAllAlerts(
+            @AuthenticationPrincipal String employeeId,
+            @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(alertService.getAllAlerts(employeeId, pageable));
     }
 
     @GetMapping("/{deviceId}")
