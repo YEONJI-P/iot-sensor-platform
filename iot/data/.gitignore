@@ -1,0 +1,5 @@
+# 실데이터는 공개 소스에서 내려받아 사용한다. 저장소에는 커밋하지 않는다.
+*
+!.gitignore
+!README.md
+!download.sh
