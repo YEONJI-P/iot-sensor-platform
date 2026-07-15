@@ -25,8 +25,8 @@ public class SseController {
     private final JwtUtil jwtUtil;
 
     @GetMapping(value = "/dashboard/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream(@RequestParam("token") String token) {
-        if (!jwtUtil.validateToken(token)) {
+    public SseEmitter stream(@RequestParam(value = "token", required = false) String token) {
+        if (token == null || !jwtUtil.validateToken(token)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다.");
         }
         return sseService.subscribe();

@@ -7,6 +7,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @RestControllerAdvice
@@ -35,6 +36,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleConflict(IllegalStateException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ErrorResponse("CONFLICT", e.getMessage()));
+    }
+
+    // 명시적 상태코드를 담은 예외(예: SSE 토큰 인증 실패 401)는 그 상태를 보존한다.
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException e) {
+        return ResponseEntity.status(e.getStatusCode())
+                .body(new ErrorResponse("ERROR", e.getReason()));
     }
 
     // 처리되지 않은 서버 예외 → 500

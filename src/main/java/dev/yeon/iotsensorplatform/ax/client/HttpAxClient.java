@@ -6,8 +6,11 @@ import dev.yeon.iotsensorplatform.ax.dto.AnomalyExplainResponse;
 import dev.yeon.iotsensorplatform.ax.dto.FreshnessDiagnoseRequest;
 import dev.yeon.iotsensorplatform.ax.dto.FreshnessDiagnoseResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+
+import java.net.http.HttpClient;
 
 /**
  * RestClient 기반 AX 클라이언트 구현.
@@ -22,7 +25,13 @@ public class HttpAxClient implements AxClient {
     private final RestClient restClient;
 
     public HttpAxClient(AxProperties properties) {
+        // FastAPI(uvicorn/h11)는 HTTP/1.1만 지원 — 기본 JDK HttpClient의 HTTP/2 업그레이드(h2c)
+        // 시도가 "Invalid HTTP request"로 거부되므로 HTTP/1.1로 고정한다.
+        HttpClient httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
         this.restClient = RestClient.builder()
+                .requestFactory(new JdkClientHttpRequestFactory(httpClient))
                 .baseUrl(properties.getBaseUrl())
                 .build();
     }
