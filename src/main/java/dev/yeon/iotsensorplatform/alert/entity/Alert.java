@@ -24,15 +24,23 @@ public class Alert {
     private Double sensorValue;
     private Double thresholdValue;
     private String message;
+    @Enumerated(EnumType.STRING)
+    private AlertSeverity severity;
+    private String evidence;
+    private String recommendation;
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public Alert(Device device, Double sensorValue, Double thresholdValue, String message) {
+    public Alert(Device device, Double sensorValue, Double thresholdValue, String message,
+                 AlertSeverity severity, String evidence, String recommendation) {
         this.device = device;
         this.sensorValue = sensorValue;
         this.thresholdValue = thresholdValue;
         this.message = message;
+        this.severity = severity;
+        this.evidence = evidence;
+        this.recommendation = recommendation;
     }
 }

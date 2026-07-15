@@ -5,8 +5,11 @@ import dev.yeon.iotsensorplatform.alert.repository.AlertRepository;
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
 import dev.yeon.iotsensorplatform.global.service.AccessControlService;
+import dev.yeon.iotsensorplatform.sensordata.anomaly.AnomalyDetector;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataRequest;
 import dev.yeon.iotsensorplatform.sensordata.entity.SensorData;
+import dev.yeon.iotsensorplatform.sensordata.failure.FailedReading;
+import dev.yeon.iotsensorplatform.sensordata.failure.FailedReadingRepository;
 import dev.yeon.iotsensorplatform.sensordata.repository.SensorDataRepository;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -17,7 +20,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -26,6 +30,8 @@ class SensorDataServiceTest {
     @Mock DeviceRepository deviceRepository;
     @Mock SensorDataRepository sensorDataRepository;
     @Mock AlertRepository alertRepository;
+    @Mock FailedReadingRepository failedReadingRepository;
+    @Mock AnomalyDetector anomalyDetector;
     @Mock AccessControlService accessControlService; // GET Test
     @Mock UserRepository userRepository; // GET Test
 
@@ -54,11 +60,12 @@ class SensorDataServiceTest {
     }
 
     @Test
-    void receive_below_threshold_no_alert() {
+    void receive_normal_value_no_alert() {
         Device device = mockDevice(80.0);
         SensorDataRequest request = new SensorDataRequest(1L, 50.0);
 
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(anomalyDetector.isAnomaly(any(Device.class), anyDouble())).thenReturn(false);
 
         sensorDataService.receive(request);
 
@@ -66,11 +73,12 @@ class SensorDataServiceTest {
     }
 
     @Test
-    void receive_above_threshold_creates_alert() {
+    void receive_anomaly_creates_alert() {
         Device device = mockDevice(80.0);
         SensorDataRequest request = new SensorDataRequest(1L, 100.0);
 
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(anomalyDetector.isAnomaly(any(Device.class), anyDouble())).thenReturn(true);
 
         sensorDataService.receive(request);
 
@@ -78,13 +86,24 @@ class SensorDataServiceTest {
     }
 
     @Test
-    void receive_fail_device_not_found() {
+    void receive_device_not_found_records_failure() {
         SensorDataRequest request = new SensorDataRequest(99L, 50.0);
         when(deviceRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class, () -> sensorDataService.receive(request));
+        sensorDataService.receive(request);
+
+        verify(failedReadingRepository, times(1)).save(any(FailedReading.class));
         verify(sensorDataRepository, never()).save(any());
     }
 
+    @Test
+    void receive_invalid_request_records_failure() {
+        SensorDataRequest request = new SensorDataRequest(null, 50.0);
 
+        sensorDataService.receive(request);
+
+        verify(failedReadingRepository, times(1)).save(any(FailedReading.class));
+        verify(deviceRepository, never()).findById(any());
+        verify(sensorDataRepository, never()).save(any());
+    }
 }

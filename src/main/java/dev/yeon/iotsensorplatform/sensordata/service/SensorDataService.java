@@ -1,13 +1,17 @@
 package dev.yeon.iotsensorplatform.sensordata.service;
 
 import dev.yeon.iotsensorplatform.alert.entity.Alert;
+import dev.yeon.iotsensorplatform.alert.entity.AlertSeverity;
 import dev.yeon.iotsensorplatform.alert.repository.AlertRepository;
 import dev.yeon.iotsensorplatform.device.entity.Device;
 import dev.yeon.iotsensorplatform.device.repository.DeviceRepository;
 import dev.yeon.iotsensorplatform.global.service.AccessControlService;
+import dev.yeon.iotsensorplatform.sensordata.anomaly.AnomalyDetector;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataRequest;
 import dev.yeon.iotsensorplatform.sensordata.dto.SensorDataResponse;
 import dev.yeon.iotsensorplatform.sensordata.entity.SensorData;
+import dev.yeon.iotsensorplatform.sensordata.failure.FailedReading;
+import dev.yeon.iotsensorplatform.sensordata.failure.FailedReadingRepository;
 import dev.yeon.iotsensorplatform.sensordata.repository.SensorDataRepository;
 import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
@@ -16,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -26,33 +31,55 @@ public class SensorDataService {
     private final DeviceRepository deviceRepository;
     private final SensorDataRepository sensorDataRepository;
     private final AlertRepository alertRepository;
+    private final FailedReadingRepository failedReadingRepository;
+    private final AnomalyDetector anomalyDetector;
     private final AccessControlService accessControlService;
     private final UserRepository userRepository;
 
     @Transactional
     public void receive(SensorDataRequest request) {
-        Device device = deviceRepository.findById(request.getDeviceId())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "존재하지 않는 장치에요 - deviceId: " + request.getDeviceId()));
+        if (request.getDeviceId() == null || request.getValue() == null) {
+            recordFailure(request, "INVALID_REQUEST");
+            return;
+        }
+
+        Device device = deviceRepository.findById(request.getDeviceId()).orElse(null);
+        if (device == null) {
+            // 조용히 버리지 않고 실패로 적재한다 (데이터 안 옴 신호 소스)
+            recordFailure(request, "DEVICE_NOT_FOUND");
+            return;
+        }
 
         SensorData sensorData = SensorData.builder()
                 .device(device)
                 .value(request.getValue())
                 .build();
         sensorDataRepository.save(sensorData);
+        device.markSeen(LocalDateTime.now());
         log.info("센서 데이터 저장 완료 - deviceId: {}, value: {}", request.getDeviceId(), request.getValue());
 
-        if (device.getThresholdValue() != null && request.getValue() > device.getThresholdValue()) {
+        if (anomalyDetector.isAnomaly(device, request.getValue())) {
             Alert alert = Alert.builder()
                     .device(device)
                     .sensorValue(request.getValue())
                     .thresholdValue(device.getThresholdValue())
                     .message(String.format("[%s] 임계값 초과! 현재값: %.1f, 임계값: %.1f",
                             device.getName(), request.getValue(), device.getThresholdValue()))
+                    .severity(AlertSeverity.WARNING)
                     .build();
             alertRepository.save(alert);
             log.warn("Alert 생성 - device: {}, value: {}", device.getName(), request.getValue());
         }
+    }
+
+    private void recordFailure(SensorDataRequest request, String reason) {
+        failedReadingRepository.save(FailedReading.builder()
+                .deviceId(request.getDeviceId())
+                .value(request.getValue())
+                .reason(reason)
+                .build());
+        log.warn("수신 실패 적재 - reason: {}, deviceId: {}, value: {}",
+                reason, request.getDeviceId(), request.getValue());
     }
 
     @Transactional(readOnly = true)

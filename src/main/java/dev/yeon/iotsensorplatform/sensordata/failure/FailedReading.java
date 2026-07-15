@@ -1,7 +1,5 @@
-package dev.yeon.iotsensorplatform.sensordata.entity;
+package dev.yeon.iotsensorplatform.sensordata.failure;
 
-import dev.yeon.iotsensorplatform.device.entity.Device;
-import dev.yeon.iotsensorplatform.user.entity.User;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -14,28 +12,30 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor
-@Table(name = "sensor_data", indexes = @Index(name = "idx_sensor_device_recorded", columnList = "device_id, recorded_at"))
 @EntityListeners(AuditingEntityListener.class)
-public class SensorData {
+public class FailedReading {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "device_id")
-    private Device device;
+    // 요청에 담긴 deviceId 값만 저장한다. FK가 아니며 존재하지 않는 장치일 수 있다.
+    private Long deviceId;
 
     private Double value;
 
+    // 실패 사유 문자열 (예: "DEVICE_NOT_FOUND")
+    private String reason;
+
     @CreatedDate
     @Column(updatable = false)
-    private LocalDateTime recordedAt;
+    private LocalDateTime createdAt;
 
     @Builder
-    public SensorData(Device device, Double value) {
-        this.device = device;
+    public FailedReading(Long deviceId, Double value, String reason) {
+        this.deviceId = deviceId;
         this.value = value;
+        this.reason = reason;
     }
 
 }
