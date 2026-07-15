@@ -135,7 +135,8 @@ class AlertServiceTest {
         when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         doNothing().when(accessControlService).assertCanAccessDevice(user, device);
-        when(alertRepository.findAllByDeviceIdOrderByCreatedAtDesc(device.getId())).thenReturn(List.of(alert));
+        when(alertRepository.findByDeviceIdOrderByCreatedAtDesc(eq(device.getId()), any(Pageable.class)))
+                .thenReturn(List.of(alert));
 
         List<AlertResponse> result = alertService.getAllAlertsByDeviceId("EMP001", 1L);
 

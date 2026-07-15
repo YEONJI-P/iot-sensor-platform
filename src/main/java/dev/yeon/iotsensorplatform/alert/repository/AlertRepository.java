@@ -13,7 +13,7 @@ import java.util.List;
 
 public interface AlertRepository extends JpaRepository<Alert, Long> {
 
-    List<Alert> findAllByDeviceIdOrderByCreatedAtDesc(Long deviceId);
+    List<Alert> findByDeviceIdOrderByCreatedAtDesc(Long deviceId, Pageable pageable);
     Page<Alert> findByDeviceIdIn(List<Long> deviceIds, Pageable pageable);
 
     @Query("select new dev.yeon.iotsensorplatform.alert.dto.EnrichTarget(a.id, a.device.name, a.device.type, a.sensorValue, a.thresholdValue, a.message) from Alert a where a.evidence is null order by a.createdAt desc")

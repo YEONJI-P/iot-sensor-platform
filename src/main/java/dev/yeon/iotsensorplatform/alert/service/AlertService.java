@@ -10,6 +10,7 @@ import dev.yeon.iotsensorplatform.user.entity.User;
 import dev.yeon.iotsensorplatform.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class AlertService {
+
+    private static final int MAX_RECENT = 500; // 장치별 조회 상한
 
     private final AlertRepository alertRepository;
     private final DeviceRepository deviceRepository;
@@ -41,7 +44,9 @@ public class AlertService {
         User user = getUser(employeeId);
         Device device = getDevice(deviceId);
         accessControlService.assertCanAccessDevice(user, device);
-        return alertRepository.findAllByDeviceIdOrderByCreatedAtDesc(device.getId())
+        // 무제한 로드 방지 — 최근 N건만 반환.
+        return alertRepository
+                .findByDeviceIdOrderByCreatedAtDesc(device.getId(), PageRequest.of(0, MAX_RECENT))
                 .stream().map(AlertResponse::from).toList();
     }
 

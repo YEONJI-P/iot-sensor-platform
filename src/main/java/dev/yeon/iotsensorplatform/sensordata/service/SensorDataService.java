@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class SensorDataService {
+
+    private static final int MAX_RECENT = 500; // 장치별 조회 상한
 
     private final DeviceRepository deviceRepository;
     private final SensorDataRepository sensorDataRepository;
@@ -108,7 +111,9 @@ public class SensorDataService {
         Device device = deviceRepository.findById(deviceId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 장치예요 - deviceId: " + deviceId));
         accessControlService.assertCanAccessDevice(user, device);
-        return sensorDataRepository.findAllByDeviceIdOrderByRecordedAtDesc(deviceId)
+        // 무제한 로드 방지 — 최근 N건만 반환(응답은 배열 유지, 대시보드 호환).
+        return sensorDataRepository
+                .findByDeviceIdOrderByRecordedAtDesc(deviceId, PageRequest.of(0, MAX_RECENT))
                 .stream().map(SensorDataResponse::from).toList();
     }
 
