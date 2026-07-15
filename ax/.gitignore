@@ -1,0 +1,9 @@
+# uv / Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# 환경변수 (실제 키)
+.env
