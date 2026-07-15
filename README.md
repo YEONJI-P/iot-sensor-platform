@@ -1,4 +1,4 @@
-# IoT Sensor Platform
+# Sensor Monitor
 
 > 제조 설비 센서 데이터를 수집하고 이상 발생 시 근거와 함께 알림을 생성하는 센서 시계열 수집, 모니터링 백엔드
 
@@ -224,9 +224,9 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
-| GET | `/admin/users` | 전체 사용자 목록 | JWT |
-| GET | `/admin/users/pending` | 승인 대기 목록 | JWT |
-| PATCH | `/admin/users/{id}/approve` | 가입 승인, ACTIVE 전환 | JWT |
+| GET | `/admin/users` | 사용자 목록 (FACTORY_ADMIN은 소속 공장만) | JWT |
+| GET | `/admin/users/pending` | 승인 대기 목록 (FACTORY_ADMIN은 소속 공장만) | JWT |
+| PATCH | `/admin/users/{id}/approve` | 가입 승인 — ACTIVE 전환 + 역할 부여 + 구역 배정 (body: `role`, `zoneIds`) | JWT |
 | PATCH | `/admin/users/{id}/reject` | 가입 반려, REJECTED 전환 | JWT |
 | GET, POST | `/admin/factories` | 공장 조회, 등록 (SYSTEM_ADMIN) | JWT |
 | PUT, DELETE | `/admin/factories/{id}` | 공장 수정, 삭제 (SYSTEM_ADMIN) | JWT |
@@ -235,7 +235,7 @@ Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 | POST | `/admin/zones/{id}/users` | 구역에 사용자 추가 | JWT |
 | DELETE | `/admin/zones/{id}/users/{userId}` | 구역에서 사용자 제거 | JWT |
 
-### Device (인증 필요, 쓰기는 MEMBER 이상)
+### Device (조회는 인증, 쓰기는 SYSTEM_ADMIN·MEMBER)
 
 | Method | Endpoint | 설명 | 인증 |
 |---|---|---|---|
@@ -287,7 +287,8 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 ### 승인제 사용자 관리와 접근 제어
 
 - 사번(employeeId) 기반 가입 신청, 가입 즉시 `PENDING` 상태로 저장
-- `FACTORY_ADMIN` 이상의 관리자가 승인(`ACTIVE`) 또는 반려(`REJECTED`) 처리
+- `FACTORY_ADMIN` 이상의 관리자가 승인 또는 반려(`REJECTED`) 처리. 승인 시 `ACTIVE` 전환과 함께 역할 부여, 소속 구역 배정을 한 트랜잭션에서 수행
+- `FACTORY_ADMIN`은 자신의 소속 공장 사용자만 조회·승인 가능 (`SYSTEM_ADMIN`은 전체). 부여 가능한 역할도 자기 역할 이하로 제한
 - `PENDING`, `REJECTED` 상태에서 로그인 시 `DisabledException`으로 차단
 - 4단계 역할 기반 접근 제어
 
@@ -313,6 +314,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 - 장치에 기대 수신 주기(`expectedIntervalSeconds`)와 마지막 수신 시각(`lastSeenAt`)을 두고, 수신마다 갱신
 - 주기 스케줄러가 기대 주기를 넘겨 침묵한 장치를 감지 (데이터가 안 오는 상황을 신호로 포착)
+- 침묵을 곧 고장으로 단정하지 않고 구역(zone) 단위로 비교: 같은 구역 장치가 동시 침묵하면 사이트 사건(계획 정지, 게이트웨이 장애)으로 보고 구역 1건으로 집계(`WARNING`), 이웃이 정상 수신 중인데 단독 침묵하면 개별 고장으로 `CRITICAL` + AX 원인진단(규격 변경 의심 vs 소스 침묵)
 
 ### LLM 기반 이상 설명 (AX 서비스)
 
@@ -345,10 +347,11 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 - JWT 인증, 인가, 사번 기반 로그인, 승인제 가입
 - 4단계 역할 기반 접근 제어, 공장, 구역 계층 접근 제어
+- 가입 승인 워크플로 (역할 부여 + 구역 배정, FACTORY_ADMIN 소속 공장 스코핑)
 - 동기 센서 수신 파이프라인 (수신, 저장, 임계값 판정, 알림)
 - 이상 판정 로직 전략화 (`AnomalyDetector` 인터페이스로 분리)
 - 알림 스키마 확장 (severity, 근거, 권고 필드)와 실패 수신 적재
-- 장치 freshness 감지 (기대 수신 주기 초과 시 알림)
+- 장치 freshness 감지 (구역 코호트 판정으로 오탐 억제, 침묵 원인 AX 진단)
 - SSE 기반 실시간 대시보드 (접근 범위 스코핑)
 - LLM 기반 이상 근거, 원인 진단 (Python 분석 서비스 HTTP 연동)
 - 실측 공개 센서 시계열(C-MAPSS 엔진, CNC 밀링) 리플레이로 시뮬레이터 데이터 교체
@@ -472,6 +475,10 @@ python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 ### 접근 제어 계층
 
 공장(Factory), 구역(Zone), 구역 소속(ZoneUser) 3계층으로 접근 범위를 계산합니다. `SYSTEM_ADMIN`은 전체, `FACTORY_ADMIN`은 소속 공장, `MEMBER`와 `VIEWER`는 소속 구역으로 범위가 좁혀지며, `VIEWER`는 읽기 전용으로 장치 변경이 차단됩니다.
+
+### freshness 오탐 억제 — 침묵은 곧 고장이 아니다
+
+설비 센서는 정상적으로도 조용해집니다(계획 정지, 비가동, 게이트웨이 점검). 침묵을 무조건 알림으로 올리면 공장이 문을 닫을 때 장치 수만큼 알림이 쏟아집니다. 그래서 구역(zone) 단위로 비교해, 여러 장치가 동시에 침묵하면 사이트 단위 사건으로 보고 한 건으로 집계(`WARNING`)하고, 이웃이 정상 수신 중인데 혼자 침묵할 때만 개별 고장으로 `CRITICAL` 승격 + AX 원인진단을 붙입니다. 설비 가동 상태나 운영시간 모델 없이도 사이트 다운타임과 개별 장애를 구분하는 경량 휴리스틱입니다.
 
 ### AX 서비스 분리와 프레임워크 미사용
 
