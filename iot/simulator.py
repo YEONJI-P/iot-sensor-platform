@@ -1,11 +1,15 @@
 """
-IoT Sensor Simulator
-실제 IoT 센서처럼 서버 외부에서 POST /sensor-data 를 직접 호출합니다.
-여러 장치를 multiprocessing.Pool 로 병렬 실행합니다.
+IoT Sensor Simulator — 실측 데이터 리플레이
+저장된 공개 센서 시계열(iot/data/)을 시간 순으로 한 행씩 흘려보내(리플레이)
+POST /sensor-data 로 전송해 실시간 수신을 재현한다.
+
+데이터는 먼저 내려받아야 한다:  bash iot/data/download.sh
+장치(device_id)별 매핑은 iot/seed.sql 의 device 삽입 순서와 일치한다(방식 A: 채널=Device).
 """
 
 import argparse
-import random
+import csv
+import os
 import sys
 import time
 from multiprocessing import Pool
@@ -17,80 +21,61 @@ except ImportError:
     sys.exit(1)
 
 
-# =============================================================================
-# 1. Static 설정
-# =============================================================================
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
-VALUE_RANGES = {
-    "TEMPERATURE": {"min": 0.0,  "max": 120.0, "default_threshold": 80.0},
-    "VIBRATION":   {"min": 0.0,  "max": 100.0, "default_threshold": 50.0},
-    "ILLUMINANCE": {"min": 0.0,  "max": 2000.0,"default_threshold": 300.0},
-    "PRESSURE":    {"min": 0.0,  "max": 2.0,   "default_threshold": 1.2},
-}
-
-# seed.sql 기준 device ID → (type, threshold) 매핑
-ALL_PRESET = [
-    {"id": 1,  "type": "TEMPERATURE", "threshold": 80.0},
-    {"id": 2,  "type": "VIBRATION",   "threshold": 50.0},
-    {"id": 3,  "type": "ILLUMINANCE", "threshold": 300.0},
-    {"id": 4,  "type": "PRESSURE",    "threshold": 1.2},
-    {"id": 5,  "type": "TEMPERATURE", "threshold": 70.0},
-    {"id": 6,  "type": "ILLUMINANCE", "threshold": 200.0},
-    {"id": 7,  "type": "TEMPERATURE", "threshold": 75.0},
-    {"id": 8,  "type": "VIBRATION",   "threshold": 45.0},
-    {"id": 9,  "type": "PRESSURE",    "threshold": 1.0},
-    {"id": 10, "type": "ILLUMINANCE", "threshold": 250.0},
+# C-MAPSS train_FD001: 공백 구분, 헤더 없음. 컬럼 인덱스 = unit0, cycle1, set2~4, s1=5 ... s21=25
+# s4 = index 8, s11 = index 15
+REPLAY_PRESET = [
+    {"id": 1, "kind": "cmapss", "unit": 1, "col": 8,  "label": "엔진1-온도(s4)"},
+    {"id": 2, "kind": "cmapss", "unit": 1, "col": 15, "label": "엔진1-압력(s11)"},
+    {"id": 3, "kind": "cmapss", "unit": 2, "col": 8,  "label": "엔진2-온도(s4)"},
+    {"id": 4, "kind": "cmapss", "unit": 2, "col": 15, "label": "엔진2-압력(s11)"},
+    {"id": 5, "kind": "cnc", "file": "cnc_experiment_01.csv", "col": "S1_OutputPower",        "label": "CNC1-스핀들파워"},
+    {"id": 6, "kind": "cnc", "file": "cnc_experiment_01.csv", "col": "S1_CurrentFeedback",    "label": "CNC1-스핀들전류"},
+    {"id": 7, "kind": "cnc", "file": "cnc_experiment_01.csv", "col": "X1_ActualAcceleration", "label": "CNC1-X축가속"},
 ]
 
 
 # =============================================================================
-# 2. Type별 값 생성 함수
-#    - 정상값 80% / 임계값 초과 20% 기준
-#    - 각 타입의 물리적 특성 반영
+# 1. 시리즈 로딩 (데이터셋별)
 # =============================================================================
 
-def generate_temperature(threshold: float) -> float:
-    """완만한 uniform 분포. 정상 구간 0 ~ threshold*0.95."""
-    r = VALUE_RANGES["TEMPERATURE"]
-    if random.random() < 0.8:
-        return round(random.uniform(r["min"], threshold * 0.95), 1)
-    return round(random.uniform(threshold * 1.01, r["max"]), 1)
+def load_cmapss_series(unit: int, col: int) -> list[float]:
+    """C-MAPSS FD001 에서 해당 엔진(unit)의 col 채널을 사이클 순서로 추출한다."""
+    path = os.path.join(DATA_DIR, "cmapss_train_FD001.txt")
+    series = []
+    with open(path) as f:
+        for line in f:
+            p = line.split()
+            if len(p) < 26:
+                continue
+            if int(float(p[0])) == unit:
+                series.append(float(p[col]))
+    return series
 
 
-def generate_vibration(threshold: float) -> float:
-    """정상 구간은 낮게 유지, 이상 시 급등하는 스파이크 모사."""
-    r = VALUE_RANGES["VIBRATION"]
-    if random.random() < 0.75:
-        return round(random.uniform(r["min"], threshold * 0.6), 1)
-    return round(random.uniform(threshold * 1.05, r["max"]), 1)
+def load_cnc_series(filename: str, col: str) -> list[float]:
+    """CNC 실험 CSV 에서 col 채널을 행 순서로 추출한다."""
+    path = os.path.join(DATA_DIR, filename)
+    series = []
+    with open(path) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                series.append(float(row[col]))
+            except (KeyError, ValueError):
+                continue
+    return series
 
 
-def generate_illuminance(threshold: float) -> float:
-    """주로 낮은 값(어두운 환경), 가끔 고조도 발생."""
-    r = VALUE_RANGES["ILLUMINANCE"]
-    if random.random() < 0.85:
-        return round(random.uniform(r["min"], threshold * 0.9), 1)
-    return round(random.uniform(threshold * 1.01, r["max"]), 1)
-
-
-def generate_pressure(threshold: float) -> float:
-    """uniform 기반, 초과 시 급격히 높은 값."""
-    r = VALUE_RANGES["PRESSURE"]
-    if random.random() < 0.8:
-        return round(random.uniform(r["min"], threshold * 0.95), 3)
-    return round(random.uniform(threshold * 1.1, r["max"]), 3)
-
-
-GENERATORS = {
-    "TEMPERATURE": generate_temperature,
-    "VIBRATION":   generate_vibration,
-    "ILLUMINANCE": generate_illuminance,
-    "PRESSURE":    generate_pressure,
-}
+def load_series(preset: dict) -> list[float]:
+    if preset["kind"] == "cmapss":
+        return load_cmapss_series(preset["unit"], preset["col"])
+    return load_cnc_series(preset["file"], preset["col"])
 
 
 # =============================================================================
-# 3. HTTP 전송
+# 2. HTTP 전송
 # =============================================================================
 
 def send(base_url: str, device_id: int, value: float) -> bool:
@@ -114,113 +99,78 @@ def send(base_url: str, device_id: int, value: float) -> bool:
 
 
 # =============================================================================
-# 4. 프로세스 워커 (Pool.starmap 에서 각 장치별로 실행)
+# 3. 워커 (Pool 에서 장치별로 실행)
 # =============================================================================
 
-def worker(device_id: int, sensor_type: str, threshold: float, count: int, interval: int, base_url: str):
-    generate = GENERATORS[sensor_type]
+def worker(preset: dict, interval: float, limit: int, base_url: str):
+    device_id = preset["id"]
+    label = preset["label"]
+
+    try:
+        series = load_series(preset)
+    except FileNotFoundError:
+        print(f"[장치 {device_id}:{label}] 데이터 파일 없음 — 먼저 'bash iot/data/download.sh' 실행")
+        return
+
+    if limit > 0:
+        series = series[:limit]
+    if not series:
+        print(f"[장치 {device_id}:{label}] 리플레이할 데이터가 없습니다")
+        return
+
+    print(f"[장치 {device_id}:{label}] 리플레이 시작 — {len(series)}행 / {interval}초 간격")
     success = 0
-
-    print(f"[장치 {device_id}:{sensor_type}] 시작 — {count}회 / {interval}초 간격 / 임계값 {threshold}")
-
-    for i in range(1, count + 1):
-        value = generate(threshold)
-        status = "초과" if value > threshold else "정상"
-        ok = send(base_url, device_id, value)
-
-        if ok:
+    for i, value in enumerate(series, start=1):
+        if send(base_url, device_id, value):
             success += 1
-            print(f"  [장치 {device_id}] [{i:>3}/{count}] {value:>8}  {status}  -> 전송 완료")
-        else:
-            print(f"  [장치 {device_id}] [{i:>3}/{count}] {value:>8}  {status}  -> 전송 실패")
-
-        if i < count:
+        if i % 20 == 0 or i == len(series):
+            print(f"  [장치 {device_id}] {i}/{len(series)} 전송 (마지막 값 {value})")
+        if i < len(series):
             time.sleep(interval)
 
-    print(f"[장치 {device_id}:{sensor_type}] 완료 — {success}/{count}건 성공")
+    print(f"[장치 {device_id}:{label}] 완료 — {success}/{len(series)}건 성공")
 
 
 # =============================================================================
-# 5. main
+# 4. main
 #
-# CLI 사용 예시:
-#
-#   [단일 장치]
-#   python simulator.py --devices 1:TEMPERATURE
-#
-#   [여러 장치 병렬 실행]
-#   python simulator.py --devices 1:TEMPERATURE 2:VIBRATION 3:ILLUMINANCE 4:PRESSURE
-#
-#   [전송 횟수·간격 지정]
-#   python simulator.py --devices 1:TEMPERATURE 2:VIBRATION --count 30 --interval 1
-#
-#   [--all 프리셋: seed.sql 기준 전체 10개 장치 동시 실행]
-#   python simulator.py --all
-#   python simulator.py --all --count 50 --interval 2
-#
-#   [배포 서버 대상]
-#   python simulator.py --all --base-url https://iot-sensor-platform-142990968320.asia-northeast3.run.app
-#
-# 인자:
-#   --devices   id:TYPE 형식으로 1개 이상 (--all 사용 시 생략)
-#               TYPE: TEMPERATURE | VIBRATION | ILLUMINANCE | PRESSURE
-#   --all       seed.sql 기준 전체 10개 장치를 프리셋 threshold로 실행
-#   --count     장치당 전송 횟수 (기본: 20)
-#   --interval  전송 간격 초 (기본: 2, 최소: 1)
-#   --base-url  서버 주소 (기본: http://localhost:8080)
+# 사용 예시:
+#   bash iot/data/download.sh            # 데이터 먼저 내려받기
+#   python iot/simulator.py --all        # 7개 채널 전체 리플레이
+#   python iot/simulator.py --devices 1 2 --interval 0.5 --limit 100
+#   python iot/simulator.py --all --base-url http://localhost:8080
 # =============================================================================
 
 def main():
     parser = argparse.ArgumentParser(
-        description="IoT 센서 데이터 시뮬레이터 — multiprocessing 병렬 실행",
+        description="IoT 센서 시뮬레이터 — 실측 데이터 리플레이",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
-        "--devices", nargs="+", metavar="ID:TYPE",
-        help="장치 목록 (예: 1:TEMPERATURE 2:VIBRATION). --all 사용 시 생략 가능",
-    )
-    parser.add_argument(
-        "--all", action="store_true",
-        help="seed.sql 기준 전체 10개 장치를 프리셋 threshold로 실행",
-    )
-    parser.add_argument("--count",    type=int, default=20,                      help="장치당 전송 횟수 (기본: 20)")
-    parser.add_argument("--interval", type=int, default=2,                       help="전송 간격 초 (기본: 2, 최소: 1)")
-    parser.add_argument("--base-url", type=str, default="http://localhost:8080", help="서버 주소 (기본: http://localhost:8080)")
+    parser.add_argument("--devices", nargs="+", type=int, metavar="ID",
+                        help="리플레이할 device id 목록 (기본: --all)")
+    parser.add_argument("--all", action="store_true", help="전체 7개 채널 리플레이")
+    parser.add_argument("--interval", type=float, default=1.0, help="행 간 간격 초 (기본 1.0)")
+    parser.add_argument("--limit", type=int, default=0, help="장치당 최대 행 수 (기본 0=전체)")
+    parser.add_argument("--base-url", type=str, default="http://localhost:8080", help="서버 주소")
     args = parser.parse_args()
 
     if not args.all and not args.devices:
         parser.error("--devices 또는 --all 중 하나를 지정하세요.")
 
-    interval = max(1, args.interval)
-    count    = max(1, args.count)
-
-    # 실행 대상 목록 구성
     if args.all:
-        targets = [
-            (d["id"], d["type"], d["threshold"], count, interval, args.base_url)
-            for d in ALL_PRESET
-        ]
+        presets = list(REPLAY_PRESET)
     else:
-        targets = []
-        valid_types = set(GENERATORS.keys())
-        for token in args.devices:
-            try:
-                raw_id, raw_type = token.split(":")
-                device_id   = int(raw_id)
-                sensor_type = raw_type.upper()
-            except ValueError:
-                parser.error(f"잘못된 형식: '{token}' — 올바른 형식: ID:TYPE (예: 1:TEMPERATURE)")
+        by_id = {p["id"]: p for p in REPLAY_PRESET}
+        presets = []
+        for did in args.devices:
+            if did not in by_id:
+                parser.error(f"알 수 없는 device id: {did} (사용 가능: {sorted(by_id)})")
+            presets.append(by_id[did])
 
-            if sensor_type not in valid_types:
-                parser.error(f"지원하지 않는 타입: '{sensor_type}' — 사용 가능: {', '.join(valid_types)}")
-
-            threshold = VALUE_RANGES[sensor_type]["default_threshold"]
-            targets.append((device_id, sensor_type, threshold, count, interval, args.base_url))
-
-    print(f"시뮬레이터 시작 — 장치 {len(targets)}개 / 장치당 {count}회 / {interval}초 간격")
-    print(f"서버: {args.base_url}")
+    print(f"시뮬레이터 시작 — 채널 {len(presets)}개 / {args.interval}초 간격 / 서버 {args.base_url}")
     print("=" * 50)
 
+    targets = [(p, args.interval, args.limit, args.base_url) for p in presets]
     with Pool(processes=len(targets)) as pool:
         pool.starmap(worker, targets)
 

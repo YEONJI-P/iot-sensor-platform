@@ -375,15 +375,23 @@ psql -U postgres -d iot_sensor_db_v2 -f iot/seed.sql
 
 ### 센서 시뮬레이터 실행 (`iot/simulator.py`)
 
+실측 공개 데이터(C-MAPSS, CNC)를 시간 순으로 리플레이해 `POST /sensor-data`로 전송합니다. seed의 device(채널)와 1:1로 매핑됩니다.
+
 ```bash
-# 의존성 설치
+# 1. 데이터 내려받기 (최초 1회)
+bash iot/data/download.sh
+
+# 2. 의존성 설치
 pip install requests
 
-# 기본 실행 (장치 ID=1, 10회, 2초 간격, 임계값 80)
-python iot/simulator.py --device-id 1 --count 10 --interval 2 --threshold 80
+# 3. 전체 7개 채널 리플레이 (1초 간격)
+python iot/simulator.py --all
+
+# 특정 채널만 / 간격·행수 조절
+python iot/simulator.py --devices 1 6 --interval 0.5 --limit 100
 ```
 
-> seed.sql로 투입된 장치의 ID를 확인하여 `--device-id`에 지정하세요.
+> device id는 seed.sql의 device 삽입 순서와 일치합니다(1~4 = C-MAPSS 엔진, 5~7 = CNC 밀링).
 
 ### 환경변수
 
