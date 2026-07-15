@@ -83,7 +83,7 @@ POST /sensor-data
 ```
 
 수신 경로 밖 스케줄러:
-- FreshnessScheduler: 기대 주기 초과한 침묵 장치 감지
+- FreshnessScheduler: 기대 주기 초과한 침묵 장치 감지 → ax.enabled 시 AX diagnose-freshness 호출로 원인진단(규격변경 vs 소스침묵), CRITICAL freshness 알림 생성 (episode 디바운스)
 - AlertEnrichmentScheduler: ax.enabled 시 AX 호출로 Alert evidence/recommendation 보강 (HTTP는 트랜잭션 밖)
 
 ### 역할과 접근 제어
