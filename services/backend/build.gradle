@@ -6,7 +6,7 @@ plugins {
 
 group = 'dev.bugi'
 version = '0.0.1-SNAPSHOT'
-description = 'iot-sensor-platform'
+description = 'sensor-monitor'
 
 java {
     toolchain {

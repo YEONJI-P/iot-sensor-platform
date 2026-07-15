@@ -1,10 +1,10 @@
 spring:
   application:
-    name: iot-sensor-platform
+    name: sensor-monitor
   profiles:
     default: local
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/iot_sensor_db}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/sensor_monitor_db}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
   jpa:

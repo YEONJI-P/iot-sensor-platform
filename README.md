@@ -17,7 +17,7 @@
 
 <br>
 
-GitHub: https://github.com/YEONJI-P/iot-sensor-platform
+GitHub: https://github.com/YEONJI-P/sensor-monitor
 
 <br>
 
@@ -373,8 +373,8 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 ```bash
 # 1. 레포 클론
-git clone https://github.com/YEONJI-P/iot-sensor-platform.git
-cd iot-sensor-platform
+git clone https://github.com/YEONJI-P/sensor-monitor.git
+cd sensor-monitor
 
 # 2. 환경변수 파일 생성 (docker-compose 의 PostgreSQL 이 .env 를 요구)
 cp .env.example .env
@@ -412,7 +412,7 @@ http://localhost:8080/swagger-ui/index.html
 Spring Boot 기동 후 테이블이 생성된 상태에서 실행합니다.
 
 ```bash
-psql -U postgres -d iot_sensor_db -f services/simulator/seed.sql
+psql -U postgres -d sensor_monitor_db -f services/simulator/seed.sql
 ```
 
 > 재실행이 필요한 경우 `seed.sql` 하단의 `TRUNCATE` 주석을 해제 후 먼저 실행하세요.
@@ -454,7 +454,7 @@ python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 
 | 변수명 | 설명 | 기본값 |
 |---|---|---|
-| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/iot_sensor_db` |
+| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/sensor_monitor_db` |
 | `DB_USERNAME` | DB 사용자명 | `postgres` |
 | `DB_PASSWORD` | DB 비밀번호 | `postgres` |
 | `JWT_SECRET` | JWT 서명 키 (32자 이상) | 없음 (필수), 미설정 시 부팅 실패 |
