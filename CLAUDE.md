@@ -54,7 +54,7 @@ cd services/backend && ./gradlew bootRun
 메시지 버스(Kafka)는 제거됨. 소비자가 하나뿐이라 과설계였고, 수신을 동기 처리로 단순화 (설계 근거는 README 설계 메모 참고).
 
 ### 도메인 구조
-`src/main/java/dev/yeon/iotsensorplatform/` 하위 도메인:
+`src/main/java/dev/bugi/sensor/` 하위 도메인:
 
 | 패키지 | 역할 |
 |--------|------|

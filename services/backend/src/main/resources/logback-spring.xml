@@ -67,14 +67,14 @@
           콘솔·app.log·error.log에도 그대로 전파됨 = pipeline.log는 필터링된 뷰).
         -->
         <!-- 수신 → 저장 → 이상판정 → 실패적재 -->
-        <logger name="dev.yeon.iotsensorplatform.sensordata" level="INFO">
+        <logger name="dev.bugi.sensor.sensordata" level="INFO">
             <appender-ref ref="PIPELINE_FILE"/>
         </logger>
         <!-- AX 연동(알림 근거 보강) -->
-        <logger name="dev.yeon.iotsensorplatform.alert.scheduler" level="INFO">
+        <logger name="dev.bugi.sensor.alert.scheduler" level="INFO">
             <appender-ref ref="PIPELINE_FILE"/>
         </logger>
-        <logger name="dev.yeon.iotsensorplatform.ax" level="INFO">
+        <logger name="dev.bugi.sensor.ax" level="INFO">
             <appender-ref ref="PIPELINE_FILE"/>
         </logger>
 
