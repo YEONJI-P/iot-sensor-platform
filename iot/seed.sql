@@ -78,7 +78,8 @@ INSERT INTO device (zone_id, name, type, location, threshold_value, expected_int
     -- 5,6,7: CNC 밀링 1호기 (스핀들 파워·전류, X축 가속)
     ((SELECT id FROM zones WHERE name = '밀링1구역'), 'CNC1-스핀들파워', 'POWER',        'CNC exp01 S1_OutputPower',        0.25,  10),
     ((SELECT id FROM zones WHERE name = '밀링1구역'), 'CNC1-스핀들전류', 'CURRENT',      'CNC exp01 S1_CurrentFeedback',    30.0,  10),
-    ((SELECT id FROM zones WHERE name = '밀링1구역'), 'CNC1-X축가속',    'ACCELERATION', 'CNC exp01 X1_ActualAcceleration', 300.0, 10);
+    -- 단측 비교라 양의 극단 스파이크만 감지(음의 편위 미감지) — 데모용 단순화
+    ((SELECT id FROM zones WHERE name = '밀링1구역'), 'CNC1-X축가속',    'ACCELERATION', 'CNC exp01 X1_ActualAcceleration', 900.0, 10);
 
 
 -- =============================================================================

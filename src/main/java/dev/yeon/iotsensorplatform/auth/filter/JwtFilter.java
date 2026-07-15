@@ -33,7 +33,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
         String token = resolveToken(request);
 
-        if (token != null && jwtUtil.validateToken(token)) {
+        if (token != null && jwtUtil.validateAccessToken(token)) {
             String employeeId = jwtUtil.getEmployeeId(token);
             String role = jwtUtil.getRole(token);
 

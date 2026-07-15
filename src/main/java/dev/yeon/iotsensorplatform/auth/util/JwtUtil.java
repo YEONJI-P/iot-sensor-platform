@@ -16,6 +16,9 @@ import java.util.Date;
 public class JwtUtil {
 
     private static final String CLAIM_ROLE = "role";
+    private static final String CLAIM_TYPE = "type";
+    private static final String TYPE_ACCESS = "access";
+    private static final String TYPE_REFRESH = "refresh";
 
     private final SecretKey secretKey;
     private final long expiration;
@@ -36,6 +39,7 @@ public class JwtUtil {
         return Jwts.builder()
                 .subject(employeeId)
                 .claim(CLAIM_ROLE, role)
+                .claim(CLAIM_TYPE, TYPE_ACCESS)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expiration))
                 .signWith(secretKey)
@@ -46,6 +50,7 @@ public class JwtUtil {
         Date now = new Date();
         return Jwts.builder()
                 .subject(emplyeeId)
+                .claim(CLAIM_TYPE, TYPE_REFRESH)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + refreshExpiration))
                 .signWith(secretKey)
@@ -66,6 +71,16 @@ public class JwtUtil {
             return true;
         } catch (Exception e) {
             log.error("JWT 검증 실패: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean validateAccessToken(String token) {
+        try {
+            String type = getClaims(token).get(CLAIM_TYPE, String.class);
+            return TYPE_ACCESS.equals(type);
+        } catch (Exception e) {
+            log.error("JWT access 토큰 검증 실패: {}", e.getMessage());
             return false;
         }
     }

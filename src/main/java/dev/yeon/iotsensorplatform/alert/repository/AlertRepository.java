@@ -1,5 +1,6 @@
 package dev.yeon.iotsensorplatform.alert.repository;
 
+import dev.yeon.iotsensorplatform.alert.dto.EnrichTarget;
 import dev.yeon.iotsensorplatform.alert.entity.Alert;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,7 +15,9 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     List<Alert> findAllByDeviceIdOrderByCreatedAtDesc(Long deviceId);
     Page<Alert> findByDeviceIdIn(List<Long> deviceIds, Pageable pageable);
-    List<Alert> findTop20ByEvidenceIsNullOrderByCreatedAtDesc();
+
+    @Query("select new dev.yeon.iotsensorplatform.alert.dto.EnrichTarget(a.id, a.device.name, a.device.type, a.sensorValue, a.thresholdValue, a.message) from Alert a where a.evidence is null order by a.createdAt desc")
+    List<EnrichTarget> findEnrichTargets(Pageable pageable);
 
     @Query(value = """
             SELECT *

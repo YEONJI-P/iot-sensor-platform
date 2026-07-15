@@ -31,11 +31,34 @@ class GeminiProvider(LLMProvider):
 
     def generate(self, prompt: str) -> str:
         model = self._ensure_model()
-        response = model.generate_content(
-            prompt,
-            request_options={"timeout": self._timeout},
-        )
-        return (response.text or "").strip()
+        response = None
+        try:
+            response = model.generate_content(
+                prompt,
+                request_options={"timeout": self._timeout},
+            )
+            return (response.text or "").strip()
+        except Exception as exc:  # noqa: BLE001 — 응답 없음/차단 시 폴백 반환
+            reason = self._extract_reason(response, exc) if response is not None else str(exc)
+            return f"[Gemini 응답 없음: {reason}]"
+
+    @staticmethod
+    def _extract_reason(response, exc: Exception) -> str:
+        """차단/후보 없음 등의 사유를 사람이 읽을 수 있는 문자열로 추출한다."""
+        try:
+            feedback = getattr(response, "prompt_feedback", None)
+            block_reason = getattr(feedback, "block_reason", None)
+            if block_reason:
+                return f"prompt 차단({block_reason})"
+            candidates = getattr(response, "candidates", None)
+            if not candidates:
+                return "후보 없음"
+            finish_reason = getattr(candidates[0], "finish_reason", None)
+            if finish_reason:
+                return f"finish_reason={finish_reason}"
+        except Exception:  # noqa: BLE001 — 사유 추출 실패 시 원 예외로 대체
+            pass
+        return str(exc)
 
     @property
     def model_name(self) -> str:

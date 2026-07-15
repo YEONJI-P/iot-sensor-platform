@@ -418,4 +418,4 @@ python iot/simulator.py --devices 1 6 --interval 0.5 --limit 100
 
 ### 검토 중
 
-- SensorType 외부화 검토: 현재 SensorType(`TEMPERATURE`, `VIBRATION`, `ILLUMINANCE`, `PRESSURE`)이 Enum으로 하드코딩되어 있어 타입 추가 시 빌드가 필요합니다. 임계값 초과 감지 로직이 타입에 무관하게 동일하므로 외부 설정으로 관리할 여지가 있습니다. 반면 Role, UserStatus는 값마다 인가 로직과 상태 전이가 코드에 묶여 있어 Enum이 적합합니다.
+- DeviceType 외부화 검토: 현재 DeviceType(`TEMPERATURE`, `PRESSURE`, `CURRENT`, `POWER`, `ACCELERATION`)이 Enum으로 하드코딩되어 있어 타입 추가 시 빌드가 필요합니다. 임계값 초과 감지 로직이 타입에 무관하게 동일하므로 외부 설정으로 관리할 여지가 있습니다. 반면 Role, UserStatus는 값마다 인가 로직과 상태 전이가 코드에 묶여 있어 Enum이 적합합니다.

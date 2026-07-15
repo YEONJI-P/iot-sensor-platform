@@ -29,9 +29,13 @@ public class HttpAxClient implements AxClient {
         // 시도가 "Invalid HTTP request"로 거부되므로 HTTP/1.1로 고정한다.
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(java.time.Duration.ofSeconds(2))
                 .build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+        // AX request_timeout(30초)보다 약간 크게 잡아 서버 응답 대기 중 조기 절단을 방지한다.
+        factory.setReadTimeout(java.time.Duration.ofSeconds(35));
         this.restClient = RestClient.builder()
-                .requestFactory(new JdkClientHttpRequestFactory(httpClient))
+                .requestFactory(factory)
                 .baseUrl(properties.getBaseUrl())
                 .build();
     }

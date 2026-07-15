@@ -19,7 +19,7 @@ async def handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
         status_code=500,
         content={
             "error": "internal",
-            "detail": str(exc),
+            "detail": "내부 오류",
             "path": request.url.path,
         },
     )
