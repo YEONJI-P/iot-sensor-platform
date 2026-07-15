@@ -60,10 +60,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/dashboard/stream")
                         .permitAll()
 
-                        // 대시보드 API — 운영 역할(MEMBER, VIEWER)
-                        .requestMatchers("/dashboard/**")
-                        .hasAnyRole("MEMBER", "VIEWER")
-
                         // 센서 데이터 조회 — FACTORY_ADMIN 제외 (운영 데이터 불필요)
                         .requestMatchers(HttpMethod.GET, "/sensor-data", "/sensor-data/**")
                         .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
