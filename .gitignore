@@ -38,6 +38,9 @@ out/
 .vscode/
 .venv/
 
+# 애플리케이션 로그 (local 프로파일에서만 생성, 로컬 전용)
+logs/
+
 # 로컬 전용 (내부 전략 문서·AI 도구 — 추적 제외)
 docs/local/
 .claude/
