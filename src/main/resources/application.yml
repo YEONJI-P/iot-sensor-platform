@@ -4,7 +4,7 @@ spring:
   profiles:
     default: local
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/iot_sensor_db_v2}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/iot_sensor_db}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
   jpa:

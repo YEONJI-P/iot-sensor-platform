@@ -9,7 +9,7 @@
 -- 실행 전: 테이블이 생성된 상태(Spring Boot 기동 후)여야 하며, 중복 실행은
 --   UNIQUE 제약 위반이 난다. 재실행은 하단 TRUNCATE 주석을 먼저 실행한다.
 --
---   psql -U postgres -d iot_sensor_db_v2 -f iot/seed.sql
+--   psql -U postgres -d iot_sensor_db -f iot/seed.sql
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

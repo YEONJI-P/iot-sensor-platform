@@ -355,7 +355,7 @@ http://localhost:8080/swagger-ui/index.html
 Spring Boot 기동 후 테이블이 생성된 상태에서 실행합니다.
 
 ```bash
-psql -U postgres -d iot_sensor_db_v2 -f iot/seed.sql
+psql -U postgres -d iot_sensor_db -f iot/seed.sql
 ```
 
 > 재실행이 필요한 경우 `seed.sql` 하단의 `TRUNCATE` 주석을 해제 후 먼저 실행하세요.
@@ -397,7 +397,7 @@ python iot/simulator.py --devices 1 6 --interval 0.5 --limit 100
 
 | 변수명 | 설명 | 기본값 |
 |---|---|---|
-| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/iot_sensor_db_v2` |
+| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/iot_sensor_db` |
 | `DB_USERNAME` | DB 사용자명 | `postgres` |
 | `DB_PASSWORD` | DB 비밀번호 | `postgres` |
 | `JWT_SECRET` | JWT 서명 키 (32자 이상) | 없음 (필수), 미설정 시 부팅 실패 |
