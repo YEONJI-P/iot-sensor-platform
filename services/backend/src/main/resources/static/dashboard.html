@@ -3,522 +3,168 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>IoT Dashboard</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <title>센서 대시보드 · IoT Sensor Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/app.css"/>
   <style>
-    body { background: #0f172a; color: #e2e8f0; min-height: 100vh; }
-    .navbar { background: #1e293b !important; border-bottom: 1px solid #334155; }
-    .card { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; }
-    .form-select {
-      background: #0f172a; border: 1px solid #475569; color: #e2e8f0;
+    /* 대시보드 전용 보조 스타일 (디자인 토큰·컴포넌트는 app.css) */
+    .ctl-row {
+      display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap;
+      margin-bottom: 1.4rem;
     }
-    .form-select:focus {
-      background: #0f172a; color: #e2e8f0;
-      border-color: #3b82f6; box-shadow: 0 0 0 0.2rem rgba(59,130,246,.25);
+    .ctl-row .field { margin-bottom: 0; flex: 1 1 300px; min-width: 260px; max-width: 480px; }
+    .ctl-row .refresh-tag { margin-left: auto; align-self: center; }
+
+    .dash-grid { grid-template-columns: 2fr 1fr; align-items: start; margin-bottom: 1.1rem; }
+    @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
+
+    .chart-box { position: relative; height: 260px; padding: .7rem .4rem .3rem; }
+    .bar-box   { position: relative; height: 220px; padding: .7rem .4rem .3rem; }
+    .chart-box canvas, .bar-box canvas { max-width: 100%; }
+
+    .readout-stack { display: flex; flex-direction: column; }
+    .readout-stack .ro {
+      display: flex; align-items: flex-start; gap: .85rem;
+      padding: 1.15rem 1.3rem; border-bottom: 1px solid var(--line-soft);
     }
-    .table-dark-custom { --bs-table-bg: #0f172a; --bs-table-border-color: #334155; }
-    .table-dark-custom thead th { background: #1e3a5f; color: #93c5fd; }
-    .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.2rem 1.5rem; }
-    .stat-value { font-size: 2rem; font-weight: 700; }
-    .chart-container { position: relative; height: 260px; }
-    #refreshBadge { font-size: 0.75rem; }
-    .exceed-row { background: rgba(239,68,68,.12) !important; }
-    .modal-content { background: #1e293b; border: 1px solid #475569; }
+    .readout-stack .ro:last-child { border-bottom: none; }
+    .readout-stack .ro .lamp { margin-top: .45rem; }
+
+    .thr-badge {
+      font-family: var(--font-mono); font-size: .7rem; letter-spacing: .04em;
+      color: var(--brand); border: 1px dashed color-mix(in srgb, var(--brand) 50%, var(--line));
+      padding: .16rem .5rem; border-radius: 5px; white-space: nowrap;
+    }
+    .log-wrap { max-height: 480px; overflow: auto; }
+    .evi { display: block; font-size: .76rem; color: var(--text-faint); margin-top: .3rem; line-height: 1.4; }
+    .evi .k { font-family: var(--font-mono); letter-spacing: .04em; color: var(--text-dim); }
+    .cell-alarm { color: var(--alarm); font-weight: 600; }
   </style>
 </head>
 <body>
 
-<!-- ── 403 Forbidden 모달 ── -->
-<div class="modal fade" id="forbiddenModal" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
-  <div class="modal-dialog modal-sm modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-body text-center py-4 px-3">
-        <div class="fs-1 mb-2">🚫</div>
-        <h6 class="text-white mb-1">접근 권한 없음</h6>
-        <p class="text-secondary small mb-3">해당 기능에 접근 권한이 없습니다.</p>
-        <button type="button" class="btn btn-outline-secondary btn-sm px-4"
-                onclick="location.href='/index.html'">확인</button>
-      </div>
-    </div>
+<!-- ══ 상단바 ══ -->
+<div class="topbar">
+  <div class="brand"><span class="mark">IO</span> Sensor Platform</div>
+  <div class="topbar-right">
+    <span class="clock" id="clock">--:--:--</span>
+    <span class="flex items-center gap-sm" title="실시간 스트림 연결 상태">
+      <span class="lamp idle" id="sseLamp"></span>
+      <span class="eyebrow" id="sseLabel">STREAM · 대기</span>
+    </span>
+    <span class="identity">
+      <span class="mono dim" id="navEmployee"></span>
+      <span class="tag" id="navRole"></span>
+    </span>
+    <a class="btn btn-sm btn-ghost" href="/index.html">홈</a>
+    <button class="btn btn-sm btn-danger" onclick="Auth.logout()">로그아웃</button>
   </div>
 </div>
 
-<!-- ── Navbar ── -->
-<nav class="navbar navbar-dark px-4 py-2">
-  <a href="/index.html" class="navbar-brand fw-bold text-decoration-none">📊 IoT Dashboard</a>
-  <div class="d-flex gap-2 align-items-center">
-    <span id="refreshBadge" class="badge bg-secondary">갱신 대기</span>
-    <button onclick="logout()" class="btn btn-sm btn-outline-danger">로그아웃</button>
+<!-- ══ 무권한 안내 ══ -->
+<div id="noAccess" class="noaccess hidden">
+  <div class="flex items-center gap-sm" style="justify-content:center; margin-bottom:1rem;">
+    <span class="lamp idle"></span>
+    <span class="eyebrow">ACCESS · DENIED</span>
   </div>
-</nav>
+  <h1 style="font-size:1.35rem; margin-bottom:.6rem;">접근 불가</h1>
+  <p class="dim" style="margin-bottom:1.4rem;">이 역할은 대시보드 접근 권한이 없습니다.</p>
+  <a class="btn btn-sm btn-ghost" href="/index.html">홈으로 돌아가기</a>
+</div>
 
-<div class="container-fluid py-4 px-4">
+<!-- ══ 대시보드 ══ -->
+<div id="dash" class="stage hidden">
+  <div class="eyebrow" style="margin-bottom:.5rem;">TELEMETRY</div>
+  <h1 style="font-size:1.7rem; margin-bottom:1.3rem;">센서 대시보드</h1>
 
-  <!-- ── 장치 선택 ── -->
-  <div class="row mb-4">
-    <div class="col-md-4">
-      <label class="form-label text-secondary small mb-1">장치 선택</label>
-      <select id="deviceSelect" class="form-select" onchange="onDeviceChange()">
-        <option value="">-- 장치를 선택하세요 --</option>
+  <div class="ctl-row">
+    <div class="field">
+      <label for="deviceSelect">채널</label>
+      <select class="input" id="deviceSelect">
+        <option value="">장치를 불러오는 중…</option>
       </select>
     </div>
-    <div class="col-md-8 d-flex align-items-end gap-3" id="statCards" style="display:none!important;">
-      <div class="stat-card text-center">
-        <div class="text-secondary small">최근 알림</div>
-        <div id="statTotalAlert" class="stat-value text-danger">—</div>
+    <span class="tag refresh-tag" id="refreshTag">갱신 대기</span>
+  </div>
+
+  <!-- 실시간 라인 차트 + 텔레메트리 리드아웃 -->
+  <div class="grid dash-grid">
+    <div class="panel">
+      <div class="panel-head">
+        <h3>실시간 센서값</h3>
+        <span class="thr-badge" id="thrBadge">임계값 —</span>
       </div>
-      <div class="stat-card text-center">
-        <div class="text-secondary small">최근 7일 알림</div>
-        <div id="statWeekAlert" class="stat-value text-warning">—</div>
+      <div class="chart-box">
+        <div class="empty" id="lineEmpty">채널을 선택하면 실시간 센서값이 표시됩니다.</div>
+        <canvas id="lineChart" class="hidden"></canvas>
       </div>
-      <div class="stat-card text-center">
-        <div class="text-secondary small">수집 데이터</div>
-        <div id="statDataCount" class="stat-value text-info">—</div>
+    </div>
+
+    <div class="panel readout-stack">
+      <div class="ro">
+        <span class="lamp idle" id="roAlertLamp"></span>
+        <div class="readout">
+          <span class="val" id="roAlertCount">—</span>
+          <span class="lbl">최근 알림 수</span>
+        </div>
+      </div>
+      <div class="ro">
+        <span class="lamp idle" id="roWeekLamp"></span>
+        <div class="readout">
+          <span class="val" id="roWeekCount">—</span>
+          <span class="lbl">최근 7일 알림</span>
+        </div>
+      </div>
+      <div class="ro">
+        <span class="lamp idle" id="roDataLamp"></span>
+        <div class="readout">
+          <span class="val" id="roDataCount">—</span>
+          <span class="lbl">수집 데이터 수</span>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ── 차트 영역 ── -->
-  <div class="row g-4 mb-4">
-
-    <!-- 센서 라인 차트 -->
-    <div class="col-lg-8">
-      <div class="card p-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0 text-info">📈 최근 50개 센서값</h6>
-          <span id="thresholdLabel" class="badge bg-danger d-none">임계값: —</span>
-        </div>
-        <div class="chart-container">
-          <canvas id="sensorChart"></canvas>
-        </div>
-      </div>
+  <!-- 일별 알림 바 차트 -->
+  <div class="panel" style="margin-bottom:1.1rem;">
+    <div class="panel-head"><h3>최근 7일 알림 발생</h3></div>
+    <div class="bar-box">
+      <div class="empty" id="barEmpty">채널을 선택하면 일별 알림 발생 건수가 표시됩니다.</div>
+      <canvas id="barChart" class="hidden"></canvas>
     </div>
-
-    <!-- 일별 알림 바 차트 -->
-    <div class="col-lg-4">
-      <div class="card p-3">
-        <h6 class="mb-2 text-info">🚨 최근 7일 알림 발생</h6>
-        <div class="chart-container">
-          <canvas id="alertChart"></canvas>
-        </div>
-      </div>
-    </div>
-
   </div>
 
-  <!-- ── 알림 테이블 ── -->
-  <div class="card p-3">
-    <h6 class="mb-3 text-info">🔔 최근 알림 목록 (최대 20건)</h6>
-    <div class="table-responsive">
-      <table class="table table-dark table-dark-custom table-hover mb-0">
+  <!-- 최근 알림 로그 -->
+  <div class="panel">
+    <div class="panel-head"><h3>최근 알림</h3></div>
+    <div class="log-wrap">
+      <table class="table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>장치 ID</th>
-            <th>센서값</th>
-            <th>임계값</th>
+            <th style="width:54px;">상태</th>
+            <th>장치</th>
+            <th style="width:98px;">센서값</th>
+            <th style="width:98px;">임계값</th>
             <th>메시지</th>
-            <th>발생 시각</th>
+            <th style="width:150px;">발생시각</th>
           </tr>
         </thead>
-        <tbody id="alertTableBody">
-          <tr><td colspan="6" class="text-center text-secondary py-4">장치를 선택하면 알림이 표시됩니다</td></tr>
+        <tbody id="alertBody">
+          <tr id="alertEmptyRow">
+            <td colspan="6"><div class="empty">채널을 선택하면 최근 알림이 표시됩니다.</div></td>
+          </tr>
         </tbody>
       </table>
     </div>
   </div>
+</div>
 
-</div><!-- /container -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-  /* ── 공통 fetch 함수 ── */
-  async function apiFetch(url, options = {}) {
-    const token = localStorage.getItem('jwt_token');
-    if (!token) { location.href = '/index.html'; return null; }
-
-    let res;
-    try {
-      res = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token,
-          ...(options.headers || {})
-        }
-      });
-    } catch (e) {
-      console.error('[apiFetch] 네트워크 오류:', url, e);
-      return null;
-    }
-
-    if (res.ok) return res;
-
-    if (res.status === 401) {
-      localStorage.removeItem('jwt_token');
-      location.href = '/index.html';
-      return null;
-    }
-
-    if (res.status === 403) {
-      new bootstrap.Modal(document.getElementById('forbiddenModal')).show();
-      return null;
-    }
-
-    try {
-      const err = await res.json();
-      console.error(`[apiFetch] ${res.status} ${err.error}: ${err.message}`, url);
-    } catch {
-      console.error(`[apiFetch] ${res.status} (응답 파싱 실패):`, url);
-    }
-    return null;
-  }
-
-  /* ── 로그아웃 ── */
-  function logout() {
-    localStorage.removeItem('jwt_token');
-    location.href = '/index.html';
-  }
-
-  /* ── JWT payload 디코딩 ── */
-  function decodeJwt(token) {
-    try {
-      const payload = token.split('.')[1];
-      return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-    } catch { return null; }
-  }
-
-  /* ── 초기 JWT + role 확인 ── */
-  const DASHBOARD_ALLOWED_ROLES = ['SUPER_ADMIN', 'DEVICE_MANAGER', 'DATA_INPUTTER', 'DATA_ANALYST', 'VIEWER'];
-  (function checkAccess() {
-    const token = localStorage.getItem('jwt_token');
-    if (!token) { location.href = '/index.html'; return; }
-    const payload = decodeJwt(token);
-    if (!payload || !DASHBOARD_ALLOWED_ROLES.includes(payload.role)) {
-      new bootstrap.Modal(document.getElementById('forbiddenModal')).show();
-    }
-  })();
-
-  /* ── Chart.js 인스턴스 ── */
-  let sensorChart = null;
-  let alertChart  = null;
-  let currentThreshold = null;
-
-  function initCharts() {
-    const sensorCtx = document.getElementById('sensorChart').getContext('2d');
-    sensorChart = new Chart(sensorCtx, {
-      type: 'line',
-      data: { labels: [], datasets: [{
-        label: '센서값',
-        data: [],
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,.1)',
-        borderWidth: 2,
-        pointRadius: 3,
-        tension: 0.3,
-        fill: true
-      }]},
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#94a3b8' } } },
-        scales: {
-          x: { ticks: { color: '#64748b', maxTicksLimit: 8 }, grid: { color: '#1e3a5f' } },
-          y: { ticks: { color: '#64748b' }, grid: { color: '#1e3a5f' } }
-        },
-        animation: { duration: 300 }
-      }
-    });
-
-    const alertCtx = document.getElementById('alertChart').getContext('2d');
-    alertChart = new Chart(alertCtx, {
-      type: 'bar',
-      data: { labels: [], datasets: [{
-        label: '알림 건수',
-        data: [],
-        backgroundColor: 'rgba(239,68,68,.7)',
-        borderColor: '#ef4444',
-        borderWidth: 1,
-        borderRadius: 4
-      }]},
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#94a3b8' } } },
-        scales: {
-          x: { ticks: { color: '#64748b' }, grid: { color: '#1e3a5f' } },
-          y: {
-            ticks: { color: '#64748b', stepSize: 1 },
-            grid: { color: '#1e3a5f' },
-            beginAtZero: true
-          }
-        },
-        animation: { duration: 300 }
-      }
-    });
-  }
-
-  /* ── 장치 목록 로드 ── */
-  async function loadDevices() {
-    const res = await apiFetch('/devices');
-    if (!res) return;
-    const devices = await res.json();
-    const sel = document.getElementById('deviceSelect');
-    sel.innerHTML = '<option value="">-- 장치를 선택하세요 --</option>';
-    devices.forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d.id;
-      opt.dataset.threshold = d.thresholdValue || 0;
-      opt.textContent = `${d.name} (${d.deviceType}) — ${d.location}`;
-      sel.appendChild(opt);
-    });
-  }
-
-  /* ── 대시보드 초기 상태로 리셋 ── */
-  function resetDashboard() {
-    currentThreshold = null;
-    document.getElementById('thresholdLabel').classList.add('d-none');
-    document.getElementById('statCards').style.setProperty('display', 'none', 'important');
-    document.getElementById('statTotalAlert').textContent = '—';
-    document.getElementById('statWeekAlert').textContent = '—';
-    document.getElementById('statDataCount').textContent = '—';
-    document.getElementById('alertTableBody').innerHTML =
-      '<tr><td colspan="6" class="text-center text-secondary py-4">장치를 선택하면 알림이 표시됩니다</td></tr>';
-    sensorChart.data.labels = [];
-    sensorChart.data.datasets[0].data = [];
-    if (sensorChart.data.datasets.length > 1) sensorChart.data.datasets.splice(1);
-    sensorChart.update();
-    alertChart.data.labels = [];
-    alertChart.data.datasets[0].data = [];
-    alertChart.update();
-  }
-
-  /* ── 장치 선택 이벤트 ── */
-  function onDeviceChange() {
-    const sel = document.getElementById('deviceSelect');
-    const deviceId = sel.value;
-    if (!deviceId) { resetDashboard(); return; }
-
-    const opt = sel.options[sel.selectedIndex];
-    currentThreshold = parseFloat(opt.dataset.threshold) || null;
-
-    const badge = document.getElementById('thresholdLabel');
-    if (currentThreshold) {
-      badge.textContent = `임계값: ${currentThreshold}`;
-      badge.classList.remove('d-none');
-    } else {
-      badge.classList.add('d-none');
-    }
-
-    document.getElementById('statCards').style.removeProperty('display');
-    loadAll(deviceId);
-  }
-
-  /* ── 전체 데이터 로드 ── */
-  async function loadAll(deviceId) {
-    updateRefreshBadge();
-    await Promise.all([
-      loadSensorData(deviceId),
-      loadAlertDailyCount(deviceId),
-      loadRecentAlerts(deviceId)
-    ]);
-  }
-
-  /* ── 센서 데이터 라인 차트 ── */
-  async function loadSensorData(deviceId) {
-    const res = await apiFetch(`/sensor-data/${deviceId}`);
-    if (!res) return;
-    const data = await res.json();
-
-    const recent = data.slice(0, 50).reverse();
-    document.getElementById('statDataCount').textContent = data.length.toLocaleString();
-
-    const labels = recent.map(d => formatTime(d.recordedAt));
-    const values = recent.map(d => d.value);
-
-    const pointColors = values.map(v =>
-      currentThreshold && v > currentThreshold ? '#ef4444' : '#3b82f6'
-    );
-
-    sensorChart.data.labels = labels;
-    sensorChart.data.datasets[0].data = values;
-    sensorChart.data.datasets[0].pointBackgroundColor = pointColors;
-    sensorChart.update();
-
-    if (currentThreshold) {
-      if (sensorChart.data.datasets.length < 2) {
-        sensorChart.data.datasets.push({
-          label: '임계값',
-          data: values.map(() => currentThreshold),
-          borderColor: 'rgba(239,68,68,.6)',
-          borderWidth: 1.5,
-          borderDash: [6, 3],
-          pointRadius: 0,
-          fill: false
-        });
-      } else {
-        sensorChart.data.datasets[1].data = values.map(() => currentThreshold);
-      }
-      sensorChart.update();
-    }
-  }
-
-  /* ── 일별 알림 바 차트 ── */
-  async function loadAlertDailyCount(deviceId) {
-    const res = await apiFetch(`/alerts/daily-count?deviceId=${deviceId}&days=7`);
-    if (!res) return;
-    const data = await res.json();
-
-    const weekTotal = data.reduce((s, d) => s + d.count, 0);
-    document.getElementById('statWeekAlert').textContent = weekTotal;
-
-    alertChart.data.labels = data.map(d => d.date.substring(5));
-    alertChart.data.datasets[0].data = data.map(d => d.count);
-    alertChart.update();
-  }
-
-  /* ── 최근 알림 테이블 ── */
-  async function loadRecentAlerts(deviceId) {
-    const res = await apiFetch(`/alerts/recent?deviceId=${deviceId}&limit=20`);
-    if (!res) return;
-    const alerts = await res.json();
-
-    document.getElementById('statTotalAlert').textContent = alerts.length >= 20 ? '20+' : alerts.length;
-
-    const tbody = document.getElementById('alertTableBody');
-    if (alerts.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-secondary py-4">알림 없음</td></tr>';
-      return;
-    }
-    tbody.innerHTML = alerts.map((a, i) => `
-      <tr class="${a.sensorValue > a.thresholdValue ? 'exceed-row' : ''}">
-        <td class="text-secondary">${i + 1}</td>
-        <td>${a.deviceId}</td>
-        <td class="${a.sensorValue > a.thresholdValue ? 'text-danger fw-bold' : ''}">${a.sensorValue?.toFixed(1)}</td>
-        <td>${a.thresholdValue?.toFixed(1)}</td>
-        <td class="text-truncate" style="max-width:240px;" title="${a.message}">${a.message}</td>
-        <td class="text-secondary small">${formatDatetime(a.createdAt)}</td>
-      </tr>`
-    ).join('');
-  }
-
-  /* ── 자동 갱신 30초 ── */
-  setInterval(() => {
-    const deviceId = document.getElementById('deviceSelect').value;
-    if (deviceId) loadAll(deviceId);
-  }, 30000);
-
-  /* ── 갱신 시각 뱃지 ── */
-  function updateRefreshBadge() {
-    const el = document.getElementById('refreshBadge');
-    el.textContent = '갱신: ' + new Date().toLocaleTimeString('ko-KR', { hour12: false });
-    el.className = 'badge bg-info text-dark';
-  }
-
-  /* ── 날짜 포맷 ── */
-  function formatTime(dt) {
-    if (!dt) return '';
-    const d = new Date(dt);
-    return d.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  }
-  function formatDatetime(dt) {
-    if (!dt) return '';
-    const d = new Date(dt);
-    return d.toLocaleString('ko-KR', { hour12: false,
-      month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit' });
-  }
-
-  /* ── SSE 실시간 스트림 (폴링과 병행) ── */
-  let dashboardSse = null;
-
-  function initSse() {
-    const token = localStorage.getItem('jwt_token');
-    if (!token) return;               // 토큰 없거나 로그아웃 상태면 열지 않음
-    if (dashboardSse) return;         // 중복 연결 방지
-
-    // EventSource는 헤더를 실을 수 없어 토큰을 쿼리파라미터로 전달
-    dashboardSse = new EventSource('/dashboard/stream?token=' + encodeURIComponent(token));
-
-    dashboardSse.addEventListener('connected', () => {
-      console.log('[SSE] connected');
-    });
-
-    dashboardSse.addEventListener('sensor-data', (e) => {
-      let d;
-      try { d = JSON.parse(e.data); } catch { return; }
-      // 현재 선택된 장치와 일치할 때만 라이브 차트에 반영
-      const selected = document.getElementById('deviceSelect').value;
-      if (!selected || String(d.deviceId) !== String(selected)) return;
-      appendSensorPoint(d);
-    });
-
-    dashboardSse.addEventListener('alert', (e) => {
-      let a;
-      try { a = JSON.parse(e.data); } catch { return; }
-      prependAlertRow(a);
-    });
-
-    dashboardSse.onerror = (e) => {
-      // 재연결은 EventSource 기본 동작에 위임, 로그만 남김
-      console.warn('[SSE] error / reconnecting…', e);
-    };
-  }
-
-  /* ── 라이브 센서 점 append (loadSensorData 렌더링 방식 재사용) ── */
-  function appendSensorPoint(d) {
-    const ds = sensorChart.data.datasets[0];
-    sensorChart.data.labels.push(formatTime(d.recordedAt));
-    ds.data.push(d.value);
-
-    // 임계값 초과 시 점 색상 (기존 loadSensorData와 동일 규칙)
-    if (!Array.isArray(ds.pointBackgroundColor)) ds.pointBackgroundColor = [];
-    ds.pointBackgroundColor.push(
-      currentThreshold && d.value > currentThreshold ? '#ef4444' : '#3b82f6'
-    );
-
-    // 최근 50개만 유지
-    while (ds.data.length > 50) {
-      sensorChart.data.labels.shift();
-      ds.data.shift();
-      if (Array.isArray(ds.pointBackgroundColor)) ds.pointBackgroundColor.shift();
-    }
-
-    // 임계값 기준선 데이터셋 길이 동기화 (기존 구조 재사용)
-    if (sensorChart.data.datasets.length > 1) {
-      sensorChart.data.datasets[1].data = ds.data.map(() => currentThreshold);
-    }
-    sensorChart.update();
-  }
-
-  /* ── 라이브 알림 prepend (loadRecentAlerts 행 마크업 재사용) ── */
-  function prependAlertRow(a) {
-    const tbody = document.getElementById('alertTableBody');
-    // placeholder(안내/알림없음) 행 제거
-    const first = tbody.querySelector('td[colspan]');
-    if (first) tbody.innerHTML = '';
-
-    const exceed = a.sensorValue > a.thresholdValue;
-    const extra = [a.evidence, a.recommendation].filter(Boolean).join(' · ');
-    const messageCell = extra
-      ? `${a.message}<div class="text-secondary small mt-1">${extra}</div>`
-      : a.message;
-
-    const tr = document.createElement('tr');
-    tr.className = exceed ? 'exceed-row' : '';
-    tr.innerHTML = `
-        <td class="text-secondary">•</td>
-        <td>${a.deviceId}</td>
-        <td class="${exceed ? 'text-danger fw-bold' : ''}">${a.sensorValue?.toFixed(1)}</td>
-        <td>${a.thresholdValue?.toFixed(1)}</td>
-        <td style="max-width:240px;" title="${a.message}">${messageCell}</td>
-        <td class="text-secondary small">${formatDatetime(a.createdAt)}</td>`;
-    tbody.insertBefore(tr, tbody.firstChild);
-  }
-
-  /* ── 초기화 ── */
-  initCharts();
-  loadDevices();
-  initSse();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/dashboard.js"></script>
 </body>
 </html>

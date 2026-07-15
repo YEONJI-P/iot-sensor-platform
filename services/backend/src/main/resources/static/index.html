@@ -4,234 +4,171 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>IoT Sensor Platform</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/app.css"/>
   <style>
-    body { background: #0f172a; color: #e2e8f0; min-height: 100vh; }
-    .navbar { background: #1e293b !important; border-bottom: 1px solid #334155; }
-    .card { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; }
-    .form-control {
-      background: #0f172a; border: 1px solid #475569; color: #e2e8f0;
+    /* 로그인 화면 전용 */
+    .access-wrap { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
+    .access { width: 380px; max-width: 100%; }
+    .access .brand-lg { display: flex; align-items: center; gap: .7rem; margin-bottom: 1.6rem; }
+    .access .brand-lg .mark { width: 38px; height: 38px; font-size: 1.15rem; border-radius: 9px; }
+    .access .brand-lg .name { font-size: 1.15rem; font-weight: 700; }
+    .status-line {
+      display: flex; align-items: center; gap: .5rem; font-family: var(--font-mono);
+      font-size: .72rem; letter-spacing: .12em; color: var(--text-faint);
+      padding: .55rem .75rem; border: 1px solid var(--line-soft); border-radius: var(--radius-sm);
+      background: var(--bg); margin-bottom: 1.3rem;
     }
-    .form-control:focus {
-      background: #0f172a; color: #e2e8f0;
-      border-color: #3b82f6; box-shadow: 0 0 0 0.2rem rgba(59,130,246,.25);
+    /* 홈 화면 */
+    .hero-eyebrow { margin-bottom: .6rem; }
+    .entry {
+      display: block; padding: 1.3rem 1.4rem; border: 1px solid var(--line);
+      border-radius: var(--radius); background: var(--surface);
+      transition: border-color .16s, transform .1s, background .16s; height: 100%;
     }
-    .form-control::placeholder { color: #64748b; }
-    .page-link-card {
-      background: #0f172a; border: 1px solid #334155; border-radius: 12px;
-      padding: 1.2rem 1.5rem; text-decoration: none; color: #e2e8f0;
-      display: block; transition: border-color .2s, background .2s;
-    }
-    .page-link-card:hover { border-color: #3b82f6; background: #1e293b; color: #e2e8f0; }
-    .page-link-card .icon { font-size: 2rem; }
-    .role-badge { font-size: 0.75rem; letter-spacing: .05em; }
-    #loginSection, #homeSection { min-height: 85vh; }
+    .entry:hover { border-color: color-mix(in srgb, var(--brand) 55%, var(--line)); background: var(--surface-2); transform: translateY(-2px); }
+    .entry .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.1rem; }
+    .entry .title { font-size: 1.05rem; font-weight: 600; color: var(--text); margin-bottom: .25rem; }
+    .entry .desc { font-size: .84rem; color: var(--text-dim); }
+    .entry .arrow { color: var(--text-faint); font-family: var(--font-mono); }
+    .clock { font-family: var(--font-mono); font-size: .82rem; color: var(--text-dim); }
   </style>
 </head>
 <body>
 
-<!-- ── Navbar ── -->
-<nav class="navbar navbar-dark px-4 py-2">
-  <span class="navbar-brand fw-bold">🏭 IoT Sensor Platform</span>
-  <div id="navRight" class="d-none d-flex gap-2 align-items-center">
-    <span id="navEmployeeId" class="text-secondary small"></span>
-    <span id="navRoleBadge" class="badge role-badge bg-secondary"></span>
-    <button onclick="logout()" class="btn btn-sm btn-outline-danger">로그아웃</button>
-  </div>
-</nav>
+<!-- ══ 로그인 ══ -->
+<div id="loginView" class="access-wrap hidden">
+  <div class="access panel panel-pad">
+    <div class="brand-lg">
+      <span class="mark">IO</span>
+      <span class="name">Sensor Platform</span>
+    </div>
+    <div class="status-line">
+      <span id="accessLamp" class="lamp idle"></span>
+      <span id="accessStatus">SYSTEM · STANDBY</span>
+    </div>
 
-<!-- ── 로그인 섹션 ── -->
-<div id="loginSection" class="d-flex justify-content-center align-items-center">
-  <div class="card p-4" style="width:360px;">
-    <h5 class="mb-1 text-center">로그인</h5>
-    <p class="text-secondary small text-center mb-4">사원번호와 비밀번호를 입력하세요</p>
-    <div class="mb-3">
-      <label class="form-label text-secondary small">사원번호</label>
-      <input id="loginEmployeeId" type="text" class="form-control" placeholder="예: DM001"/>
+    <div class="field">
+      <label for="employeeId">사원번호</label>
+      <input id="employeeId" class="input" type="text" placeholder="예: ADMIN001" autocomplete="username"/>
     </div>
-    <div class="mb-3">
-      <label class="form-label text-secondary small">비밀번호</label>
-      <input id="loginPassword" type="password" class="form-control" placeholder="비밀번호 입력"/>
+    <div class="field">
+      <label for="password">비밀번호</label>
+      <input id="password" class="input" type="password" placeholder="비밀번호" autocomplete="current-password"/>
     </div>
-    <div id="loginError" class="text-danger small mb-2 d-none"></div>
-    <button onclick="login()" class="btn btn-primary w-100">로그인</button>
+    <div id="loginError" class="hidden" style="color:var(--alarm); font-size:.82rem; margin-bottom:.8rem;"></div>
+    <button id="loginBtn" class="btn btn-primary" style="width:100%; justify-content:center;">접속</button>
+    <p class="faint" style="font-size:.76rem; margin-top:1rem; text-align:center;">
+      계정이 없으면 관리자 승인이 필요합니다.
+    </p>
   </div>
 </div>
 
-<!-- ── 홈 섹션 (로그인 후) ── -->
-<div id="homeSection" class="d-none container py-5">
-  <div class="mb-5">
-    <h4 class="fw-bold mb-1">안녕하세요 👋</h4>
-    <p class="text-secondary">접근 가능한 페이지를 선택하세요.</p>
+<!-- ══ 홈 (로그인 후) ══ -->
+<div id="homeView" class="hidden">
+  <div class="topbar">
+    <div class="brand"><span class="mark">IO</span> Sensor Platform</div>
+    <div class="topbar-right">
+      <span class="clock" id="clock">--:--:--</span>
+      <span class="identity">
+        <span class="mono dim" id="navEmployee"></span>
+        <span class="tag" id="navRole"></span>
+      </span>
+      <button class="btn btn-sm btn-danger" onclick="Auth.logout()">로그아웃</button>
+    </div>
   </div>
 
-  <div id="pageLinks" class="row g-3 mb-5"></div>
+  <div class="stage">
+    <div class="eyebrow hero-eyebrow">CONSOLE · <span id="heroRole"></span></div>
+    <h1 style="font-size:1.7rem; margin-bottom:.4rem;">접근 가능한 콘솔</h1>
+    <p class="dim" style="margin-bottom:1.8rem;">역할에 허용된 화면입니다.</p>
 
-  <hr class="border-secondary my-4"/>
+    <div id="entries" class="grid g-3" style="margin-bottom:2.4rem;"></div>
 
-  <!-- Swagger -->
-  <div class="mb-2 text-secondary small text-uppercase fw-semibold" style="letter-spacing:.08em;">API 문서</div>
-  <a href="/swagger-ui/index.html" target="_blank" class="page-link-card d-inline-flex align-items-center gap-3" style="width:auto; padding:.8rem 1.2rem;">
-    <span class="icon">📄</span>
-    <div>
-      <div class="fw-semibold">Swagger UI</div>
-      <div class="text-secondary small">REST API 명세 및 테스트</div>
-    </div>
-  </a>
+    <div class="eyebrow" style="margin-bottom:.7rem;">API</div>
+    <a href="/swagger-ui/index.html" target="_blank" class="entry" style="max-width:360px;">
+      <div class="top"><span class="eyebrow">OPENAPI</span><span class="lamp ok"></span></div>
+      <div class="title">Swagger UI</div>
+      <div class="desc">REST API 명세와 직접 호출</div>
+    </a>
+  </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/auth.js"></script>
 <script>
-  /* ── JWT payload 디코딩 ── */
-  function decodeJwt(token) {
-    try {
-      const payload = token.split('.')[1];
-      return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-    } catch { return null; }
-  }
-
-  /* ── role → 접근 가능 페이지 정의 ── */
-  const PAGE_MAP = {
-    SUPER_ADMIN:    [],
-    USER_ADMIN:     [],
-    DATA_INPUTTER: [
-      { href: '/dashboard.html', icon: '📊', title: '대시보드', desc: '센서 데이터 및 알림 시각화' }
-    ],
-    DEVICE_MANAGER: [
-      { href: '/dashboard.html', icon: '📊', title: '대시보드', desc: '센서 데이터 및 알림 시각화' }
-    ],
-    DATA_ANALYST: [
-      { href: '/dashboard.html', icon: '📊', title: '대시보드', desc: '센서 데이터 및 알림 시각화' }
-    ],
-    VIEWER: [
-      { href: '/dashboard.html', icon: '📊', title: '대시보드', desc: '센서 데이터 및 알림 시각화' }
-    ]
+  /* 역할 → 콘솔 진입점 (4역할 정합) */
+  const ENTRIES = {
+    dashboard: { href: '/dashboard.html', code: 'TELEMETRY', title: '센서 대시보드', desc: '실시간 센서값, 임계값 초과 알림 모니터링' },
+    console:   { href: '/console.html',   code: 'CONTROL',   title: '관리 콘솔',     desc: '사용자 승인, 공장·구역, 장치 관리' },
   };
-
-  const ROLE_LABEL = {
-    SUPER_ADMIN:    { text: 'SUPER ADMIN',    bg: 'bg-danger' },
-    USER_ADMIN:     { text: 'USER ADMIN',     bg: 'bg-warning text-dark' },
-    DEVICE_MANAGER: { text: 'DEVICE MANAGER', bg: 'bg-info text-dark' },
-    DATA_INPUTTER:  { text: 'DATA INPUTTER',  bg: 'bg-primary' },
-    DATA_ANALYST:   { text: 'DATA ANALYST',   bg: 'bg-success' },
-    VIEWER:         { text: 'VIEWER',         bg: 'bg-secondary' }
-  };
-
-  /* ── 초기화 ── */
-  window.onload = () => {
-    const token = localStorage.getItem('jwt_token');
-    if (token) showHome(token);
-    else showLogin();
+  const ROLE_ENTRIES = {
+    SYSTEM_ADMIN: ['dashboard', 'console'],
+    FACTORY_ADMIN: ['console'],
+    MEMBER:       ['dashboard', 'console'],
+    VIEWER:       ['dashboard'],
   };
 
   function showLogin() {
-    document.getElementById('loginSection').classList.remove('d-none');
-    document.getElementById('homeSection').classList.add('d-none');
-    document.getElementById('navRight').classList.add('d-none');
+    document.getElementById('loginView').classList.remove('hidden');
+    document.getElementById('homeView').classList.add('hidden');
+    document.getElementById('employeeId').focus();
   }
 
-  function showHome(token) {
-    const payload = decodeJwt(token);
-    if (!payload) { logout(); return; }
+  function showHome() {
+    const role = Auth.getRole();
+    const rl = Auth.ROLE_LABEL[role] || { text: role, cls: '' };
+    document.getElementById('navEmployee').textContent = Auth.getEmployeeId();
+    const rt = document.getElementById('navRole');
+    rt.textContent = rl.text; rt.className = 'tag ' + rl.cls;
+    document.getElementById('heroRole').textContent = rl.text;
 
-    const role = payload.role;
-    const employeeId = payload.sub;
+    const keys = ROLE_ENTRIES[role] || [];
+    document.getElementById('entries').innerHTML = keys.map(k => {
+      const e = ENTRIES[k];
+      return `<a href="${e.href}" class="entry">
+          <div class="top"><span class="eyebrow">${e.code}</span><span class="arrow">→</span></div>
+          <div class="title">${e.title}</div>
+          <div class="desc">${e.desc}</div>
+        </a>`;
+    }).join('');
 
-    // 네비게이션 바
-    document.getElementById('navEmployeeId').textContent = employeeId;
-    const rl = ROLE_LABEL[role] || { text: role, bg: 'bg-secondary' };
-    const roleBadge = document.getElementById('navRoleBadge');
-    roleBadge.textContent = rl.text;
-    roleBadge.className = `badge role-badge ${rl.bg}`;
-    document.getElementById('navRight').classList.remove('d-none');
-
-    // 페이지 링크
-    const pages = PAGE_MAP[role] || [];
-    const container = document.getElementById('pageLinks');
-
-    if (pages.length === 0) {
-      const msg = (role === 'DATA_INPUTTER')
-        ? '데이터 입력 API는 Swagger UI를 통해 사용하세요.'
-        : '관리자 계정입니다. Swagger UI를 통해 Admin API를 사용하세요.';
-      container.innerHTML = `
-        <div class="col-12">
-          <div class="alert alert-warning border-0" style="background:#451a03; color:#fde68a;">
-            ${msg}
-          </div>
-        </div>`;
-    } else {
-      container.innerHTML = pages.map(p => `
-        <div class="col-md-4 col-sm-6">
-          <a href="${p.href}" class="page-link-card h-100 d-flex align-items-center gap-3">
-            <span class="icon">${p.icon}</span>
-            <div>
-              <div class="fw-semibold">${p.title}</div>
-              <div class="text-secondary small">${p.desc}</div>
-            </div>
-          </a>
-        </div>`
-      ).join('');
-    }
-
-    document.getElementById('loginSection').classList.add('d-none');
-    document.getElementById('homeSection').classList.remove('d-none');
+    document.getElementById('loginView').classList.add('hidden');
+    document.getElementById('homeView').classList.remove('hidden');
+    startClock();
   }
 
-  /* ── 로그인 ── */
-  async function login() {
-    const employeeId = document.getElementById('loginEmployeeId').value.trim();
-    const password   = document.getElementById('loginPassword').value;
-    const errEl = document.getElementById('loginError');
-    errEl.classList.add('d-none');
-
+  async function doLogin() {
+    const id = document.getElementById('employeeId').value.trim();
+    const pw = document.getElementById('password').value;
+    const err = document.getElementById('loginError');
+    const lamp = document.getElementById('accessLamp');
+    const status = document.getElementById('accessStatus');
+    err.classList.add('hidden');
+    lamp.className = 'lamp warn'; status.textContent = 'SYSTEM · 인증 중…';
     try {
-      const res = await fetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, password })
-      });
-      if (!res.ok) {
-        try {
-          const err = await res.json();
-          errEl.textContent = err.message;
-        } catch {
-          errEl.textContent = '로그인 중 오류가 발생했습니다.';
-        }
-        errEl.classList.remove('d-none');
-        return;
-      }
-      const { accessToken,refreshToken } = await res.json();
-      localStorage.setItem('jwt_token', accessToken);
-      localStorage.setItem('refresh_token', refreshToken);
-      showHome(accessToken);
-    } catch {
-      errEl.textContent = '서버 연결 오류';
-      errEl.classList.remove('d-none');
+      await Auth.login(id, pw);
+      lamp.className = 'lamp ok'; status.textContent = 'SYSTEM · 접속됨';
+      showHome();
+    } catch (e) {
+      lamp.className = 'lamp alarm'; status.textContent = 'SYSTEM · 거부됨';
+      err.textContent = e.message; err.classList.remove('hidden');
     }
   }
 
-  /* ── 로그아웃 ── */
-  async function logout() {
-    const accessToken = localStorage.getItem('jwt_token');
-    try{
-      if(accessToken){
-        await fetch('/auth/logout',{
-          method:'POST',
-          headers: {'Authorization': 'Bearer ' + accessToken}
-        });
-      }
-    } catch{
-
-    } finally {
-      localStorage.removeItem('jwt_token');
-      localStorage.removeItem('refresh_token');
-      showLogin();
-    }
+  let clockTimer = null;
+  function startClock() {
+    const el = document.getElementById('clock');
+    const tick = () => { el.textContent = new Date().toLocaleTimeString('ko-KR', { hour12: false }); };
+    tick(); if (!clockTimer) clockTimer = setInterval(tick, 1000);
   }
 
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !document.getElementById('loginSection').classList.contains('d-none')) login();
-  });
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('loginView').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+  /* 진입 */
+  if (Auth.isLoggedIn()) showHome(); else showLogin();
 </script>
 </body>
 </html>
