@@ -15,8 +15,9 @@ import java.net.http.HttpClient;
 /**
  * RestClient 기반 AX 클라이언트 구현.
  *
- * 골격: 아직 수신·알림 흐름에 연결하지 않았다. 빈으로 주입 가능한 상태로 두고,
- * 실제 호출(Alert의 evidence/recommendation 채우기 등)은 다음 단계에서 연결한다.
+ * explainAnomaly는 AlertEnrichmentScheduler가 Alert 근거 보강에,
+ * diagnoseFreshness는 FreshnessScheduler가 침묵 원인진단에 호출한다.
+ * 둘 다 수신 hot path 밖(스케줄 트리거)이라 적재 지연에 영향이 없다.
  */
 @Slf4j
 @Component
