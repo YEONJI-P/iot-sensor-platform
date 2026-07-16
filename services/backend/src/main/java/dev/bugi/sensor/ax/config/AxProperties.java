@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 public class AxProperties {
 
     /** AX FastAPI 서비스 주소 */
-    private String baseUrl = "http://localhost:8000";
+    private String baseUrl = "http://localhost:23200";
 
     /** 연동 활성화 여부 (off면 AX 호출을 건너뛴다) */
     private boolean enabled = false;

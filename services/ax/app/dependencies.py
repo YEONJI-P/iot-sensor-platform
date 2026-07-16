@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     ax_provider: str = "echo"          # echo | gemini
     gemini_api_key: str = ""           # AX_PROVIDER=gemini 일 때만 필요
     model_name: str = "gemini-2.0-flash"
-    port: int = 8000
+    port: int = 23200
     request_timeout: float = 30.0
 
     model_config = SettingsConfigDict(

@@ -11,5 +11,8 @@ RUN uv sync --frozen --no-dev
 
 COPY app ./app
 
-EXPOSE 8000
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 포트는 PORT env로 주입(기본 23200). 하드코딩하지 않는다 — CLAUDE.md 포트 규칙.
+ENV PORT=23200
+EXPOSE 23200
+# shell form이라야 ${PORT}가 확장된다
+CMD uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT}

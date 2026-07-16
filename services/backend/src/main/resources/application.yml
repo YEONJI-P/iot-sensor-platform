@@ -41,7 +41,7 @@ jwt:
 
 # AX(Python) 서비스 연동
 ax:
-  base-url: ${AX_BASE_URL:http://localhost:8000}
+  base-url: ${AX_BASE_URL:http://localhost:23200}
   enabled: ${AX_ENABLED:false}
 
 ---

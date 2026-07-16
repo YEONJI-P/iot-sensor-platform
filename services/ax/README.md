@@ -38,13 +38,13 @@ cd ax
 uv sync
 
 # 개발 서버
-uv run uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 23200
 
 # 테스트 (echo provider, 키 불필요)
 uv run pytest
 ```
 
-Swagger UI: `http://localhost:8000/docs`
+Swagger UI: `http://localhost:23200/docs`
 
 ## provider 전환
 
