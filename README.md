@@ -219,6 +219,8 @@ erDiagram
 
 Swagger UI: `http://localhost:23100/swagger-ui/index.html` (컨테이너 데모는 `8080`)
 
+![Swagger UI](docs/images/swagger.png)
+
 ### Auth
 
 | Method | Endpoint | 설명 | 인증 |
@@ -290,6 +292,10 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 ---
 
 ## 7. 주요 기능
+
+실시간 대시보드 — SSE로 센서값이 실시간 갱신되고, 임계값 초과 알림에는 LLM(explain 서비스)이 생성한 근거·권고가 붙습니다.
+
+![센서 대시보드](docs/images/dashboard.png)
 
 ### 승인제 사용자 관리와 접근 제어
 
