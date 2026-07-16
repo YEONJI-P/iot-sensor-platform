@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
@@ -34,6 +35,13 @@ public class Device {
 
     private LocalDateTime lastSeenAt;
 
+    // 알람 상태(엣지 트리거 쿨다운). 초과 진입 시 true, 재발화 방지 여유 아래로 복귀 시 false.
+    // 매 판독마다 Alert를 만드는 스팸을 막고, 상태가 바뀌는 순간에만 발화한다.
+    private boolean inAlarm = false;
+
+    // 마지막 발화 시각(UTC). 신규 코드 → timestamptz + Instant + 주입 Clock 규칙 준수.
+    private Instant lastAlertAt;
+
     @Builder
     public Device(Zone zone, String name, DeviceType type, String location, Double thresholdValue, Integer expectedIntervalSeconds) {
         this.zone = zone;
@@ -55,7 +63,32 @@ public class Device {
         this.lastSeenAt = at;
     }
 
+    /** 임계 초과 진입: 알람 상태로 전환하고 발화 시각을 기록한다. */
+    public void enterAlarm(Instant at) {
+        this.inAlarm = true;
+        this.lastAlertAt = at;
+    }
+
+    /** 임계값 아래 여유 구간까지 복귀: 알람 해제(알림은 만들지 않는다). */
+    public void clearAlarm() {
+        this.inAlarm = false;
+    }
+
     public enum DeviceType {
-        TEMPERATURE, PRESSURE, CURRENT, POWER, ACCELERATION
+        TEMPERATURE("°C"),
+        PRESSURE("kPa"),
+        CURRENT("A"),
+        POWER("kW"),
+        ACCELERATION("m/s²");
+
+        private final String unit;
+
+        DeviceType(String unit) {
+            this.unit = unit;
+        }
+
+        public String getUnit() {
+            return unit;
+        }
     }
 }
