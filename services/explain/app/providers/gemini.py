@@ -1,10 +1,10 @@
-"""Gemini provider — Google Generative AI SDK 직접 호출.
+"""Gemini provider — Google Gen AI SDK(google-genai) 직접 호출.
 
 google 패키지는 지연 import 한다. echo만 쓰는 환경(테스트 포함)에서는
 이 모듈이 로드되지 않으므로 해당 패키지가 없어도 무방하다.
 
-주의(스켈레톤): 실제 사용 가능한 모델명·SDK 버전은 Google AI Studio에서
-최신 기준으로 확인 후 pyproject/.env를 맞춘다.
+구 google-generativeai(지원 종료) → 신규 google-genai 로 이전.
+실제 사용 가능한 모델명은 Google AI Studio에서 최신 기준으로 확인 후 .env(MODEL_NAME)를 맞춘다.
 """
 
 from .base import LLMProvider
@@ -19,23 +19,26 @@ class GeminiProvider(LLMProvider):
         self._model_name = model_name
         self._timeout = timeout
         self._api_key = api_key
-        self._model = None  # 첫 호출 시 지연 생성
+        self._client = None  # 첫 호출 시 지연 생성
 
-    def _ensure_model(self):
-        if self._model is None:
-            import google.generativeai as genai  # 지연 import
+    def _ensure_client(self):
+        if self._client is None:
+            from google import genai  # 지연 import (google-genai)
 
-            genai.configure(api_key=self._api_key)
-            self._model = genai.GenerativeModel(self._model_name)
-        return self._model
+            # 타임아웃은 ms 단위 HttpOptions 로 전달
+            self._client = genai.Client(
+                api_key=self._api_key,
+                http_options={"timeout": int(self._timeout * 1000)},
+            )
+        return self._client
 
     def generate(self, prompt: str) -> str:
-        model = self._ensure_model()
+        client = self._ensure_client()
         response = None
         try:
-            response = model.generate_content(
-                prompt,
-                request_options={"timeout": self._timeout},
+            response = client.models.generate_content(
+                model=self._model_name,
+                contents=prompt,
             )
             return (response.text or "").strip()
         except Exception as exc:  # noqa: BLE001 — 응답 없음/차단 시 폴백 반환
