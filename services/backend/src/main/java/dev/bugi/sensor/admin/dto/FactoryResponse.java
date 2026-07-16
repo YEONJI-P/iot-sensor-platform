@@ -3,14 +3,14 @@ package dev.bugi.sensor.admin.dto;
 import dev.bugi.sensor.factory.entity.Factory;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 public class FactoryResponse {
     private final Long id;
     private final String name;
     private final String description;
-    private final LocalDateTime createdAt;
+    private final Instant createdAt;
 
     public FactoryResponse(Factory org) {
         this.id = org.getId();

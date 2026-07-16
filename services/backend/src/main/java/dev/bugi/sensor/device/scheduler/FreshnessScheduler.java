@@ -15,8 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,16 +50,17 @@ public class FreshnessScheduler {
     private final AlertRepository alertRepository;
     private final AxClient axClient;
     private final AxProperties axProperties;
+    private final Clock clock;
 
     // 개별 침묵 디바운스: deviceId → 알림을 남긴 시점의 lastSeenAt(회복 시 새 episode).
-    private final Map<Long, LocalDateTime> diagnosedEpisodes = new ConcurrentHashMap<>();
+    private final Map<Long, Instant> diagnosedEpisodes = new ConcurrentHashMap<>();
     // 구역 전체 침묵 디바운스: 연속된 전체 침묵 구간에 1건만.
     private final Set<Long> cohortAlertedZones = ConcurrentHashMap.newKeySet();
 
     @Scheduled(fixedRateString = "60000")
     public void checkFreshness() {
         List<Device> devices = deviceRepository.findMonitoredWithZone();
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = clock.instant();
 
         // 관측된(lastSeenAt 존재) 장치를 구역별로, 그중 침묵 장치도 구역별로 모은다.
         Map<Long, List<Device>> seenByZone = new HashMap<>();
@@ -103,7 +105,7 @@ public class FreshnessScheduler {
     }
 
     // 구역 전체 동시 침묵 — 계획 정지/게이트웨이 장애 가능성. 대표 장치에 집계 1건(WARNING).
-    private void handleCohortSilence(List<Device> silentDevices, LocalDateTime now) {
+    private void handleCohortSilence(List<Device> silentDevices, Instant now) {
         Device rep = silentDevices.get(0);
         String zoneName = rep.getZone().getName();
         long elapsed = Duration.between(rep.getLastSeenAt(), now).getSeconds();
@@ -118,8 +120,8 @@ public class FreshnessScheduler {
     }
 
     // 이웃은 정상인데 혼자 침묵 — 개별 고장으로 보고 AX 원인진단 + CRITICAL.
-    private void handleIndividualSilence(Device device, LocalDateTime now) {
-        LocalDateTime lastSeenAt = device.getLastSeenAt();
+    private void handleIndividualSilence(Device device, Instant now) {
+        Instant lastSeenAt = device.getLastSeenAt();
         if (lastSeenAt.equals(diagnosedEpisodes.get(device.getId()))) {
             return;
         }
@@ -143,7 +145,7 @@ public class FreshnessScheduler {
     }
 
     // AX가 꺼져 있거나 호출이 실패해도 알림 자체는 남긴다(진단만 비는 채로).
-    private FreshnessDiagnoseResponse diagnose(Device device, LocalDateTime lastSeenAt,
+    private FreshnessDiagnoseResponse diagnose(Device device, Instant lastSeenAt,
                                                long elapsedSeconds, int failedRecent) {
         if (!axProperties.isEnabled()) {
             return null;

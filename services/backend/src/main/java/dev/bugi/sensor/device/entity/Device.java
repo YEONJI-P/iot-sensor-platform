@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Getter
@@ -32,7 +32,7 @@ public class Device {
 
     private Integer expectedIntervalSeconds;
 
-    private LocalDateTime lastSeenAt;
+    private Instant lastSeenAt;
 
     @Builder
     public Device(Zone zone, String name, DeviceType type, String location, Double thresholdValue, Integer expectedIntervalSeconds) {
@@ -51,7 +51,7 @@ public class Device {
         this.thresholdValue = thresholdValue;
     }
 
-    public void markSeen(LocalDateTime at) {
+    public void markSeen(Instant at) {
         this.lastSeenAt = at;
     }
 

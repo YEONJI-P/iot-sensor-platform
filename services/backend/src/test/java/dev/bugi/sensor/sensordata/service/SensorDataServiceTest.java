@@ -16,8 +16,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -35,6 +39,7 @@ class SensorDataServiceTest {
     @Mock org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock AccessControlService accessControlService; // GET Test
     @Mock UserRepository userRepository; // GET Test
+    @Spy Clock clock = Clock.fixed(Instant.parse("2026-07-16T00:00:00Z"), ZoneOffset.UTC);
 
     @InjectMocks
     SensorDataService sensorDataService;

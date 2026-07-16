@@ -3,7 +3,7 @@ package dev.bugi.sensor.admin.dto;
 import dev.bugi.sensor.factory.entity.Zone;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 public class ZoneResponse {
@@ -12,7 +12,7 @@ public class ZoneResponse {
     private final String factoryName;
     private final String name;
     private final String description;
-    private final LocalDateTime createdAt;
+    private final Instant createdAt;
 
     public ZoneResponse(Zone zone) {
         this.id = zone.getId();

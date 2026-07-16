@@ -26,7 +26,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.List;
 
 @Slf4j
@@ -44,6 +44,7 @@ public class SensorDataService {
     private final ApplicationEventPublisher eventPublisher;
     private final AccessControlService accessControlService;
     private final UserRepository userRepository;
+    private final Clock clock;
 
     @Transactional
     public void receive(SensorDataRequest request) {
@@ -64,7 +65,7 @@ public class SensorDataService {
                 .value(request.getValue())
                 .build();
         sensorDataRepository.save(sensorData);
-        device.markSeen(LocalDateTime.now());
+        device.markSeen(clock.instant());
         log.info("센서 데이터 저장 완료 - deviceId: {}, value: {}", request.getDeviceId(), request.getValue());
         // 실시간 전송은 커밋 후에 (SseBroadcastListener). 저장 트랜잭션 안에서 I/O를 하지 않는다.
         eventPublisher.publishEvent(
