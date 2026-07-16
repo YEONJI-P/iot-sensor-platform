@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @NoArgsConstructor
@@ -14,7 +14,7 @@ public class SensorDataResponse {
     private Long id;
     private Long deviceId;
     private Double value;
-    private LocalDateTime recordedAt;
+    private Instant recordedAt;
 
     public static SensorDataResponse from(SensorData data) {
         return new SensorDataResponse(

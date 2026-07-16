@@ -15,7 +15,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,6 +31,7 @@ public class AlertService {
     private final DeviceRepository deviceRepository;
     private final UserRepository userRepository;
     private final AccessControlService accessControlService;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public Page<AlertResponse> getAllAlerts(String employeeId, Pageable pageable) {
@@ -65,7 +68,7 @@ public class AlertService {
         Device device = getDevice(deviceId);
         accessControlService.assertCanAccessDevice(user, device);
 
-        LocalDateTime startDate = LocalDateTime.now().minusDays(days);
+        Instant startDate = clock.instant().minus(Duration.ofDays(days));
         List<Object[]> rows = alertRepository.findDailyCountByDeviceId(deviceId, startDate);
 
         List<DailyAlertCountResponse> result = new ArrayList<>();

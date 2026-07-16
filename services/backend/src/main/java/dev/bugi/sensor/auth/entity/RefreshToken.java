@@ -7,7 +7,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * Refresh Token 서버측 저장소.
@@ -27,20 +27,20 @@ public class RefreshToken {
     private String token;
 
     @Column(nullable = false)
-    private LocalDateTime expiresAt;
+    private Instant expiresAt;
 
-    public RefreshToken(String employeeId, String token, LocalDateTime expiresAt) {
+    public RefreshToken(String employeeId, String token, Instant expiresAt) {
         this.employeeId = employeeId;
         this.token = token;
         this.expiresAt = expiresAt;
     }
 
-    public void rotate(String token, LocalDateTime expiresAt) {
+    public void rotate(String token, Instant expiresAt) {
         this.token = token;
         this.expiresAt = expiresAt;
     }
 
-    public boolean isExpired(LocalDateTime now) {
+    public boolean isExpired(Instant now) {
         return expiresAt.isBefore(now);
     }
 }

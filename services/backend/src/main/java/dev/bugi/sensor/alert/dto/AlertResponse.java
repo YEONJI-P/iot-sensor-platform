@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @NoArgsConstructor
@@ -20,7 +20,7 @@ public class AlertResponse {
     private AlertSeverity severity;
     private String evidence;
     private String recommendation;
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     public static AlertResponse from(Alert alert){
         return new AlertResponse(

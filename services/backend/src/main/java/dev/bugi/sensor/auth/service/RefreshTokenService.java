@@ -6,19 +6,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
+    private final Clock clock;
 
     private static final Duration TTL = Duration.ofDays(7);
 
     @Transactional
     public void save(String employeeId, String refreshToken) {
-        LocalDateTime expiresAt = LocalDateTime.now().plus(TTL);
+        Instant expiresAt = clock.instant().plus(TTL);
         refreshTokenRepository.findById(employeeId)
                 .ifPresentOrElse(
                         existing -> existing.rotate(refreshToken, expiresAt),
@@ -29,7 +31,7 @@ public class RefreshTokenService {
     @Transactional(readOnly = true)
     public String get(String employeeId) {
         return refreshTokenRepository.findById(employeeId)
-                .filter(t -> !t.isExpired(LocalDateTime.now()))
+                .filter(t -> !t.isExpired(clock.instant()))
                 .map(RefreshToken::getToken)
                 .orElse(null);
     }
