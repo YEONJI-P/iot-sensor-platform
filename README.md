@@ -407,24 +407,24 @@ export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 cd services/backend
 ./gradlew bootRun
 
-# (선택) explain 분석 서비스만 컨테이너로: 루트에서 docker-compose up -d explain
+# (선택) explain 분석 서비스만 컨테이너로: 루트에서 docker compose up -d explain
 ```
 
 > 공용 Postgres 가 기본 접속정보와 다르면 `DB_URL`·`DB_USERNAME`·`DB_PASSWORD` 를 셸 env 로 재정의합니다. Spring 은 `.env` 를 자동 로드하지 않으므로 위 값은 셸/IDE 에 직접 주입합니다.
 
-### 컨테이너 데모 (`docker-compose up`)
+### 컨테이너 데모 (`docker compose up`)
 
 평가자·데모용. postgres + backend + explain 을 한 번에 기동한다. 공용 DB 불필요.
 
 ```bash
 cp .env.example .env          # JWT_SECRET 등 채우기 (compose 가 자동 로드)
-docker-compose up --build     # postgres + backend + explain
+docker compose up --build     # postgres + backend + explain
 
 # 초기 데이터(계정/장치/임계값) 적재
-docker-compose exec -T postgres psql -U sensor_monitor -d sensor_monitor < services/simulator/seed.sql
+docker compose exec -T postgres psql -U sensor_monitor -d sensor_monitor < services/simulator/seed.sql
 
 # (선택) 실측 CSV 리플레이 배치 — seed 프로파일
-docker-compose --profile seed run --rm simulator --all
+docker compose --profile seed run --rm simulator --all
 ```
 
 > 컨테이너 postgres 는 호스트 `5433` 에 노출됩니다(공용 `5432` 와 충돌 방지). backend 는 내부 네트워크(`postgres:5432`)로 접속하므로 `DB_*` 재정의는 필요 없습니다. 리플레이 데이터(`services/simulator/data/`)는 저장소에 포함되지 않으니 먼저 내려받아야 합니다.
@@ -446,7 +446,7 @@ cd services/backend
 http://localhost:23100/swagger-ui/index.html
 ```
 
-> bootRun 기본 포트는 `23100`. 컨테이너 데모(`docker-compose up`)는 호스트 `8080`을 유지합니다.
+> bootRun 기본 포트는 `23100`. 컨테이너 데모(`docker compose up`)는 호스트 `8080`을 유지합니다.
 
 ### 초기 데이터 투입 (`services/simulator/seed.sql`)
 
