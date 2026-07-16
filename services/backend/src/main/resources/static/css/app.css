@@ -29,6 +29,27 @@
   --shadow:    0 10px 34px rgba(0,0,0,.42);
 }
 
+/* ── 라이트 테마 (다크가 기본, 토글·OS 선호로 전환) ── */
+:root[data-theme="light"] {
+  --bg:        #e9ecf0;
+  --surface:   #ffffff;
+  --surface-2: #f2f4f7;
+  --surface-3: #e7eaef;
+  --line:      #d5dae1;
+  --line-soft: #e6e9ee;
+
+  --text:      #161b22;
+  --text-dim:  #515b68;
+  --text-faint:#8b94a1;
+
+  --brand:     #b45f0a;   /* 라이트에선 깊은 앰버(텍스트·채움 대비 확보) */
+  --brand-ink: #ffffff;
+  --signal:    #0e9384;
+  --alarm:     #d63a30;
+
+  --shadow:    0 8px 24px rgba(28,37,54,.10);
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -100,6 +121,9 @@ a { color: var(--brand); text-decoration: none; }
 .btn-ghost { background: transparent; }
 .btn-sm { padding: .38rem .7rem; font-size: .82rem; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+.theme-toggle { padding: .42rem .5rem; }
+.theme-toggle svg { display: block; }
+.theme-fab { position: fixed; top: 1.1rem; right: 1.1rem; z-index: 30; }
 
 /* ── 패널/카드 ── */
 .panel {
@@ -160,7 +184,8 @@ a { color: var(--brand); text-decoration: none; }
   padding: .7rem 1.4rem; background: color-mix(in srgb, var(--surface) 92%, transparent);
   border-bottom: 1px solid var(--line); backdrop-filter: blur(8px);
 }
-.brand { display: flex; align-items: center; gap: .6rem; font-weight: 600; letter-spacing: -.01em; }
+.brand { display: flex; align-items: center; gap: .6rem; font-weight: 600; letter-spacing: -.01em; color: var(--text); }
+a.brand:hover .mark { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 30%, transparent); }
 .brand .mark {
   width: 26px; height: 26px; border-radius: 7px; flex: none;
   background: var(--brand); color: var(--brand-ink);

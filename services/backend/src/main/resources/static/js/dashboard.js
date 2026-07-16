@@ -8,14 +8,26 @@
 
   const ALLOWED = ['SYSTEM_ADMIN', 'MEMBER', 'VIEWER'];
 
-  /* 산업 계기판 팔레트 (app.css 토큰과 정합) */
-  const C = {
-    signal: '#2dd4bf', // 틸 — 정상 텔레메트리
-    brand:  '#f2a63b', // 앰버 — 임계값
-    alarm:  '#ff5d52', // 레드 — 초과 지점
-    grid:   '#1f2630',
-    tick:   '#5c6775',
-  };
+  /* 산업 계기판 팔레트 — app.css 토큰에서 읽어 라이트/다크에 함께 반응 */
+  let C = { signal: '#2dd4bf', brand: '#f2a63b', alarm: '#ff5d52', grid: '#1f2630', tick: '#5c6775' };
+
+  function hexA(hex, a) {
+    const h = hex.replace('#', '').trim();
+    const n = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+    const r = parseInt(n.slice(0, 2), 16), g = parseInt(n.slice(2, 4), 16), b = parseInt(n.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  function readPalette() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = (name, fb) => (cs.getPropertyValue(name).trim() || fb);
+    return {
+      signal: g('--signal', '#2dd4bf'),
+      brand:  g('--brand',  '#f2a63b'),
+      alarm:  g('--alarm',  '#ff5d52'),
+      grid:   g('--line-soft', '#1f2630'),
+      tick:   g('--text-faint', '#5c6775'),
+    };
+  }
 
   const MAX_POINTS = 50;
 
@@ -129,7 +141,7 @@
             label: '센서값',
             data: [],
             borderColor: C.signal,
-            backgroundColor: 'rgba(45,212,191,.08)',
+            backgroundColor: hexA(C.signal, .08),
             borderWidth: 2,
             pointRadius: 3,
             pointHoverRadius: 5,
@@ -166,7 +178,7 @@
         datasets: [{
           label: '알림 건수',
           data: [],
-          backgroundColor: 'rgba(255,93,82,.6)',
+          backgroundColor: hexA(C.alarm, .6),
           borderColor: C.alarm,
           borderWidth: 1,
           borderRadius: 4,
@@ -181,6 +193,26 @@
       },
     });
   }
+
+  /* 테마 전환 시 차트 색을 토큰 기준으로 다시 칠한다 (캔버스는 CSS를 못 읽어 수동 갱신) */
+  function applyPalette() {
+    if (!lineChart || !barChart) return;
+    C = readPalette();
+    const l0 = lineChart.data.datasets[0], l1 = lineChart.data.datasets[1];
+    l0.borderColor = C.signal;
+    l0.backgroundColor = hexA(C.signal, .08);
+    l0.pointBackgroundColor = l0.data.map(pointColor);
+    l1.borderColor = C.brand;
+    barChart.data.datasets[0].borderColor = C.alarm;
+    barChart.data.datasets[0].backgroundColor = hexA(C.alarm, .6);
+    [lineChart, barChart].forEach((ch) => {
+      ch.options.scales.x.ticks.color = C.tick; ch.options.scales.x.grid.color = C.grid;
+      ch.options.scales.y.ticks.color = C.tick; ch.options.scales.y.grid.color = C.grid;
+    });
+    lineChart.options.plugins.legend.labels.color = C.tick;
+    lineChart.update(); barChart.update();
+  }
+  window.addEventListener('sm-theme-change', applyPalette);
 
   function pointColor(v) {
     return (currentThreshold != null && num(v) != null && v > currentThreshold) ? C.alarm : C.signal;
@@ -220,6 +252,12 @@
       );
     });
     sel.innerHTML = opts.join('');
+
+    // 첫 채널 자동 선택 — 진입 즉시 데이터가 보이게 (빈 화면 방지)
+    if (sel.options.length > 1) {
+      sel.selectedIndex = 1;
+      onDeviceChange();
+    }
   }
 
   /* ── 대시보드 리셋(미선택 상태) ── */
@@ -303,6 +341,11 @@
     $('roWeekCount').textContent = total.toLocaleString('ko-KR');
     $('roWeekLamp').className = total > 0 ? 'lamp warn' : 'lamp ok';
 
+    // 오늘(마지막 날) 알림 수 — 리드아웃 상단 카드
+    const today = data.length ? (num(data[data.length - 1].count) || 0) : 0;
+    $('roAlertCount').textContent = today.toLocaleString('ko-KR');
+    $('roAlertLamp').className = today > 0 ? 'lamp warn' : 'lamp ok';
+
     barChart.data.labels = data.map((d) => (d.date ? String(d.date).substring(5) : ''));
     barChart.data.datasets[0].data = data.map((d) => num(d.count) || 0);
     barChart.update();
@@ -317,9 +360,6 @@
     let alerts;
     try { alerts = await res.json(); } catch { return; }
     if (!Array.isArray(alerts)) return;
-
-    $('roAlertCount').textContent = alerts.length >= 20 ? '20+' : String(alerts.length);
-    $('roAlertLamp').className = alerts.length > 0 ? 'lamp warn' : 'lamp ok';
 
     const tbody = $('alertBody');
     if (alerts.length === 0) {
@@ -385,14 +425,10 @@
     if (placeholder) tbody.innerHTML = '';
     tbody.insertAdjacentHTML('afterbegin', alertRowHtml(a));
 
-    // 리드아웃 대략 갱신
-    const cur = $('roAlertCount').textContent;
-    if (cur !== '20+') {
-      const n = parseInt(cur, 10);
-      const next = isNaN(n) ? 1 : n + 1;
-      $('roAlertCount').textContent = next >= 20 ? '20+' : String(next);
-      $('roAlertLamp').className = 'lamp warn';
-    }
+    // 오늘 알림 카운트 +1 (라이브)
+    const n = parseInt($('roAlertCount').textContent.replace(/[^\d]/g, ''), 10);
+    $('roAlertCount').textContent = (isNaN(n) ? 1 : n + 1).toLocaleString('ko-KR');
+    $('roAlertLamp').className = 'lamp warn';
   }
 
   /* ── SSE 스트림 ── */
@@ -444,6 +480,7 @@
     }
 
     $('dash').classList.remove('hidden');
+    C = readPalette();
     initCharts();
     $('deviceSelect').addEventListener('change', onDeviceChange);
 
