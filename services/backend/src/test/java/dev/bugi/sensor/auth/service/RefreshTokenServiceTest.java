@@ -51,8 +51,7 @@ public class RefreshTokenServiceTest {
 
         refreshTokenService.save("EMP001", "new_token");
 
-        // 기존 행을 덮어쓰므로 save(insert) 호출 없이 엔티티만 회전
-        verify(refreshTokenRepository, never()).save(any());
+        // 기존 엔티티의 토큰이 새 값으로 회전된다(저장 방식은 dirty checking이라 검증 안 함).
         assertThat(existing.getToken()).isEqualTo("new_token");
     }
 

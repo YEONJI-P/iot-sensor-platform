@@ -19,8 +19,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -33,7 +31,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class FreshnessSchedulerTest {
 
     @Mock DeviceStatusRepository deviceStatusRepository;
@@ -49,10 +46,11 @@ class FreshnessSchedulerTest {
     private DeviceStatus device(long id, long zoneId, long silentSeconds) {
         Zone zone = mock(Zone.class);
         when(zone.getId()).thenReturn(zoneId);
-        when(zone.getName()).thenReturn("Z" + zoneId);
+        // 이름·id 는 알림(코호트/개별)을 만드는 경로에서만 읽히므로 정상 시나리오에선 미사용.
+        lenient().when(zone.getName()).thenReturn("Z" + zoneId);
         Device device = mock(Device.class);
-        when(device.getId()).thenReturn(id);
-        when(device.getName()).thenReturn("dev" + id);
+        lenient().when(device.getId()).thenReturn(id);
+        lenient().when(device.getName()).thenReturn("dev" + id);
         when(device.getZone()).thenReturn(zone);
         when(device.getExpectedIntervalSeconds()).thenReturn(10);
         DeviceStatus status = mock(DeviceStatus.class);
@@ -65,7 +63,7 @@ class FreshnessSchedulerTest {
     private DeviceStatus healthy(long id, long zoneId) { return device(id, zoneId, 2); }
 
     @Test
-    void 혼자_침묵하면_AX진단이_담긴_CRITICAL() {
+    void 혼자_침묵하면_explain진단이_담긴_CRITICAL() {
         DeviceStatus d1 = silent(1, 100);
         when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1));
         when(explainProperties.isEnabled()).thenReturn(true);
@@ -100,7 +98,7 @@ class FreshnessSchedulerTest {
     }
 
     @Test
-    void 구역_전체가_동시_침묵하면_WARNING_집계_1건_AX호출없음() {
+    void 구역_전체가_동시_침묵하면_WARNING_집계_1건_explain호출없음() {
         // 두 장치 모두 침묵 = 계획정지/게이트웨이 가능성 → 장치별 CRITICAL 대신 구역 1건.
         DeviceStatus d1 = silent(1, 100), d2 = silent(2, 100);
         when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1, d2));
@@ -161,6 +159,52 @@ class FreshnessSchedulerTest {
         scheduler.checkFreshness();
 
         verifyNoInteractions(alertRepository, explainClient);
+    }
+
+    @Test
+    void 경과가_기대주기와_정확히_같으면_정상() {
+        // elapsed > expected 만 침묵. elapsed == expected(10s) 는 경계 안쪽 → 알림 없음.
+        DeviceStatus d1 = device(1, 100, 10);
+        when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1));
+
+        scheduler.checkFreshness();
+
+        verifyNoInteractions(alertRepository, explainClient);
+    }
+
+    @Test
+    void 일부만_침묵하면_침묵한_장치들만_개별_CRITICAL() {
+        // 3대 중 2대 침묵(silent < seen) → 구역 집계가 아니라 침묵한 2대 각각 개별 처리.
+        DeviceStatus d1 = silent(1, 100), d2 = silent(2, 100), d3 = healthy(3, 100);
+        when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1, d2, d3));
+        when(explainProperties.isEnabled()).thenReturn(true);
+        when(explainClient.diagnoseFreshness(any())).thenReturn(new FreshnessDiagnoseResponse("c", "r", "echo"));
+
+        scheduler.checkFreshness();
+
+        ArgumentCaptor<Alert> captor = ArgumentCaptor.forClass(Alert.class);
+        verify(alertRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .allMatch(a -> a.getSeverity() == AlertSeverity.CRITICAL);
+        verify(explainClient, times(2)).diagnoseFreshness(any());
+    }
+
+    @Test
+    void explain호출이_실패해도_진단없이_알림은_저장된다() {
+        // diagnose()의 try-catch(의도적 방어) 경로: 예외가 나도 evidence=null 로 CRITICAL 저장.
+        DeviceStatus d1 = silent(1, 100);
+        when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1));
+        when(explainProperties.isEnabled()).thenReturn(true);
+        when(explainClient.diagnoseFreshness(any())).thenThrow(new RuntimeException("explain 다운"));
+
+        scheduler.checkFreshness();
+
+        ArgumentCaptor<Alert> captor = ArgumentCaptor.forClass(Alert.class);
+        verify(alertRepository).save(captor.capture());
+        Alert alert = captor.getValue();
+        assertThat(alert.getSeverity()).isEqualTo(AlertSeverity.CRITICAL);
+        assertThat(alert.getEvidence()).isNull();
+        assertThat(alert.getRecommendation()).isNull();
     }
 
     @Test
