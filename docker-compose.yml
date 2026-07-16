@@ -37,7 +37,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/sensor_monitor
       DB_USERNAME: sensor_monitor
       DB_PASSWORD: sensor_monitor
-      EXPLAIN_BASE_URL: http://explain:23200
+      EXPLAIN_BASE_URL: http://explain:8000
     ports:
       - "8080:8080"
 
@@ -48,8 +48,11 @@ services:
     env_file:
       - path: ./services/explain/.env
         required: false
+    environment:
+      # 데모는 호스트 8000 유지 — 앱 기본 포트(23200)를 8000으로 핀 고정. env_file 보다 우선 적용됨.
+      PORT: 8000
     ports:
-      - "23200:23200"
+      - "8000:8000"
 
   # 실측 CSV 리플레이 배치. 상시 서비스가 아니라 seed 프로파일에서만 뜬다.
   #   docker-compose --profile seed run --rm simulator --all
