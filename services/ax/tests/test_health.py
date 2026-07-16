@@ -6,14 +6,14 @@
 from fastapi.testclient import TestClient
 
 
-def test_health_returns_ok():
-    """헬스 엔드포인트가 200/ok를 반환한다."""
+def test_health_returns_up():
+    """헬스 엔드포인트가 200/UP을 반환한다 (감시 규약: status == "UP")."""
     from app.main import app
 
     client = TestClient(app)
     res = client.get("/health")
     assert res.status_code == 200
-    assert res.json() == {"status": "ok"}
+    assert res.json() == {"status": "UP"}
 
 
 def test_explain_anomaly_with_echo_provider():

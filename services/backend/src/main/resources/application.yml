@@ -19,6 +19,15 @@ spring:
       # 시각 필드를 epoch 숫자가 아닌 ISO-8601 문자열로 직렬화 (Instant는 끝에 Z 부착)
       write-dates-as-timestamps: false
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
 springdoc:
   swagger-ui:
     path: /swagger-ui/index.html

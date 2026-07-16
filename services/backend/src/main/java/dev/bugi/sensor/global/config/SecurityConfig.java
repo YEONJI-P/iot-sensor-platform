@@ -41,6 +41,9 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**")
                         .permitAll()
+                        // health 감시용 — 상태만 노출(show-details: never)
+                        .requestMatchers(HttpMethod.GET, "/actuator/health")
+                        .permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/sensor-data","/auth/refresh")
                         .permitAll()
 

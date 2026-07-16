@@ -50,5 +50,9 @@ app.include_router(freshness.router)
 
 @app.get("/health", tags=["meta"])
 def health() -> dict[str, str]:
-    """헬스 체크 — 컨테이너 liveness 용도."""
-    return {"status": "ok"}
+    """헬스 체크 — 컨테이너 liveness·감시 대시보드 용도.
+
+    status 값은 Spring actuator 규약(UP/DOWN)에 맞춘다 — 감시하는 쪽이
+    서비스별 분기 없이 `status == "UP"` 하나로 판정할 수 있게.
+    """
+    return {"status": "UP"}
