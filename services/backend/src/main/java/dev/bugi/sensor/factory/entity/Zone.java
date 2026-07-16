@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
@@ -32,6 +33,9 @@ public class Zone {
     @CreatedDate
     @Column(updatable = false)
     private Instant createdAt;
+
+    @LastModifiedDate
+    private Instant updatedAt;
 
     @Builder
     public Zone(Factory factory, String name, String description) {
