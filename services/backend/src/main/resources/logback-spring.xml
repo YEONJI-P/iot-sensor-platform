@@ -7,7 +7,7 @@
   파일 분할:
     app.log      INFO 이상 전체
     error.log    WARN/ERROR만
-    pipeline.log 수신·이상판정·AX 연동 흐름만(도메인 로거를 별도 라우팅)
+    pipeline.log 수신·이상판정·explain 연동 흐름만(도메인 로거를 별도 라우팅)
 -->
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
@@ -70,11 +70,11 @@
         <logger name="dev.bugi.sensor.sensordata" level="INFO">
             <appender-ref ref="PIPELINE_FILE"/>
         </logger>
-        <!-- AX 연동(알림 근거 보강) -->
+        <!-- explain 연동(알림 근거 보강) -->
         <logger name="dev.bugi.sensor.alert.scheduler" level="INFO">
             <appender-ref ref="PIPELINE_FILE"/>
         </logger>
-        <logger name="dev.bugi.sensor.ax" level="INFO">
+        <logger name="dev.bugi.sensor.explain" level="INFO">
             <appender-ref ref="PIPELINE_FILE"/>
         </logger>
 

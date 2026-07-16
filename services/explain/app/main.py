@@ -2,8 +2,8 @@
 
 라우트 구성:
 - GET  /health                : 헬스 체크
-- POST /ax/explain-anomaly     : 이상 근거·권고 생성 (spine① 이상)
-- POST /ax/diagnose-freshness  : 데이터 끊김 원인 진단 (spine② 데이터 안 옴)
+- POST /explain/anomaly        : 이상 근거·권고 생성 (spine① 이상)
+- POST /explain/freshness      : 데이터 끊김 원인 진단 (spine② 데이터 안 옴)
 - GET  /docs                   : Swagger UI
 
 이상 탐지 자체는 Spring이 규칙으로 수행하고, 이 서비스는 그 결과에
@@ -25,7 +25,7 @@ logging.basicConfig(
 )
 
 app = FastAPI(
-    title="IoT Sensor Platform — AX",
+    title="IoT Sensor Platform — explain",
     description="센서 이상 근거·권고 생성 및 데이터 끊김 원인 진단 서비스",
     version="0.1.0",
 )

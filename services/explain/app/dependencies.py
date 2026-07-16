@@ -16,8 +16,8 @@ from .providers.echo import EchoProvider
 class Settings(BaseSettings):
     """환경변수 기반 설정. .env 가 있으면 자동 로드한다."""
 
-    ax_provider: str = "echo"          # echo | gemini
-    gemini_api_key: str = ""           # AX_PROVIDER=gemini 일 때만 필요
+    explain_provider: str = "echo"     # echo | gemini
+    gemini_api_key: str = ""           # EXPLAIN_PROVIDER=gemini 일 때만 필요
     model_name: str = "gemini-2.0-flash"
     port: int = 23200
     request_timeout: float = 30.0
@@ -40,11 +40,11 @@ def get_settings() -> Settings:
 def get_provider() -> LLMProvider:
     """LLM provider 싱글톤.
 
-    AX_PROVIDER 값에 따라 구현체를 고른다. gemini 구현체는 google 패키지를
+    EXPLAIN_PROVIDER 값에 따라 구현체를 고른다. gemini 구현체는 google 패키지를
     지연 import 하므로, echo만 쓰는 환경에서는 해당 패키지가 없어도 된다.
     """
     settings = get_settings()
-    if settings.ax_provider == "gemini":
+    if settings.explain_provider == "gemini":
         from .providers.gemini import GeminiProvider
 
         return GeminiProvider(

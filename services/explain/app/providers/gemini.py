@@ -15,7 +15,7 @@ class GeminiProvider(LLMProvider):
 
     def __init__(self, api_key: str, model_name: str, timeout: float = 30.0) -> None:
         if not api_key:
-            raise ValueError("GEMINI_API_KEY가 필요합니다 (AX_PROVIDER=gemini).")
+            raise ValueError("GEMINI_API_KEY가 필요합니다 (EXPLAIN_PROVIDER=gemini).")
         self._model_name = model_name
         self._timeout = timeout
         self._api_key = api_key

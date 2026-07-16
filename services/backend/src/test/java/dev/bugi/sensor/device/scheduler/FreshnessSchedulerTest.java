@@ -3,10 +3,10 @@ package dev.bugi.sensor.device.scheduler;
 import dev.bugi.sensor.alert.entity.Alert;
 import dev.bugi.sensor.alert.entity.AlertSeverity;
 import dev.bugi.sensor.alert.repository.AlertRepository;
-import dev.bugi.sensor.ax.client.AxClient;
-import dev.bugi.sensor.ax.config.AxProperties;
-import dev.bugi.sensor.ax.dto.FreshnessDiagnoseRequest;
-import dev.bugi.sensor.ax.dto.FreshnessDiagnoseResponse;
+import dev.bugi.sensor.explain.client.ExplainClient;
+import dev.bugi.sensor.explain.config.ExplainProperties;
+import dev.bugi.sensor.explain.dto.FreshnessDiagnoseRequest;
+import dev.bugi.sensor.explain.dto.FreshnessDiagnoseResponse;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.DeviceStatus;
 import dev.bugi.sensor.device.repository.DeviceStatusRepository;
@@ -39,8 +39,8 @@ class FreshnessSchedulerTest {
     @Mock DeviceStatusRepository deviceStatusRepository;
     @Mock FailedReadingRepository failedReadingRepository;
     @Mock AlertRepository alertRepository;
-    @Mock AxClient axClient;
-    @Mock AxProperties axProperties;
+    @Mock ExplainClient explainClient;
+    @Mock ExplainProperties explainProperties;
     private static final Instant NOW = Instant.parse("2026-07-16T00:00:00Z");
     @Spy Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
@@ -68,9 +68,9 @@ class FreshnessSchedulerTest {
     void 혼자_침묵하면_AX진단이_담긴_CRITICAL() {
         DeviceStatus d1 = silent(1, 100);
         when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1));
-        when(axProperties.isEnabled()).thenReturn(true);
+        when(explainProperties.isEnabled()).thenReturn(true);
         when(failedReadingRepository.countByDeviceIdAndCreatedAtAfter(eq(1L), any())).thenReturn(0);
-        when(axClient.diagnoseFreshness(any(FreshnessDiagnoseRequest.class)))
+        when(explainClient.diagnoseFreshness(any(FreshnessDiagnoseRequest.class)))
                 .thenReturn(new FreshnessDiagnoseResponse("소스 침묵 의심", "수신 자체가 끊긴 것으로 보임", "echo"));
 
         scheduler.checkFreshness();
@@ -88,15 +88,15 @@ class FreshnessSchedulerTest {
         // 같은 구역에 정상 수신 중인 이웃이 있으므로 게이트웨이·사이트는 정상 → 개별 고장.
         DeviceStatus d1 = silent(1, 100), d2 = healthy(2, 100);
         when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1, d2));
-        when(axProperties.isEnabled()).thenReturn(true);
-        when(axClient.diagnoseFreshness(any())).thenReturn(new FreshnessDiagnoseResponse("c", "r", "echo"));
+        when(explainProperties.isEnabled()).thenReturn(true);
+        when(explainClient.diagnoseFreshness(any())).thenReturn(new FreshnessDiagnoseResponse("c", "r", "echo"));
 
         scheduler.checkFreshness();
 
         ArgumentCaptor<Alert> captor = ArgumentCaptor.forClass(Alert.class);
         verify(alertRepository).save(captor.capture());
         assertThat(captor.getValue().getSeverity()).isEqualTo(AlertSeverity.CRITICAL);
-        verify(axClient).diagnoseFreshness(any());
+        verify(explainClient).diagnoseFreshness(any());
     }
 
     @Test
@@ -111,7 +111,7 @@ class FreshnessSchedulerTest {
         verify(alertRepository, times(1)).save(captor.capture());
         assertThat(captor.getValue().getSeverity()).isEqualTo(AlertSeverity.WARNING);
         assertThat(captor.getValue().getMessage()).contains("구역 전체");
-        verify(axClient, never()).diagnoseFreshness(any());
+        verify(explainClient, never()).diagnoseFreshness(any());
     }
 
     @Test
@@ -129,8 +129,8 @@ class FreshnessSchedulerTest {
     void 개별_침묵은_틱마다_재알림하지_않는다() {
         DeviceStatus d1 = silent(1, 100);
         when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1));
-        when(axProperties.isEnabled()).thenReturn(true);
-        when(axClient.diagnoseFreshness(any())).thenReturn(new FreshnessDiagnoseResponse("c", "r", "echo"));
+        when(explainProperties.isEnabled()).thenReturn(true);
+        when(explainClient.diagnoseFreshness(any())).thenReturn(new FreshnessDiagnoseResponse("c", "r", "echo"));
 
         scheduler.checkFreshness();
         scheduler.checkFreshness();
@@ -139,14 +139,14 @@ class FreshnessSchedulerTest {
     }
 
     @Test
-    void AX비활성이면_진단없이_알림만() {
+    void explain비활성이면_진단없이_알림만() {
         DeviceStatus d1 = silent(1, 100);
         when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1));
-        when(axProperties.isEnabled()).thenReturn(false);
+        when(explainProperties.isEnabled()).thenReturn(false);
 
         scheduler.checkFreshness();
 
-        verify(axClient, never()).diagnoseFreshness(any());
+        verify(explainClient, never()).diagnoseFreshness(any());
         ArgumentCaptor<Alert> captor = ArgumentCaptor.forClass(Alert.class);
         verify(alertRepository).save(captor.capture());
         assertThat(captor.getValue().getEvidence()).isNull();
@@ -160,7 +160,7 @@ class FreshnessSchedulerTest {
 
         scheduler.checkFreshness();
 
-        verifyNoInteractions(alertRepository, axClient);
+        verifyNoInteractions(alertRepository, explainClient);
     }
 
     @Test
@@ -173,6 +173,6 @@ class FreshnessSchedulerTest {
 
         scheduler.checkFreshness();
 
-        verifyNoInteractions(alertRepository, axClient);
+        verifyNoInteractions(alertRepository, explainClient);
     }
 }

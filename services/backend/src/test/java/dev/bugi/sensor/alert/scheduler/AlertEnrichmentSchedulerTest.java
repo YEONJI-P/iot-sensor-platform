@@ -2,10 +2,10 @@ package dev.bugi.sensor.alert.scheduler;
 
 import dev.bugi.sensor.alert.dto.EnrichTarget;
 import dev.bugi.sensor.alert.repository.AlertRepository;
-import dev.bugi.sensor.ax.client.AxClient;
-import dev.bugi.sensor.ax.config.AxProperties;
-import dev.bugi.sensor.ax.dto.AnomalyExplainRequest;
-import dev.bugi.sensor.ax.dto.AnomalyExplainResponse;
+import dev.bugi.sensor.explain.client.ExplainClient;
+import dev.bugi.sensor.explain.config.ExplainProperties;
+import dev.bugi.sensor.explain.dto.AnomalyExplainRequest;
+import dev.bugi.sensor.explain.dto.AnomalyExplainResponse;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.sensordata.entity.SensorData;
 import dev.bugi.sensor.sensordata.repository.SensorDataRepository;
@@ -29,8 +29,8 @@ class AlertEnrichmentSchedulerTest {
 
     @Mock AlertRepository alertRepository;
     @Mock SensorDataRepository sensorDataRepository;
-    @Mock AxClient axClient;
-    @Mock AxProperties axProperties;
+    @Mock ExplainClient explainClient;
+    @Mock ExplainProperties explainProperties;
 
     @Captor ArgumentCaptor<AnomalyExplainRequest> requestCaptor;
 
@@ -50,24 +50,24 @@ class AlertEnrichmentSchedulerTest {
     }
 
     @Test
-    void AX_요청에_센서_단위가_포함된다() {
-        when(axProperties.isEnabled()).thenReturn(true);
+    void explain_요청에_센서_단위가_포함된다() {
+        when(explainProperties.isEnabled()).thenReturn(true);
         when(alertRepository.findEnrichTargets(any())).thenReturn(List.of(target(1416.0)));
         when(sensorDataRepository.findByDeviceIdOrderByRecordedAtDesc(eq(7L), any()))
                 .thenReturn(List.of());
-        when(axClient.explainAnomaly(any()))
+        when(explainClient.explainAnomaly(any()))
                 .thenReturn(new AnomalyExplainResponse("근거", "권고", "WARNING", "echo"));
 
         scheduler.enrichAlerts();
 
-        verify(axClient).explainAnomaly(requestCaptor.capture());
+        verify(explainClient).explainAnomaly(requestCaptor.capture());
         assertThat(requestCaptor.getValue().unit())
                 .isEqualTo(Device.DeviceType.TEMPERATURE.getUnit());
     }
 
     @Test
     void 윈도우_지표_초과율_추세_변동성이_요청에_실린다() {
-        when(axProperties.isEnabled()).thenReturn(true);
+        when(explainProperties.isEnabled()).thenReturn(true);
         when(alertRepository.findEnrichTargets(any())).thenReturn(List.of(target(100.0)));
         // 임계 100 기준: 10건 중 4건 초과 → 초과율 0.4, 뒤로 갈수록 상승 추세.
         when(sensorDataRepository.findByDeviceIdOrderByRecordedAtDesc(eq(7L), any()))
@@ -75,12 +75,12 @@ class AlertEnrichmentSchedulerTest {
                         reading(130), reading(120), reading(110), reading(105),
                         reading(95), reading(90), reading(85), reading(80),
                         reading(75), reading(70)));
-        when(axClient.explainAnomaly(any()))
+        when(explainClient.explainAnomaly(any()))
                 .thenReturn(new AnomalyExplainResponse("근거", "권고", "WARNING", "echo"));
 
         scheduler.enrichAlerts();
 
-        verify(axClient).explainAnomaly(requestCaptor.capture());
+        verify(explainClient).explainAnomaly(requestCaptor.capture());
         AnomalyExplainRequest req = requestCaptor.getValue();
         assertThat(req.breachRate()).isEqualTo(0.4, within(1e-9));
         assertThat(req.trend()).isGreaterThan(0.0);      // 상승 추세
@@ -90,16 +90,16 @@ class AlertEnrichmentSchedulerTest {
 
     @Test
     void 표본_부족이면_지표는_null이고_보강은_계속된다() {
-        when(axProperties.isEnabled()).thenReturn(true);
+        when(explainProperties.isEnabled()).thenReturn(true);
         when(alertRepository.findEnrichTargets(any())).thenReturn(List.of(target(100.0)));
         when(sensorDataRepository.findByDeviceIdOrderByRecordedAtDesc(eq(7L), any()))
                 .thenReturn(List.of(reading(130), reading(120))); // MIN_SAMPLES 미만
-        when(axClient.explainAnomaly(any()))
+        when(explainClient.explainAnomaly(any()))
                 .thenReturn(new AnomalyExplainResponse("근거", "권고", "WARNING", "echo"));
 
         scheduler.enrichAlerts();
 
-        verify(axClient).explainAnomaly(requestCaptor.capture());
+        verify(explainClient).explainAnomaly(requestCaptor.capture());
         AnomalyExplainRequest req = requestCaptor.getValue();
         assertThat(req.breachRate()).isNull();
         assertThat(req.trend()).isNull();

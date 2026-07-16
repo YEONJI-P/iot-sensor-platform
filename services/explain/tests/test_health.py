@@ -22,7 +22,7 @@ def test_explain_anomaly_with_echo_provider():
 
     client = TestClient(app)
     res = client.post(
-        "/ax/explain-anomaly",
+        "/explain/anomaly",
         json={
             "deviceName": "온도센서-A1",
             "sensorType": "TEMPERATURE",
@@ -43,7 +43,7 @@ def test_explain_anomaly_includes_unit_in_evidence():
 
     client = TestClient(app)
     res = client.post(
-        "/ax/explain-anomaly",
+        "/explain/anomaly",
         json={
             "deviceName": "온도센서-A1",
             "sensorType": "TEMPERATURE",
@@ -62,7 +62,7 @@ def test_explain_anomaly_includes_window_metrics_in_evidence():
 
     client = TestClient(app)
     res = client.post(
-        "/ax/explain-anomaly",
+        "/explain/anomaly",
         json={
             "deviceName": "엔진1-온도",
             "sensorType": "TEMPERATURE",
@@ -84,5 +84,5 @@ def test_explain_anomaly_rejects_missing_value():
     from app.main import app
 
     client = TestClient(app)
-    res = client.post("/ax/explain-anomaly", json={"deviceName": "온도센서-A1"})
+    res = client.post("/explain/anomaly", json={"deviceName": "온도센서-A1"})
     assert res.status_code == 422

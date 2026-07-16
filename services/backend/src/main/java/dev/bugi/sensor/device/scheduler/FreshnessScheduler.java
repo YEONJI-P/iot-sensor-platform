@@ -3,10 +3,10 @@ package dev.bugi.sensor.device.scheduler;
 import dev.bugi.sensor.alert.entity.Alert;
 import dev.bugi.sensor.alert.entity.AlertSeverity;
 import dev.bugi.sensor.alert.repository.AlertRepository;
-import dev.bugi.sensor.ax.client.AxClient;
-import dev.bugi.sensor.ax.config.AxProperties;
-import dev.bugi.sensor.ax.dto.FreshnessDiagnoseRequest;
-import dev.bugi.sensor.ax.dto.FreshnessDiagnoseResponse;
+import dev.bugi.sensor.explain.client.ExplainClient;
+import dev.bugi.sensor.explain.config.ExplainProperties;
+import dev.bugi.sensor.explain.dto.FreshnessDiagnoseRequest;
+import dev.bugi.sensor.explain.dto.FreshnessDiagnoseResponse;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.DeviceStatus;
 import dev.bugi.sensor.device.repository.DeviceStatusRepository;
@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 침묵 = 고장으로 단정하지 않는다. 같은 구역(zone)의 여러 장치가 동시에 침묵하면
  * 개별 센서 고장이 아니라 사이트 단위 사건(계획 정지·게이트웨이/네트워크 장애)일 가능성이 커
  * 구역 1건으로 집계(WARNING)한다. 이웃이 정상 수신 중인데 혼자 침묵하면 개별 고장으로 보고
- * CRITICAL + AX 원인진단을 남긴다. 탐지는 규칙, 원인 설명만 LLM(수신 hot path 밖).
+ * CRITICAL + explain 원인진단을 남긴다. 탐지는 규칙, 원인 설명만 LLM(수신 hot path 밖).
  *
  * 한계: 이웃 없이 혼자 도는 장치가 정상적으로 비가동하는 경우는 여전히 개별 고장으로 잡힌다.
  * 이를 구분하려면 설비 가동상태/운영시간 모델이 필요(향후).
@@ -49,8 +49,8 @@ public class FreshnessScheduler {
     private final DeviceStatusRepository deviceStatusRepository;
     private final FailedReadingRepository failedReadingRepository;
     private final AlertRepository alertRepository;
-    private final AxClient axClient;
-    private final AxProperties axProperties;
+    private final ExplainClient explainClient;
+    private final ExplainProperties explainProperties;
     private final Clock clock;
 
     // 개별 침묵 디바운스: deviceId → 알림을 남긴 시점의 lastSeenAt(회복 시 새 episode).
@@ -122,7 +122,7 @@ public class FreshnessScheduler {
         alertRepository.save(alert);
     }
 
-    // 이웃은 정상인데 혼자 침묵 — 개별 고장으로 보고 AX 원인진단 + CRITICAL.
+    // 이웃은 정상인데 혼자 침묵 — 개별 고장으로 보고 explain 원인진단 + CRITICAL.
     private void handleIndividualSilence(DeviceStatus status, Instant now) {
         Device device = status.getDevice();
         Instant lastSeenAt = status.getLastSeenAt();
@@ -148,10 +148,10 @@ public class FreshnessScheduler {
         diagnosedEpisodes.put(device.getId(), lastSeenAt);
     }
 
-    // AX가 꺼져 있거나 호출이 실패해도 알림 자체는 남긴다(진단만 비는 채로).
+    // explain이 꺼져 있거나 호출이 실패해도 알림 자체는 남긴다(진단만 비는 채로).
     private FreshnessDiagnoseResponse diagnose(Device device, Instant lastSeenAt,
                                                long elapsedSeconds, int failedRecent) {
-        if (!axProperties.isEnabled()) {
+        if (!explainProperties.isEnabled()) {
             return null;
         }
         FreshnessDiagnoseRequest request = new FreshnessDiagnoseRequest(
@@ -162,9 +162,9 @@ public class FreshnessScheduler {
                 failedRecent
         );
         try {
-            return axClient.diagnoseFreshness(request);
+            return explainClient.diagnoseFreshness(request);
         } catch (Exception ex) {
-            log.warn("AX freshness 진단 실패 (deviceId={}): {}", device.getId(), ex.getMessage());
+            log.warn("explain freshness 진단 실패 (deviceId={}): {}", device.getId(), ex.getMessage());
             return null;
         }
     }

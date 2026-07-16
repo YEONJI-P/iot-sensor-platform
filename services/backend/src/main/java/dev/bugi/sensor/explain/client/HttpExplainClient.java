@@ -1,10 +1,10 @@
-package dev.bugi.sensor.ax.client;
+package dev.bugi.sensor.explain.client;
 
-import dev.bugi.sensor.ax.config.AxProperties;
-import dev.bugi.sensor.ax.dto.AnomalyExplainRequest;
-import dev.bugi.sensor.ax.dto.AnomalyExplainResponse;
-import dev.bugi.sensor.ax.dto.FreshnessDiagnoseRequest;
-import dev.bugi.sensor.ax.dto.FreshnessDiagnoseResponse;
+import dev.bugi.sensor.explain.config.ExplainProperties;
+import dev.bugi.sensor.explain.dto.AnomalyExplainRequest;
+import dev.bugi.sensor.explain.dto.AnomalyExplainResponse;
+import dev.bugi.sensor.explain.dto.FreshnessDiagnoseRequest;
+import dev.bugi.sensor.explain.dto.FreshnessDiagnoseResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -13,7 +13,7 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 
 /**
- * RestClient 기반 AX 클라이언트 구현.
+ * RestClient 기반 explain 클라이언트 구현.
  *
  * explainAnomaly는 AlertEnrichmentScheduler가 Alert 근거 보강에,
  * diagnoseFreshness는 FreshnessScheduler가 침묵 원인진단에 호출한다.
@@ -21,11 +21,11 @@ import java.net.http.HttpClient;
  */
 @Slf4j
 @Component
-public class HttpAxClient implements AxClient {
+public class HttpExplainClient implements ExplainClient {
 
     private final RestClient restClient;
 
-    public HttpAxClient(AxProperties properties) {
+    public HttpExplainClient(ExplainProperties properties) {
         // FastAPI(uvicorn/h11)는 HTTP/1.1만 지원 — 기본 JDK HttpClient의 HTTP/2 업그레이드(h2c)
         // 시도가 "Invalid HTTP request"로 거부되므로 HTTP/1.1로 고정한다.
         HttpClient httpClient = HttpClient.newBuilder()
@@ -33,7 +33,7 @@ public class HttpAxClient implements AxClient {
                 .connectTimeout(java.time.Duration.ofSeconds(2))
                 .build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-        // AX request_timeout(30초)보다 약간 크게 잡아 서버 응답 대기 중 조기 절단을 방지한다.
+        // explain request_timeout(30초)보다 약간 크게 잡아 서버 응답 대기 중 조기 절단을 방지한다.
         factory.setReadTimeout(java.time.Duration.ofSeconds(35));
         this.restClient = RestClient.builder()
                 .requestFactory(factory)
@@ -44,7 +44,7 @@ public class HttpAxClient implements AxClient {
     @Override
     public AnomalyExplainResponse explainAnomaly(AnomalyExplainRequest request) {
         return restClient.post()
-                .uri("/ax/explain-anomaly")
+                .uri("/explain/anomaly")
                 .body(request)
                 .retrieve()
                 .body(AnomalyExplainResponse.class);
@@ -53,7 +53,7 @@ public class HttpAxClient implements AxClient {
     @Override
     public FreshnessDiagnoseResponse diagnoseFreshness(FreshnessDiagnoseRequest request) {
         return restClient.post()
-                .uri("/ax/diagnose-freshness")
+                .uri("/explain/freshness")
                 .body(request)
                 .retrieve()
                 .body(FreshnessDiagnoseResponse.class);

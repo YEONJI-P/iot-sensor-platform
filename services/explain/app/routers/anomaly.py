@@ -1,4 +1,4 @@
-"""이상 근거·권고 생성 /ax/explain-anomaly 라우트 (spine① 이상).
+"""이상 근거·권고 생성 /explain/anomaly 라우트 (spine① 이상).
 
 흐름: Spring이 규칙으로 이상을 판정해 신호를 보내면,
   1) 신호를 사람이 읽는 근거 문장으로 정리(규칙)
@@ -12,7 +12,7 @@ from ..dependencies import get_provider
 from ..providers.base import LLMProvider
 from ..schemas import AnomalyExplainRequest, AnomalyExplainResponse
 
-router = APIRouter(prefix="/ax", tags=["anomaly"])
+router = APIRouter(prefix="/explain", tags=["anomaly"])
 
 
 def _metrics_phrase(req: AnomalyExplainRequest) -> str:
@@ -56,7 +56,7 @@ def _build_prompt(req: AnomalyExplainRequest) -> str:
     return "\n".join(lines)
 
 
-@router.post("/explain-anomaly", response_model=AnomalyExplainResponse)
+@router.post("/anomaly", response_model=AnomalyExplainResponse)
 def explain_anomaly(
     req: AnomalyExplainRequest,
     provider: LLMProvider = Depends(get_provider),

@@ -1,4 +1,4 @@
-"""데이터 끊김 원인 진단 /ax/diagnose-freshness 라우트 (spine② 데이터 안 옴).
+"""데이터 끊김 원인 진단 /explain/freshness 라우트 (spine② 데이터 안 옴).
 
 freshness 신호(기대 주기 초과)와 실패 적재 유무를 규칙으로 종합해 1차 원인을
 가른 뒤, 사람이 읽는 원인 리포트를 LLM으로 생성한다. 규격변경 의심 vs 소스 침묵.
@@ -10,7 +10,7 @@ from ..dependencies import get_provider
 from ..providers.base import LLMProvider
 from ..schemas import FreshnessDiagnoseRequest, FreshnessDiagnoseResponse
 
-router = APIRouter(prefix="/ax", tags=["freshness"])
+router = APIRouter(prefix="/explain", tags=["freshness"])
 
 
 def _rule_cause(req: FreshnessDiagnoseRequest) -> str:
@@ -39,7 +39,7 @@ def _build_prompt(req: FreshnessDiagnoseRequest, cause: str) -> str:
     return "\n".join(lines)
 
 
-@router.post("/diagnose-freshness", response_model=FreshnessDiagnoseResponse)
+@router.post("/freshness", response_model=FreshnessDiagnoseResponse)
 def diagnose_freshness(
     req: FreshnessDiagnoseRequest,
     provider: LLMProvider = Depends(get_provider),

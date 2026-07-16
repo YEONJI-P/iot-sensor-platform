@@ -2,10 +2,10 @@ package dev.bugi.sensor.alert.scheduler;
 
 import dev.bugi.sensor.alert.dto.EnrichTarget;
 import dev.bugi.sensor.alert.repository.AlertRepository;
-import dev.bugi.sensor.ax.client.AxClient;
-import dev.bugi.sensor.ax.config.AxProperties;
-import dev.bugi.sensor.ax.dto.AnomalyExplainRequest;
-import dev.bugi.sensor.ax.dto.AnomalyExplainResponse;
+import dev.bugi.sensor.explain.client.ExplainClient;
+import dev.bugi.sensor.explain.config.ExplainProperties;
+import dev.bugi.sensor.explain.dto.AnomalyExplainRequest;
+import dev.bugi.sensor.explain.dto.AnomalyExplainResponse;
 import dev.bugi.sensor.sensordata.entity.SensorData;
 import dev.bugi.sensor.sensordata.repository.SensorDataRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,10 +18,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * evidence가 비어 있는 Alert를 주기적으로 AX 서비스로 보강한다.
- * 수신 hot path 밖(스케줄 트리거)에서만 AX를 호출한다.
+ * evidence가 비어 있는 Alert를 주기적으로 explain 서비스로 보강한다.
+ * 수신 hot path 밖(스케줄 트리거)에서만 explain을 호출한다.
  *
- * 외부 HTTP(AX) 호출은 트랜잭션 밖에서 수행한다. 트랜잭션을 열어둔 채로
+ * 외부 HTTP(explain) 호출은 트랜잭션 밖에서 수행한다. 트랜잭션을 열어둔 채로
  * 최대 20회 순차 HTTP 호출을 하면 DB 커넥션을 장기 점유하기 때문이다.
  * 읽기는 프로젝션(EnrichTarget)으로 즉시 값만 확보하고, 쓰기는 alert별로
  * findById/save 각각의 짧은 트랜잭션에서 처리한다.
@@ -38,12 +38,12 @@ public class AlertEnrichmentScheduler {
 
     private final AlertRepository alertRepository;
     private final SensorDataRepository sensorDataRepository;
-    private final AxClient axClient;
-    private final AxProperties axProperties;
+    private final ExplainClient explainClient;
+    private final ExplainProperties explainProperties;
 
     @Scheduled(fixedRateString = "30000")
     public void enrichAlerts() {
-        if (!axProperties.isEnabled()) {
+        if (!explainProperties.isEnabled()) {
             return;
         }
 
@@ -74,10 +74,10 @@ public class AlertEnrichmentScheduler {
             AnomalyExplainResponse response;
             try {
                 // 트랜잭션 밖에서 외부 HTTP 호출.
-                response = axClient.explainAnomaly(request);
+                response = explainClient.explainAnomaly(request);
             } catch (Exception e) {
-                // AX가 다운돼도 스케줄러가 죽지 않도록 개별 alert 실패는 무시하고 계속 진행한다.
-                log.warn("AX 알림 보강 실패 (alertId={}): {}", target.alertId(), e.getMessage());
+                // explain이 다운돼도 스케줄러가 죽지 않도록 개별 alert 실패는 무시하고 계속 진행한다.
+                log.warn("explain 알림 보강 실패 (alertId={}): {}", target.alertId(), e.getMessage());
                 continue;
             }
 

@@ -2,7 +2,7 @@ name: sensor-monitor
 
 services:
   # 데모용 DB. `docker-compose up` 시 함께 뜬다.
-  # 일상 개발에선 공용 Postgres 를 쓰므로, 전체 up 대신 `up ax` 처럼 선택 기동하면 이 서비스는 안 뜬다.
+  # 일상 개발에선 공용 Postgres 를 쓰므로, 전체 up 대신 `up explain` 처럼 선택 기동하면 이 서비스는 안 뜬다.
   postgres:
     image: postgres:15
     container_name: sensor-postgres
@@ -26,7 +26,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # 서비스 소속 설정(JWT_SECRET, AX_ENABLED 등)은 여기서 읽는다. cp services/backend/.env.example services/backend/.env
+    # 서비스 소속 설정(JWT_SECRET, EXPLAIN_ENABLED 등)은 여기서 읽는다. cp services/backend/.env.example services/backend/.env
     env_file:
       - path: ./services/backend/.env
         required: false
@@ -37,16 +37,16 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/sensor_monitor
       DB_USERNAME: sensor_monitor
       DB_PASSWORD: sensor_monitor
-      AX_BASE_URL: http://ax:23200
+      EXPLAIN_BASE_URL: http://explain:23200
     ports:
       - "8080:8080"
 
-  ax:
-    build: ./services/ax
-    container_name: sensor-ax
-    # 서비스 소속 설정(AX_PROVIDER, GEMINI_API_KEY, MODEL_NAME 등)은 여기서 읽는다. cp services/ax/.env.example services/ax/.env
+  explain:
+    build: ./services/explain
+    container_name: sensor-explain
+    # 서비스 소속 설정(EXPLAIN_PROVIDER, GEMINI_API_KEY, MODEL_NAME 등)은 여기서 읽는다. cp services/explain/.env.example services/explain/.env
     env_file:
-      - path: ./services/ax/.env
+      - path: ./services/explain/.env
         required: false
     ports:
       - "23200:23200"

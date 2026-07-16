@@ -39,10 +39,10 @@ jwt:
   expiration: 3600000
   refresh-expiration: 604800000
 
-# AX(Python) 서비스 연동
-ax:
-  base-url: ${AX_BASE_URL:http://localhost:23200}
-  enabled: ${AX_ENABLED:false}
+# explain(Python) 서비스 연동
+explain:
+  base-url: ${EXPLAIN_BASE_URL:http://localhost:23200}
+  enabled: ${EXPLAIN_ENABLED:false}
 
 ---
 # local 프로파일: 개발 편의 설정 (SQL 로그 등). 기본 활성 프로파일.
