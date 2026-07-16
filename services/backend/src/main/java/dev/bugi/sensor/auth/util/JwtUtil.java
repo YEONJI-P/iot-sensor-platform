@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.Date;
 
 @Slf4j
@@ -23,19 +24,22 @@ public class JwtUtil {
     private final SecretKey secretKey;
     private final long expiration;
     private final long refreshExpiration;
+    private final Clock clock;
 
     public JwtUtil(
             @Value("${jwt.secret-key}") String secret,
             @Value("${jwt.expiration}") long expiration,
-            @Value("${jwt.refresh-expiration}") long refreshExpiration
+            @Value("${jwt.refresh-expiration}") long refreshExpiration,
+            Clock clock
     ) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expiration = expiration;
         this.refreshExpiration = refreshExpiration;
+        this.clock = clock;
     }
 
     public String createToken(String employeeId, String role) {
-        Date now = new Date();
+        Date now = Date.from(clock.instant());
         return Jwts.builder()
                 .subject(employeeId)
                 .claim(CLAIM_ROLE, role)
@@ -47,7 +51,7 @@ public class JwtUtil {
     }
 
     public String createRefreshToken(String emplyeeId){
-        Date now = new Date();
+        Date now = Date.from(clock.instant());
         return Jwts.builder()
                 .subject(emplyeeId)
                 .claim(CLAIM_TYPE, TYPE_REFRESH)
