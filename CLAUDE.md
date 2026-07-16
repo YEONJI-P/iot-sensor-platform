@@ -40,7 +40,9 @@ cd services/backend && ./gradlew bootRun
 ./gradlew test --tests AuthServiceTest               # 특정 클래스
 ./gradlew test --tests AuthServiceTest.login_success # 특정 메서드
 ```
-테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라 없이 실행됩니다 (`services/backend/src/test/resources/application.yml`).
+테스트는 두 갈래로 나뉜다:
+- **컨텍스트 부팅 스모크** = 인메모리 H2. `SensorMonitorApplicationTests.contextLoads()` 하나가 쓴다(엔티티 매핑·빈 순환·설정 오류를 인프라 없이 싸게 잡는 용도). **H2 는 DB 계층을 검증하지 않는다** — 예전 문구가 "H2(PostgreSQL 호환 모드)로 DB 를 검증"하는 것처럼 읽혔으나, 실제로는 리포지토리를 mock 으로 대체해 네이티브 쿼리·JOIN FETCH·제약·컬럼 타입이 하나도 검증되지 않았다. 설정은 `services/backend/src/test/resources/application.yml`.
+- **DB 계층 검증** = Testcontainers 로 진짜 Postgres(프로덕션과 동일 `postgres:15`)를 띄운다. 리포지토리·네이티브 쿼리(`to_char`/`LIMIT`)·`@MapsId` 공유 PK·unique 제약·`timestamptz` 컬럼 타입을 실제 DB 로 검증한다(`@DataJpaTest` + `AbstractPostgresTest`, 패키지 `dev.bugi.sensor.support`). **도커가 필요하다.** 컨테이너는 static 으로 한 번만 떠서 모든 `@DataJpaTest` 가 재사용한다.
 
 ## 아키텍처
 

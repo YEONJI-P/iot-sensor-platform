@@ -46,8 +46,13 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
 
-    // 테스트용 인메모리 DB
+    // H2: 컨텍스트 부팅 스모크(contextLoads)용. DB 계층은 검증하지 않는다.
     testRuntimeOnly 'com.h2database:h2'
+
+    // DB 계층(리포지토리·네이티브 쿼리·제약·컬럼 타입)은 실제 Postgres(Testcontainers)로 검증한다.
+    // 버전은 Spring Boot BOM(testcontainers-bom)이 관리한다.
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
 
 
 
