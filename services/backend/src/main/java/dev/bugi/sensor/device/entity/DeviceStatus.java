@@ -32,6 +32,13 @@ public class DeviceStatus {
 
     private Instant lastSeenAt;
 
+    // 알람 상태(엣지 트리거 쿨다운). 초과 진입 시 true, 재발화 방지 여유 아래로 복귀 시 false.
+    // 매 판독마다 Alert를 만드는 스팸을 막고, 상태가 바뀌는 순간에만 발화한다.
+    private boolean inAlarm = false;
+
+    // 마지막 발화 시각(UTC).
+    private Instant lastAlertAt;
+
     public DeviceStatus(Device device, Instant lastSeenAt) {
         this.device = device;
         this.lastSeenAt = lastSeenAt;
@@ -39,5 +46,16 @@ public class DeviceStatus {
 
     public void markSeen(Instant at) {
         this.lastSeenAt = at;
+    }
+
+    /** 임계 초과 진입: 알람 상태로 전환하고 발화 시각을 기록한다. */
+    public void enterAlarm(Instant at) {
+        this.inAlarm = true;
+        this.lastAlertAt = at;
+    }
+
+    /** 임계값 아래 여유 구간까지 복귀: 알람 해제(알림은 만들지 않는다). */
+    public void clearAlarm() {
+        this.inAlarm = false;
     }
 }

@@ -4,6 +4,7 @@ import dev.bugi.sensor.alert.entity.Alert;
 import dev.bugi.sensor.alert.entity.AlertSeverity;
 import dev.bugi.sensor.alert.repository.AlertRepository;
 import dev.bugi.sensor.device.entity.Device;
+import dev.bugi.sensor.device.entity.DeviceStatus;
 import dev.bugi.sensor.device.repository.DeviceRepository;
 import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.sensordata.anomaly.AnomalyDetector;
@@ -63,13 +64,20 @@ class SensorDataServiceTest {
         lenient().when(clock.instant()).thenAnswer(inv -> now[0]);
     }
 
+    // 알람 상태(inAlarm/lastAlertAt)는 Device가 아니라 DeviceStatus에 있으므로,
+    // receive 호출 간 상태가 이어지도록 같은 인스턴스를 돌려준다.
+    private DeviceStatus status;
+
     private Device mockDevice(Double threshold) {
-        return Device.builder()
+        Device device = Device.builder()
                 .name("온도센서1")
                 .type(Device.DeviceType.TEMPERATURE)
                 .location("공장1층")
                 .thresholdValue(threshold)
                 .build();
+        status = new DeviceStatus(device, FIXED);
+        lenient().when(deviceStatusRepository.findById(any())).thenReturn(Optional.of(status));
+        return device;
     }
 
     /** 실제 ThresholdDetector와 동일하게 value > threshold 를 흉내낸다(엣지 전이 재현용). */
@@ -135,8 +143,8 @@ class SensorDataServiceTest {
         sensorDataService.receive(req(100.0));
 
         verify(alertRepository, times(1)).save(any(Alert.class));
-        assertThat(device.isInAlarm()).isTrue();
-        assertThat(device.getLastAlertAt()).isEqualTo(FIXED);
+        assertThat(status.isInAlarm()).isTrue();
+        assertThat(status.getLastAlertAt()).isEqualTo(FIXED);
     }
 
     @Test
@@ -160,7 +168,7 @@ class SensorDataServiceTest {
 
         sensorDataService.receive(req(100.0)); // 발화 → inAlarm
         sensorDataService.receive(req(79.0));  // 여유구간(77.6~80): 초과 아님이나 해제도 안 함
-        assertThat(device.isInAlarm()).isTrue();
+        assertThat(status.isInAlarm()).isTrue();
 
         sensorDataService.receive(req(100.0)); // 여전히 inAlarm → 억제
 
@@ -175,7 +183,7 @@ class SensorDataServiceTest {
 
         sensorDataService.receive(req(100.0)); // 발화(FIXED)
         sensorDataService.receive(req(70.0));  // 77.6 미만 → 해제
-        assertThat(device.isInAlarm()).isFalse();
+        assertThat(status.isInAlarm()).isFalse();
 
         now[0] = FIXED.plus(Duration.ofMinutes(6)); // 쿨다운 5분 경과
         sensorDataService.receive(req(100.0));       // 재발화

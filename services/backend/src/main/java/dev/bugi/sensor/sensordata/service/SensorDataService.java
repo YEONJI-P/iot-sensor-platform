@@ -81,29 +81,30 @@ public class SensorDataService {
                 .value(request.getValue())
                 .build();
         sensorDataRepository.save(sensorData);
-        markSeen(device);
+        DeviceStatus status = markSeen(device);
         log.info("센서 데이터 저장 완료 - deviceId: {}, value: {}", request.getDeviceId(), request.getValue());
         // 실시간 전송은 커밋 후에 (SseBroadcastListener). 저장 트랜잭션 안에서 I/O를 하지 않는다.
         eventPublisher.publishEvent(
                 new SseBroadcastEvent("sensor-data", device.getId(), SensorDataResponse.from(sensorData)));
 
-        evaluateAlarm(device, request.getValue());
+        evaluateAlarm(device, status, request.getValue());
     }
 
     /**
      * 엣지 트리거 알람 판정. 임계 초과가 '시작'되는 순간에만 Alert를 만들고,
      * 초과가 이어지는 동안은 억제한다. 값이 재발화 방지 여유 아래로 복귀하면 알람만 해제한다.
-     * Device는 트랜잭션 내 관리 엔티티이므로 상태 변경은 dirty check로 저장된다.
+     * 알람 상태는 설정(Device)이 아니라 DeviceStatus(런타임)에 두어 설정 감사를 오염시키지 않는다.
+     * DeviceStatus는 트랜잭션 내 관리 엔티티이므로 상태 변경은 dirty check로 저장된다.
      */
-    private void evaluateAlarm(Device device, double value) {
+    private void evaluateAlarm(Device device, DeviceStatus status, double value) {
         boolean breach = anomalyDetector.isAnomaly(device, value);
         Double threshold = device.getThresholdValue();
 
-        if (breach && !device.isInAlarm()) {
+        if (breach && !status.isInAlarm()) {
             Instant now = clock.instant();
             // 시간 쿨다운: 직전 발화 후 COOLDOWN 이내면 산발 스파이크로 보고 재발화를 억제한다.
-            if (device.getLastAlertAt() != null
-                    && Duration.between(device.getLastAlertAt(), now).compareTo(COOLDOWN) < 0) {
+            if (status.getLastAlertAt() != null
+                    && Duration.between(status.getLastAlertAt(), now).compareTo(COOLDOWN) < 0) {
                 log.debug("Alert 재발화 억제(쿨다운) - device: {}, value: {}", device.getName(), value);
                 return;
             }
@@ -119,27 +120,26 @@ public class SensorDataService {
                     .severity(severity)
                     .build();
             alertRepository.save(alert);
-            device.enterAlarm(now);
+            status.enterAlarm(now);
             log.warn("Alert 발화 - device: {}, value: {}, severity: {}", device.getName(), value, severity);
             eventPublisher.publishEvent(
                     new SseBroadcastEvent("alert", device.getId(), AlertResponse.from(alert)));
-        } else if (!breach && device.isInAlarm()
+        } else if (!breach && status.isInAlarm()
                 && threshold != null && value < threshold * RELEASE_RATIO) {
             // 재발화 방지 여유 아래로 복귀 → 알람 해제(알림 없음).
-            device.clearAlarm();
+            status.clearAlarm();
             log.info("Alert 해제 - device: {}, value: {}", device.getName(), value);
         }
         // breach && inAlarm → 억제(생성 안 함) / 여유 구간 → 알람 유지
     }
 
     // 수신 하트비트는 Device(설정)가 아니라 DeviceStatus(텔레메트리)에 찍는다 — 설정 감사 오염 방지.
-    private void markSeen(Device device) {
+    private DeviceStatus markSeen(Device device) {
         Instant now = clock.instant();
-        deviceStatusRepository.findById(device.getId())
-                .ifPresentOrElse(
-                        status -> status.markSeen(now),
-                        () -> deviceStatusRepository.save(new DeviceStatus(device, now))
-                );
+        DeviceStatus status = deviceStatusRepository.findById(device.getId())
+                .orElseGet(() -> deviceStatusRepository.save(new DeviceStatus(device, now)));
+        status.markSeen(now);
+        return status;
     }
 
     private void recordFailure(SensorDataRequest request, String reason) {
