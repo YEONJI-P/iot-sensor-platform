@@ -126,7 +126,7 @@ erDiagram
         bigint id PK
         varchar name
         varchar description
-        timestamp created_at
+        timestamptz created_at
     }
 
     zones {
@@ -134,14 +134,14 @@ erDiagram
         bigint factory_id FK
         varchar name
         varchar description
-        timestamp created_at
+        timestamptz created_at
     }
 
     zone_users {
         bigint id PK
         bigint zone_id FK
         bigint user_id FK
-        timestamp created_at
+        timestamptz created_at
     }
 
     users {
@@ -153,8 +153,8 @@ erDiagram
         bigint factory_id FK "NULLABLE"
         varchar role "SYSTEM_ADMIN/FACTORY_ADMIN/MEMBER/VIEWER"
         varchar status "PENDING/ACTIVE/REJECTED"
-        timestamp created_at
-        timestamp updated_at
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     device {
@@ -165,14 +165,22 @@ erDiagram
         varchar location
         double threshold_value
         int expected_interval_seconds "NULLABLE"
-        timestamp last_seen_at "NULLABLE"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    device_status {
+        bigint device_id PK "device와 공유 PK(@MapsId)"
+        timestamptz last_seen_at "수신 하트비트, NULLABLE"
+        boolean in_alarm "알람 상태(엣지 트리거)"
+        timestamptz last_alert_at "NULLABLE"
     }
 
     sensor_data {
         bigint id PK
         bigint device_id FK
         double value
-        timestamp recorded_at
+        timestamptz recorded_at
     }
 
     alerts {
@@ -184,7 +192,7 @@ erDiagram
         varchar severity "INFO/WARNING/CRITICAL"
         varchar evidence "NULLABLE, LLM 보강"
         varchar recommendation "NULLABLE, LLM 보강"
-        timestamp created_at
+        timestamptz created_at
     }
 
     failed_readings {
@@ -192,7 +200,7 @@ erDiagram
         bigint device_id "장치 없음도 기록"
         double value
         varchar reason "INVALID_REQUEST/DEVICE_NOT_FOUND"
-        timestamp created_at
+        timestamptz created_at
     }
 
     factories ||--o{ zones : "구역 보유"
@@ -200,6 +208,7 @@ erDiagram
     zones ||--o{ zone_users : "소속 사용자"
     users ||--o{ zone_users : "소속 구역"
     zones ||--o{ device : "설치"
+    device ||--|| device_status : "런타임 상태(1:1)"
     device ||--o{ sensor_data : "수집"
     device ||--o{ alerts : "발생"
 ```
@@ -302,7 +311,9 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 ### 센서 데이터 수신과 알림
 
-- `POST /sensor-data` 수신 시 한 트랜잭션에서 센서 데이터 저장, 장치 수신 시각 갱신, 임계값 초과 판정, 초과 시 알림 생성
+- `POST /sensor-data` 수신 시 한 트랜잭션에서 센서 데이터 저장, 장치 수신 시각 갱신, 임계값 초과 판정, 알림 생성
+- 알림은 **엣지 트리거**로 생성 — 정상에서 임계값 초과로 넘어가는 순간 한 건만 만들고, 초과가 지속되는 동안은 억제합니다. 값이 임계값 아래(히스테리시스 밴드)로 복귀하면 알람을 해제해 다음 초과를 다시 감지합니다. 초과가 지속되는 구간에서 같은 사건이 수십 건으로 도배되는 것을 막습니다
+- severity는 초과 폭으로 판정(임계값 대비 여유가 크면 `CRITICAL`). 장치 런타임 상태(알람 여부·마지막 수신 시각)는 설정과 분리해 `device_status` 테이블에서 관리
 - 별도 메시지 버스 없이 동기 처리 (설계 근거는 아래 설계 메모 참고)
 - 이상 판정은 `AnomalyDetector` 전략 인터페이스로 분리(현재 `ThresholdDetector`), 판정 로직 교체 가능
 - 검증 실패, 미등록 장치 요청은 조용히 버리지 않고 `failed_readings`에 사유와 함께 적재
@@ -310,7 +321,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 ### 장치 freshness 감지
 
-- 장치에 기대 수신 주기(`expectedIntervalSeconds`)와 마지막 수신 시각(`lastSeenAt`)을 두고, 수신마다 갱신
+- 장치 설정에 기대 수신 주기(`expectedIntervalSeconds`)를 두고, 마지막 수신 시각(`lastSeenAt`)은 런타임 상태라 `device_status`에 두어 수신마다 갱신
 - 주기 스케줄러가 기대 주기를 넘겨 침묵한 장치를 감지 (데이터가 안 오는 상황을 신호로 포착)
 - 같은 구역 장치가 동시에 침묵하면 사이트 사건(계획 정지, 게이트웨이 장애)으로 보고 구역 한 건으로 집계(`WARNING`), 이웃이 정상 수신 중인데 단독 침묵하면 개별 고장으로 `CRITICAL` + explain 원인진단
 

@@ -68,7 +68,7 @@ cd services/backend && ./gradlew bootRun
 | `admin/` | 사용자 승인과 관리, 공장/구역 관리 |
 | `device/` | 센서 장치 CRUD (채널=Device. TEMPERATURE, PRESSURE, CURRENT, POWER, ACCELERATION), freshness 스케줄러 |
 | `sensordata/` | 센서 데이터 동기 수신, 저장, 임계값 판정, 이상 판정 전략(AnomalyDetector), 실패 적재(failure) |
-| `alert/` | 임계값 초과 시 알림 생성과 조회, 근거 보강 스케줄러 |
+| `alert/` | 임계값 초과 알림(엣지 트리거·크기별 severity) 생성과 조회, 근거 보강 스케줄러 |
 | `sse/` | 대시보드 실시간 스트림. 커밋 후 이벤트(AFTER_COMMIT) 브로드캐스트, 구독자 접근 범위 필터 |
 | `explain/` | explain 서비스 HTTP 클라이언트(ExplainClient/HttpExplainClient), DTO, 설정(explain.base-url/enabled) |
 | `global/` | 공통 예외 처리, 접근 제어(AccessControlService), 공유 설정 |
@@ -81,8 +81,9 @@ POST /sensor-data
   → SensorDataController
   → SensorDataService.receive() (한 트랜잭션)
       ├─ 검증 실패 / 미등록 장치 → FailedReading 적재
-      ├─ SensorData 저장 (PostgreSQL) + device.markSeen()
-      ├─ AnomalyDetector 판정 → 초과 시 Alert 생성
+      ├─ SensorData 저장 (PostgreSQL) + DeviceStatus.markSeen() (하트비트 lastSeenAt 갱신)
+      ├─ AnomalyDetector 판정 → 엣지 트리거로 Alert 생성 (정상→초과 전환 시 1건,
+      │   지속 중 억제, 히스테리시스 밴드 아래 복귀 시 해제. 상태는 DeviceStatus.inAlarm)
       └─ 커밋 후(AFTER_COMMIT) SseBroadcastEvent 발행 → 대시보드 push
 ```
 
