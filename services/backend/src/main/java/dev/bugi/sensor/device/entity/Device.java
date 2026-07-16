@@ -5,13 +5,16 @@ import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 
 @Entity
 @Getter
 @NoArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
 public class Device {
 
     @Id
@@ -33,7 +36,14 @@ public class Device {
 
     private Integer expectedIntervalSeconds;
 
-    private LocalDateTime lastSeenAt;
+    private Instant lastSeenAt;
+
+    @CreatedDate
+    @Column(updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    private Instant updatedAt;
 
     // 알람 상태(엣지 트리거 쿨다운). 초과 진입 시 true, 재발화 방지 여유 아래로 복귀 시 false.
     // 매 판독마다 Alert를 만드는 스팸을 막고, 상태가 바뀌는 순간에만 발화한다.
@@ -59,7 +69,7 @@ public class Device {
         this.thresholdValue = thresholdValue;
     }
 
-    public void markSeen(LocalDateTime at) {
+    public void markSeen(Instant at) {
         this.lastSeenAt = at;
     }
 

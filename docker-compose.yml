@@ -32,6 +32,8 @@ services:
         required: false
     environment:
       # 오케스트레이션 토폴로지 값만 둔다(내부 호스트명·데모 DB 크레덴셜). env_file 보다 우선 적용됨.
+      # 데모는 호스트 8080 유지 — 앱 기본 포트(23100)를 8080으로 핀 고정
+      SERVER_PORT: 8080
       DB_URL: jdbc:postgresql://postgres:5432/sensor_monitor
       DB_USERNAME: sensor_monitor
       DB_PASSWORD: sensor_monitor

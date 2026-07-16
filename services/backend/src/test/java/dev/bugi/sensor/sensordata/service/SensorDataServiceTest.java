@@ -13,6 +13,7 @@ import dev.bugi.sensor.sensordata.failure.FailedReading;
 import dev.bugi.sensor.sensordata.failure.FailedReadingRepository;
 import dev.bugi.sensor.sensordata.repository.SensorDataRepository;
 import dev.bugi.sensor.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -51,6 +52,16 @@ class SensorDataServiceTest {
 
     private static final Instant FIXED = Instant.parse("2026-07-16T00:00:00Z");
 
+    // 가변 시각 홀더. markSeen·발화 등 clock.instant() 호출 횟수와 무관하게
+    // 지금 시각을 여기서 통제한다(쿨다운 경과를 테스트에서 재현하려고 값을 옮긴다).
+    private final Instant[] now = { FIXED };
+
+    @BeforeEach
+    void stubClock() {
+        // 수신 실패 경로(장치 없음/무효)에선 clock을 안 쓰므로 lenient.
+        lenient().when(clock.instant()).thenAnswer(inv -> now[0]);
+    }
+
     private Device mockDevice(Double threshold) {
         return Device.builder()
                 .name("온도센서1")
@@ -66,10 +77,6 @@ class SensorDataServiceTest {
             double v = inv.getArgument(1);
             return device.getThresholdValue() != null && v > device.getThresholdValue();
         });
-    }
-
-    private void stubClock() {
-        when(clock.instant()).thenReturn(FIXED);
     }
 
     private SensorDataRequest req(double value) {
@@ -123,7 +130,6 @@ class SensorDataServiceTest {
         Device device = mockDevice(80.0);
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         stubBreachByThreshold(device);
-        stubClock();
 
         sensorDataService.receive(req(100.0));
 
@@ -137,7 +143,6 @@ class SensorDataServiceTest {
         Device device = mockDevice(80.0);
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         stubBreachByThreshold(device);
-        stubClock();
 
         sensorDataService.receive(req(100.0)); // 발화
         sensorDataService.receive(req(105.0)); // 억제
@@ -151,7 +156,6 @@ class SensorDataServiceTest {
         Device device = mockDevice(80.0); // 해제 경계 = 77.6
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         stubBreachByThreshold(device);
-        stubClock();
 
         sensorDataService.receive(req(100.0)); // 발화 → inAlarm
         sensorDataService.receive(req(79.0));  // 여유구간(77.6~80): 초과 아님이나 해제도 안 함
@@ -167,14 +171,13 @@ class SensorDataServiceTest {
         Device device = mockDevice(80.0);
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         stubBreachByThreshold(device);
-        // 2번째 발화 시도는 첫 발화보다 6분 뒤(쿨다운 5분 경과) → 재발화 허용.
-        when(clock.instant()).thenReturn(FIXED, FIXED.plus(Duration.ofMinutes(6)));
 
-        sensorDataService.receive(req(100.0)); // 발화
+        sensorDataService.receive(req(100.0)); // 발화(FIXED)
         sensorDataService.receive(req(70.0));  // 77.6 미만 → 해제
         assertThat(device.isInAlarm()).isFalse();
 
-        sensorDataService.receive(req(100.0)); // 쿨다운 지남 → 재발화
+        now[0] = FIXED.plus(Duration.ofMinutes(6)); // 쿨다운 5분 경과
+        sensorDataService.receive(req(100.0));       // 재발화
 
         verify(alertRepository, times(2)).save(any(Alert.class));
     }
@@ -184,12 +187,12 @@ class SensorDataServiceTest {
         Device device = mockDevice(80.0);
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         stubBreachByThreshold(device);
-        // 2번째 발화 시도는 첫 발화 1분 뒤(쿨다운 5분 이내) → 억제.
-        when(clock.instant()).thenReturn(FIXED, FIXED.plus(Duration.ofMinutes(1)));
 
-        sensorDataService.receive(req(100.0)); // 발화
+        sensorDataService.receive(req(100.0)); // 발화(FIXED)
         sensorDataService.receive(req(70.0));  // 해제
-        sensorDataService.receive(req(100.0)); // 쿨다운 이내 → 억제(산발 스파이크 취급)
+
+        now[0] = FIXED.plus(Duration.ofMinutes(1)); // 쿨다운 5분 이내
+        sensorDataService.receive(req(100.0));       // 억제(산발 스파이크 취급)
 
         verify(alertRepository, times(1)).save(any(Alert.class));
     }
@@ -201,7 +204,6 @@ class SensorDataServiceTest {
         Device device = mockDevice(80.0); // 88.0 이하면 WARNING
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         stubBreachByThreshold(device);
-        stubClock();
 
         sensorDataService.receive(req(85.0));
 
@@ -214,7 +216,6 @@ class SensorDataServiceTest {
         Device device = mockDevice(80.0);
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         stubBreachByThreshold(device);
-        stubClock();
 
         sensorDataService.receive(req(100.0));
 

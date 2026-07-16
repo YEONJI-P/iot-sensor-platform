@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public interface AlertRepository extends JpaRepository<Alert, Long> {
@@ -38,5 +38,5 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
             ORDER BY date ASC
             """, nativeQuery = true)
     List<Object[]> findDailyCountByDeviceId(@Param("deviceId") Long deviceId,
-                                             @Param("startDate") LocalDateTime startDate);
+                                             @Param("startDate") Instant startDate);
 }

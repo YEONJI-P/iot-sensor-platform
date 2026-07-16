@@ -6,8 +6,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Getter
@@ -30,7 +31,11 @@ public class Alert {
     private String recommendation;
     @CreatedDate
     @Column(updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
+
+    // evidence/recommendation 이 enrich()로 나중에 채워질 때 갱신된다.
+    @LastModifiedDate
+    private Instant updatedAt;
 
     @Builder
     public Alert(Device device, Double sensorValue, Double thresholdValue, String message,

@@ -5,7 +5,7 @@ import dev.bugi.sensor.user.entity.User;
 import dev.bugi.sensor.user.entity.UserStatus;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 public class UserResponse {
@@ -18,8 +18,8 @@ public class UserResponse {
     private final String factoryName;
     private final Role role;
     private final UserStatus status;
-    private final LocalDateTime createdAt;
-    private final LocalDateTime updatedAt;
+    private final Instant createdAt;
+    private final Instant updatedAt;
 
     public UserResponse(User user) {
         this.id = user.getId();

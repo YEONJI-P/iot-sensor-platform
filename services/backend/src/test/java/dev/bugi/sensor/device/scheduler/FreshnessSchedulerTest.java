@@ -16,11 +16,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,6 +40,8 @@ class FreshnessSchedulerTest {
     @Mock AlertRepository alertRepository;
     @Mock AxClient axClient;
     @Mock AxProperties axProperties;
+    private static final Instant NOW = Instant.parse("2026-07-16T00:00:00Z");
+    @Spy Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @InjectMocks FreshnessScheduler scheduler;
 
@@ -49,7 +54,7 @@ class FreshnessSchedulerTest {
         when(device.getName()).thenReturn("dev" + id);
         when(device.getZone()).thenReturn(zone);
         when(device.getExpectedIntervalSeconds()).thenReturn(10);
-        when(device.getLastSeenAt()).thenReturn(LocalDateTime.now().minusSeconds(silentSeconds));
+        when(device.getLastSeenAt()).thenReturn(NOW.minusSeconds(silentSeconds));
         return device;
     }
 

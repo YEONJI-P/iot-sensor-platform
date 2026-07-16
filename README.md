@@ -208,7 +208,7 @@ erDiagram
 
 ## 6. API 명세
 
-Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+Swagger UI: `http://localhost:23100/swagger-ui/index.html` (컨테이너 데모는 `8080`)
 
 ### Auth
 
@@ -424,8 +424,10 @@ cd services/backend
 ### Swagger UI
 
 ```
-http://localhost:8080/swagger-ui/index.html
+http://localhost:23100/swagger-ui/index.html
 ```
+
+> bootRun 기본 포트는 `23100`. 컨테이너 데모(`docker-compose up`)는 호스트 `8080`을 유지합니다.
 
 ### 초기 데이터 투입 (`services/simulator/seed.sql`)
 
