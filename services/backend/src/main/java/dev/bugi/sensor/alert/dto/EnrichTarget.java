@@ -8,6 +8,7 @@ import dev.bugi.sensor.device.entity.Device;
  */
 public record EnrichTarget(
         Long alertId,
+        Long deviceId,
         String deviceName,
         Device.DeviceType sensorType,
         Double sensorValue,

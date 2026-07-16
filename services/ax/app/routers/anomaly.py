@@ -15,6 +15,23 @@ from ..schemas import AnomalyExplainRequest, AnomalyExplainResponse
 router = APIRouter(prefix="/ax", tags=["anomaly"])
 
 
+def _metrics_phrase(req: AnomalyExplainRequest) -> str:
+    """Spring이 계산한 윈도우 지표를 사람이 읽는 한 구절로 정리한다(값 재계산 없음)."""
+    parts: list[str] = []
+    if req.breach_rate is not None:
+        parts.append(f"최근 초과율 {round(req.breach_rate * 100)}%")
+    if req.trend is not None:
+        if req.trend > 0:
+            parts.append(f"상승 추세(+{req.trend:.1f})")
+        elif req.trend < 0:
+            parts.append(f"하강 추세({req.trend:.1f})")
+        else:
+            parts.append("추세 평탄")
+    if req.volatility is not None:
+        parts.append(f"변동성 σ={req.volatility:.1f}")
+    return ", ".join(parts)
+
+
 def _build_prompt(req: AnomalyExplainRequest) -> str:
     """규칙으로 모은 신호를 LLM 프롬프트로 조립한다."""
     lines = [
@@ -23,11 +40,19 @@ def _build_prompt(req: AnomalyExplainRequest) -> str:
     ]
     if req.sensor_type:
         lines.append(f"- 센서 타입: {req.sensor_type}")
-    lines.append(f"- 측정값: {req.value}")
+    unit = f" {req.unit}" if req.unit else ""
+    lines.append(f"- 측정값: {req.value}{unit}")
     if req.threshold is not None:
-        lines.append(f"- 임계값: {req.threshold}")
+        lines.append(f"- 임계값: {req.threshold}{unit}")
     if req.recent_values:
         lines.append(f"- 직전 값들: {req.recent_values}")
+    metrics = _metrics_phrase(req)
+    if metrics:
+        lines.append(f"- 최근 추세 지표: {metrics}")
+        lines.append(
+            "  (초과율이 낮고 추세가 평탄하면 간헐 스파이크로 노이즈 가능성, "
+            "초과율이 높거나 상승 추세면 지속 이상으로 판단해 권고 수위를 높여라.)"
+        )
     return "\n".join(lines)
 
 
@@ -38,12 +63,16 @@ def explain_anomaly(
 ) -> AnomalyExplainResponse:
     """이상 신호에 근거와 권고를 붙여 반환한다."""
     # 근거는 규칙으로 조립 (LLM 없이 결정적)
+    unit = f"{req.unit}" if req.unit else ""
     evidence = f"{req.device_name}"
     if req.sensor_type:
         evidence += f" {req.sensor_type}"
-    evidence += f" 측정값 {req.value}"
+    evidence += f" 측정값 {req.value}{unit}"
     if req.threshold is not None:
-        evidence += f"가 임계값 {req.threshold}를 초과"
+        evidence += f"가 임계값 {req.threshold}{unit}를 초과"
+    metrics = _metrics_phrase(req)
+    if metrics:
+        evidence += f" ({metrics})"
 
     # 권고는 LLM으로 생성
     recommendation = provider.generate(_build_prompt(req))

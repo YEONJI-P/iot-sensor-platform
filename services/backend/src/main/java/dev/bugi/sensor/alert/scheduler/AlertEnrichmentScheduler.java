@@ -6,12 +6,15 @@ import dev.bugi.sensor.ax.client.AxClient;
 import dev.bugi.sensor.ax.config.AxProperties;
 import dev.bugi.sensor.ax.dto.AnomalyExplainRequest;
 import dev.bugi.sensor.ax.dto.AnomalyExplainResponse;
+import dev.bugi.sensor.sensordata.entity.SensorData;
+import dev.bugi.sensor.sensordata.repository.SensorDataRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -28,7 +31,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AlertEnrichmentScheduler {
 
+    // 설명용 윈도우 크기(최근 판독 건수). 탐지가 아니라 근거·권고를 만드는 데만 쓴다.
+    private static final int WINDOW = 20;
+    // 지표를 신뢰할 최소 표본. 이보다 적으면(신규 장치 등) 지표 없이 단건 근거로 보강한다.
+    private static final int MIN_SAMPLES = 5;
+
     private final AlertRepository alertRepository;
+    private final SensorDataRepository sensorDataRepository;
     private final AxClient axClient;
     private final AxProperties axProperties;
 
@@ -45,13 +54,21 @@ public class AlertEnrichmentScheduler {
                 continue;
             }
 
+            // 설명용 윈도우: 최근 판독을 읽어 규칙으로 추세·초과율·변동성을 계산(탐지엔 안 씀).
+            List<Double> recentValues = recentValues(target.deviceId());
+            WindowMetrics metrics = WindowMetrics.of(recentValues, target.thresholdValue());
+
             AnomalyExplainRequest request = new AnomalyExplainRequest(
                     target.deviceName(),
                     target.sensorType() != null ? target.sensorType().name() : null,
+                    target.sensorType() != null ? target.sensorType().getUnit() : null,
                     target.sensorValue(),
                     target.thresholdValue(),
                     target.message(),
-                    null
+                    recentValues.isEmpty() ? null : recentValues,
+                    metrics.breachRate(),
+                    metrics.trend(),
+                    metrics.volatility()
             );
 
             AnomalyExplainResponse response;
@@ -69,6 +86,60 @@ public class AlertEnrichmentScheduler {
                 alert.enrich(response.evidence(), response.recommendation());
                 alertRepository.save(alert);
             });
+        }
+    }
+
+    /** 장치의 최근 판독값을 시간순(과거→현재)으로 반환. 추세 계산이 쉬우라고 뒤집는다. */
+    private List<Double> recentValues(Long deviceId) {
+        if (deviceId == null) {
+            return List.of();
+        }
+        List<SensorData> recent = sensorDataRepository
+                .findByDeviceIdOrderByRecordedAtDesc(deviceId, PageRequest.of(0, WINDOW));
+        List<Double> values = new ArrayList<>(recent.size());
+        for (int i = recent.size() - 1; i >= 0; i--) {
+            values.add(recent.get(i).getValue());
+        }
+        return values;
+    }
+
+    /**
+     * 윈도우에서 규칙으로 뽑는 파생 지표. 산발 스파이크 / 점진 열화 / 급성 이상을 가르는 신호다.
+     * 표본이 {@link #MIN_SAMPLES} 미만이면 신뢰할 수 없어 모두 null(설명은 단건 근거로 fallback).
+     */
+    private record WindowMetrics(Double breachRate, Double trend, Double volatility) {
+
+        private static final WindowMetrics EMPTY = new WindowMetrics(null, null, null);
+
+        static WindowMetrics of(List<Double> values, Double threshold) {
+            if (values == null || values.size() < MIN_SAMPLES) {
+                return EMPTY;
+            }
+            int n = values.size();
+
+            // 초과율: 임계 초과 판독 비율(threshold 없으면 계산 불가).
+            Double breachRate = null;
+            if (threshold != null) {
+                long over = values.stream().filter(v -> v > threshold).count();
+                breachRate = (double) over / n;
+            }
+
+            // 추세: 후반 절반 평균 - 전반 절반 평균(양수면 상승 중).
+            int half = n / 2;
+            double front = average(values.subList(0, half));
+            double back = average(values.subList(n - half, n));
+            double trend = back - front;
+
+            // 변동성: 모표준편차.
+            double mean = average(values);
+            double var = values.stream().mapToDouble(v -> (v - mean) * (v - mean)).sum() / n;
+            double volatility = Math.sqrt(var);
+
+            return new WindowMetrics(breachRate, trend, volatility);
+        }
+
+        private static double average(List<Double> xs) {
+            return xs.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
         }
     }
 }

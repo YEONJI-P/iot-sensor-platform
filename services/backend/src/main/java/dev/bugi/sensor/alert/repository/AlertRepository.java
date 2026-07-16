@@ -16,7 +16,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     List<Alert> findByDeviceIdOrderByCreatedAtDesc(Long deviceId, Pageable pageable);
     Page<Alert> findByDeviceIdIn(List<Long> deviceIds, Pageable pageable);
 
-    @Query("select new dev.bugi.sensor.alert.dto.EnrichTarget(a.id, a.device.name, a.device.type, a.sensorValue, a.thresholdValue, a.message) from Alert a where a.evidence is null order by a.createdAt desc")
+    @Query("select new dev.bugi.sensor.alert.dto.EnrichTarget(a.id, a.device.id, a.device.name, a.device.type, a.sensorValue, a.thresholdValue, a.message) from Alert a where a.evidence is null order by a.createdAt desc")
     List<EnrichTarget> findEnrichTargets(Pageable pageable);
 
     @Query(value = """

@@ -28,10 +28,15 @@ class AnomalyExplainRequest(CamelModel):
 
     device_name: str = Field(..., description="장치 이름")
     sensor_type: str | None = Field(None, description="센서 타입(TEMPERATURE 등)")
+    unit: str | None = Field(None, description="측정 단위(예: °C, kPa, A)")
     value: float = Field(..., description="이상으로 판정된 측정값")
     threshold: float | None = Field(None, description="임계값")
     message: str | None = Field(None, description="Spring이 만든 원본 알림 메시지")
     recent_values: list[float] | None = Field(None, description="직전 측정값들(추세 근거)")
+    # Spring이 최근 윈도우에서 규칙으로 계산한 파생 지표. 여기선 서술만 하고 재계산하지 않는다.
+    breach_rate: float | None = Field(None, description="윈도우 내 임계 초과 비율(0~1)")
+    trend: float | None = Field(None, description="추세(후반 평균 - 전반 평균), 양수면 상승 중")
+    volatility: float | None = Field(None, description="변동성(표준편차)")
 
 
 class AnomalyExplainResponse(CamelModel):

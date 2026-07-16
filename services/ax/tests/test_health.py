@@ -37,6 +37,48 @@ def test_explain_anomaly_with_echo_provider():
     assert body["model"] == "echo-0"
 
 
+def test_explain_anomaly_includes_unit_in_evidence():
+    """unit을 넘기면 근거 문장에 단위가 붙는다."""
+    from app.main import app
+
+    client = TestClient(app)
+    res = client.post(
+        "/ax/explain-anomaly",
+        json={
+            "deviceName": "온도센서-A1",
+            "sensorType": "TEMPERATURE",
+            "unit": "°C",
+            "value": 95.0,
+            "threshold": 80.0,
+        },
+    )
+    assert res.status_code == 200
+    assert "°C" in res.json()["evidence"]
+
+
+def test_explain_anomaly_includes_window_metrics_in_evidence():
+    """윈도우 지표를 넘기면 근거에 초과율·추세·변동성이 반영된다."""
+    from app.main import app
+
+    client = TestClient(app)
+    res = client.post(
+        "/ax/explain-anomaly",
+        json={
+            "deviceName": "엔진1-온도",
+            "sensorType": "TEMPERATURE",
+            "value": 1500.0,
+            "threshold": 1416.0,
+            "breachRate": 0.6,
+            "trend": 8.0,
+            "volatility": 12.3,
+        },
+    )
+    assert res.status_code == 200
+    evidence = res.json()["evidence"]
+    assert "초과율 60%" in evidence
+    assert "상승 추세" in evidence
+
+
 def test_explain_anomaly_rejects_missing_value():
     """필수 필드(value) 누락은 422로 거부된다."""
     from app.main import app
