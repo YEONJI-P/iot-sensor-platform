@@ -26,25 +26,28 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # 서비스 소속 설정(JWT_SECRET, AX_ENABLED 등)은 여기서 읽는다. cp services/backend/.env.example services/backend/.env
+    env_file:
+      - path: ./services/backend/.env
+        required: false
     environment:
+      # 오케스트레이션 토폴로지 값만 둔다(내부 호스트명·데모 DB 크레덴셜). env_file 보다 우선 적용됨.
       DB_URL: jdbc:postgresql://postgres:5432/sensor_monitor
       DB_USERNAME: sensor_monitor
       DB_PASSWORD: sensor_monitor
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 환경변수가 필요합니다 (.env 또는 셸 export)}
       AX_BASE_URL: http://ax:8000
-      AX_ENABLED: ${AX_ENABLED:-false}
     ports:
       - "8080:8080"
 
   ax:
     build: ./services/ax
     container_name: sensor-ax
+    # 서비스 소속 설정(AX_PROVIDER, GEMINI_API_KEY, MODEL_NAME 등)은 여기서 읽는다. cp services/ax/.env.example services/ax/.env
+    env_file:
+      - path: ./services/ax/.env
+        required: false
     ports:
       - "8000:8000"
-    environment:
-      AX_PROVIDER: ${AX_PROVIDER:-echo}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      MODEL_NAME: ${MODEL_NAME:-gemini-flash-lite-latest}
 
   # 실측 CSV 리플레이 배치. 상시 서비스가 아니라 seed 프로파일에서만 뜬다.
   #   docker-compose --profile seed run --rm simulator --all

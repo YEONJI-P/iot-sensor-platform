@@ -30,7 +30,7 @@ export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 cd services/backend && ./gradlew bootRun
 ```
 
-컨테이너 데모: `docker-compose up --build` 가 자체 postgres + backend + ax 를 함께 띄운다(공용 DB 불필요, postgres 는 호스트 5433 노출). backend 는 멀티스테이지 Dockerfile 로 컨테이너 안에서 빌드된다. simulator 는 상시 서비스가 아니라 `seed` 프로파일(`docker-compose --profile seed run --rm simulator --all`). 일상 개발은 위 bootRun(공용 DB) 경로를 쓰고, compose 전체 up 대신 필요한 서비스만(`up ax`) 선택 기동한다.
+컨테이너 데모: `docker-compose up --build` 가 자체 postgres + backend + ax 를 함께 띄운다(공용 DB 불필요, postgres 는 호스트 5433 노출). compose 는 각 서비스의 `.env`(`services/backend/.env`, `services/ax/.env`)를 `env_file` 로 읽으므로 미리 각 폴더에서 `cp .env.example .env` 해둔다(없어도 앱 기본값으로 뜨지만 backend 는 `JWT_SECRET` 이 필수). backend 는 멀티스테이지 Dockerfile 로 컨테이너 안에서 빌드된다. simulator 는 상시 서비스가 아니라 `seed` 프로파일(`docker-compose --profile seed run --rm simulator --all`). 일상 개발은 위 bootRun(공용 DB) 경로를 쓰고, compose 전체 up 대신 필요한 서비스만(`up ax`) 선택 기동한다.
 
 ### 빌드 / 테스트 (services/backend/ 에서)
 ```bash
@@ -107,3 +107,40 @@ POST /sensor-data
 
 ### CI
 GitHub Actions (`.github/workflows/ci.yml`): JDK 17 + Gradle `build` (H2 테스트 포함).
+
+## 환경변수(env) 구조
+
+값의 성격으로 위치를 나눈다. **키 하나는 정본 파일 하나에만** 둔다(중복 금지).
+
+- **서비스별 설정** → 각 `services/<svc>/.env` 가 정본. backend = `JWT_SECRET`, `AX_ENABLED`; ax = `AX_PROVIDER`, `GEMINI_API_KEY`, `MODEL_NAME`, `REQUEST_TIMEOUT` 등. 예시는 같은 폴더의 `.env.example`.
+- **오케스트레이션 토폴로지** → `docker-compose.yml` 의 `environment:`. 내부 호스트명(`postgres`, `ax`), 데모 DB 크레덴셜 등 compose 에서만 유효한 값. `env_file` 보다 우선 적용된다.
+- **루트 `.env` 는 쓰지 않는다.** (compose 는 각 서비스 `.env` 를 `env_file: required:false` 로 읽는다 — 없어도 앱 기본값으로 뜬다)
+
+새 env 키는 그 값을 소비하는 **서비스의 `.env.example` 에만** 추가한다. 루트나 다른 서비스에 중복 정의하지 말 것.
+
+## 포트
+
+값은 env로 override 가능하므로 어디에 clone하든 기본값으로 단독 실행된다.
+
+- backend API: `SERVER_PORT`(= `server.port`, 기본 `23100`)
+- frontend: `23000` (있을 경우)
+- DB: `DB_*` (기본 로컬 PostgreSQL `5432/sensor_monitor`)
+- 데모 compose(`docker-compose up`)는 자체 postgres를 호스트 `5433`으로 노출(공용 DB와 별개, 포폴용 독립 스택)
+
+포트를 코드/설정에 하드코딩하지 말고 `server.port`로 주입한다. 같은 머신에서 여러 서비스/워크트리를 동시에 띄울 때만 충돌 가능성이 있고, 그땐 오프셋(`23100 + INSTANCE`, 예: 워크트리1=`23101`)으로 격리한다.
+
+> 여러 로컬 서비스 간 포트 배정을 한눈에 보는 전체 대장은 작성자의 로컬 개발 인프라 쪽에서 따로 관리한다(이 repo 단독 실행엔 불필요, 로컬에서 새 포트를 배정할 때만 참조).
+
+## 시각(timestamp) 처리 규칙
+
+"UTC로 저장하고, 표시할 때만 변환한다"를 따른다.
+
+- DB 컬럼은 `timestamptz`. `timestamp`(without time zone) 쓰지 말 것.
+- 엔티티/DTO의 시각 필드는 `Instant`(필요 시 `OffsetDateTime`). `LocalDateTime` 금지 — 타임존 정보가 없어 서버 로컬 타임존에 의존한다.
+- 현재 시각은 `LocalDateTime.now()`/`Instant.now()` 직접 호출 대신 주입한 `Clock`으로(`clock.instant()`) 얻는다. 테스트에서 고정 가능.
+- API 응답은 ISO 8601 UTC 문자열(끝에 `Z`). Jackson이 epoch 숫자로 내보내지 않게 `spring.jackson.serialization.write-dates-as-timestamps=false`.
+- DB의 `timezone`(GUC)과 컨테이너 `TZ`는 건드리지 말 것 — UTC 기본값 유지.
+- 사용자 타임존 변환은 프론트가 담당한다. 백엔드는 UTC로만 내보낸다.
+- 예외: 이메일/PDF/리포트처럼 서버가 최종 렌더하거나 "그 나라 자정" 기준 집계가 필요할 때만 백엔드에서 명시적으로 zone 변환한다.
+
+> 현재 코드는 이 규칙 이전에 작성돼 일부 DTO/엔티티가 `LocalDateTime`을 쓴다(`AlertResponse.createdAt`, `SensorDataResponse.recordedAt`, `RefreshToken`). 신규 코드는 규칙을 따르고, 기존 것은 별도 리팩터링으로 정리한다.
