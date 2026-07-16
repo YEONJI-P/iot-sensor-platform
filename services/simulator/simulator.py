@@ -138,7 +138,7 @@ def worker(preset: dict, interval: float, limit: int, base_url: str):
 #   bash services/simulator/data/download.sh            # 데이터 먼저 내려받기
 #   python services/simulator/simulator.py --all        # 7개 채널 전체 리플레이
 #   python services/simulator/simulator.py --devices 1 2 --interval 0.5 --limit 100
-#   python services/simulator/simulator.py --all --base-url http://localhost:8080
+#   python services/simulator/simulator.py --all --base-url http://localhost:23100
 # =============================================================================
 
 def main():
@@ -151,7 +151,7 @@ def main():
     parser.add_argument("--all", action="store_true", help="전체 7개 채널 리플레이")
     parser.add_argument("--interval", type=float, default=1.0, help="행 간 간격 초 (기본 1.0)")
     parser.add_argument("--limit", type=int, default=0, help="장치당 최대 행 수 (기본 0=전체)")
-    parser.add_argument("--base-url", type=str, default="http://localhost:8080", help="서버 주소")
+    parser.add_argument("--base-url", type=str, default="http://localhost:23100", help="서버 주소")
     args = parser.parse_args()
 
     if not args.all and not args.devices:

@@ -30,10 +30,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS — Spring(8080)과 로컬 프론트(5173)만 허용
+# CORS — Spring(23100 로컬 / 8080 데모)과 로컬 프론트(5173)만 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "http://localhost:5173"],
+    allow_origins=["http://localhost:23100", "http://localhost:8080", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

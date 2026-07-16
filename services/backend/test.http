@@ -1,4 +1,4 @@
-@host = http://localhost:8080
+@host = http://localhost:23100
 
 ### 회원가입 (승인 대기 상태로 생성됨 — 로그인하려면 관리자 승인 필요)
 POST {{host}}/auth/register
