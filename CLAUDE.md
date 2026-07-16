@@ -20,8 +20,8 @@ gradle 명령은 반드시 `services/backend/`에서 실행한다.
 
 ### 로컬 개발 환경 시작
 ```bash
-# 의존 서비스 시작 (PostgreSQL) — 루트에서
-docker-compose up -d
+# 공용 PostgreSQL(외부, DB·계정 sensor_monitor)이 실행 중이어야 함
+# 앱 기본값: jdbc:postgresql://localhost:5432/sensor_monitor (다르면 DB_* env 로 재정의)
 
 # JWT 서명 키 주입 (기본값 없음, 미설정 시 부팅 실패)
 export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
@@ -29,6 +29,8 @@ export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 # 애플리케이션 실행 (services/backend/)
 cd services/backend && ./gradlew bootRun
 ```
+
+컨테이너 데모: `docker-compose up --build` 가 자체 postgres + backend + ax 를 함께 띄운다(공용 DB 불필요, postgres 는 호스트 5433 노출). backend 는 멀티스테이지 Dockerfile 로 컨테이너 안에서 빌드된다. simulator 는 상시 서비스가 아니라 `seed` 프로파일(`docker-compose --profile seed run --rm simulator --all`). 일상 개발은 위 bootRun(공용 DB) 경로를 쓰고, compose 전체 up 대신 필요한 서비스만(`up ax`) 선택 기동한다.
 
 ### 빌드 / 테스트 (services/backend/ 에서)
 ```bash

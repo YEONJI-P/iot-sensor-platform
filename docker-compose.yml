@@ -1,24 +1,64 @@
+name: sensor-monitor
+
 services:
-  postgresql:
+  # 데모용 DB. `docker-compose up` 시 함께 뜬다.
+  # 일상 개발에선 공용 Postgres 를 쓰므로, 전체 up 대신 `up ax` 처럼 선택 기동하면 이 서비스는 안 뜬다.
+  postgres:
     image: postgres:15
-    container_name: iot-postgresql
-    restart: always
-    env_file:
-      - .env
+    container_name: sensor-postgres
+    environment:
+      POSTGRES_DB: sensor_monitor
+      POSTGRES_USER: sensor_monitor
+      POSTGRES_PASSWORD: sensor_monitor
     ports:
-      - "5432:5432"
+      - "5433:5432"   # 호스트 공용 Postgres(5432)와 충돌 피하려 5433 로 노출
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sensor_monitor -d sensor_monitor"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./services/backend
+    container_name: sensor-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/sensor_monitor
+      DB_USERNAME: sensor_monitor
+      DB_PASSWORD: sensor_monitor
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 환경변수가 필요합니다 (.env 또는 셸 export)}
+      AX_BASE_URL: http://ax:8000
+      AX_ENABLED: ${AX_ENABLED:-false}
+    ports:
+      - "8080:8080"
 
   ax:
     build: ./services/ax
-    container_name: iot-ax
+    container_name: sensor-ax
     ports:
       - "8000:8000"
     environment:
       AX_PROVIDER: ${AX_PROVIDER:-echo}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       MODEL_NAME: ${MODEL_NAME:-gemini-flash-lite-latest}
+
+  # 실측 CSV 리플레이 배치. 상시 서비스가 아니라 seed 프로파일에서만 뜬다.
+  #   docker-compose --profile seed run --rm simulator --all
+  # 선행: seed.sql 로 계정/장치/임계값이 먼저 적재돼 있어야 한다.
+  simulator:
+    build: ./services/simulator
+    container_name: sensor-simulator
+    profiles: [seed]
+    depends_on:
+      backend:
+        condition: service_started
+    volumes:
+      - ./services/simulator/data:/app/data
+    command: ["--all", "--base-url", "http://backend:8080"]
 
 volumes:
   postgres_data:

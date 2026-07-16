@@ -4,9 +4,9 @@ spring:
   profiles:
     default: local
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/sensor_monitor_db}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/sensor_monitor}
+    username: ${DB_USERNAME:sensor_monitor}
+    password: ${DB_PASSWORD:sensor_monitor}
   jpa:
     hibernate:
       ddl-auto: update

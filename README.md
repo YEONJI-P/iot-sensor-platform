@@ -368,30 +368,49 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 ### 사전 요구사항
 
 - Java 17
-- Docker, Docker Compose (PostgreSQL 로컬 실행)
+- 아래 두 모드 중 하나
+  - **로컬 실행**: 공용 PostgreSQL 인스턴스(이 저장소 밖에서 실행, DB·계정 `sensor_monitor`)
+  - **컨테이너 데모**: Docker, Docker Compose (자체 Postgres 포함, compose 하나로 전체 기동)
 
-### 로컬 실행
+### 로컬 실행 (공용 Postgres + bootRun)
+
+일상 개발용. 공용 Postgres 를 쓰고 backend 만 로컬에서 띄운다.
 
 ```bash
-# 1. 레포 클론
 git clone https://github.com/YEONJI-P/sensor-monitor.git
 cd sensor-monitor
 
-# 2. 환경변수 파일 생성 (docker-compose 의 PostgreSQL 이 .env 를 요구)
-cp .env.example .env
+# 공용 PostgreSQL 준비 — DB·사용자 sensor_monitor 가 실행 중이어야 함
+# (앱 기본값이 jdbc:postgresql://localhost:5432/sensor_monitor 를 가리킴)
 
-# 3. PostgreSQL 실행
-docker-compose up -d
-
-# 4. JWT 서명 키 설정, 기본값이 없어 미설정 시 부팅 실패 (셸 export 또는 IDE 실행 구성)
+# JWT 서명 키 설정, 기본값이 없어 미설정 시 부팅 실패 (셸 export 또는 IDE 실행 구성)
 export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 
-# 5. 애플리케이션 실행 (Spring은 services/backend/)
+# 애플리케이션 실행 (Spring은 services/backend/)
 cd services/backend
 ./gradlew bootRun
+
+# (선택) AX 분석 서비스만 컨테이너로: 루트에서 docker-compose up -d ax
 ```
 
-> `.env` 는 docker-compose(Postgres) 전용이며 Spring 은 자동 로드하지 않습니다. 앱이 쓰는 `JWT_SECRET` 은 위처럼 셸이나 IDE에 직접 주입합니다.
+> 공용 Postgres 가 기본 접속정보와 다르면 `DB_URL`·`DB_USERNAME`·`DB_PASSWORD` 를 셸 env 로 재정의합니다. Spring 은 `.env` 를 자동 로드하지 않으므로 위 값은 셸/IDE 에 직접 주입합니다.
+
+### 컨테이너 데모 (`docker-compose up`)
+
+평가자·데모용. postgres + backend + ax 를 한 번에 기동한다. 공용 DB 불필요.
+
+```bash
+cp .env.example .env          # JWT_SECRET 등 채우기 (compose 가 자동 로드)
+docker-compose up --build     # postgres + backend + ax
+
+# 초기 데이터(계정/장치/임계값) 적재
+docker-compose exec -T postgres psql -U sensor_monitor -d sensor_monitor < services/simulator/seed.sql
+
+# (선택) 실측 CSV 리플레이 배치 — seed 프로파일
+docker-compose --profile seed run --rm simulator --all
+```
+
+> 컨테이너 postgres 는 호스트 `5433` 에 노출됩니다(공용 `5432` 와 충돌 방지). backend 는 내부 네트워크(`postgres:5432`)로 접속하므로 `DB_*` 재정의는 필요 없습니다. 리플레이 데이터(`services/simulator/data/`)는 저장소에 포함되지 않으니 먼저 내려받아야 합니다.
 
 ### 테스트 실행
 
@@ -413,7 +432,7 @@ http://localhost:8080/swagger-ui/index.html
 Spring Boot 기동 후 테이블이 생성된 상태에서 실행합니다.
 
 ```bash
-psql -U postgres -d sensor_monitor_db -f services/simulator/seed.sql
+psql -U sensor_monitor -d sensor_monitor -f services/simulator/seed.sql
 ```
 
 > 재실행이 필요한 경우 `seed.sql` 하단의 `TRUNCATE` 주석을 해제 후 먼저 실행하세요.
@@ -454,9 +473,9 @@ python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 
 | 변수명 | 설명 | 기본값 |
 |---|---|---|
-| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/sensor_monitor_db` |
-| `DB_USERNAME` | DB 사용자명 | `postgres` |
-| `DB_PASSWORD` | DB 비밀번호 | `postgres` |
+| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/sensor_monitor` |
+| `DB_USERNAME` | DB 사용자명 | `sensor_monitor` |
+| `DB_PASSWORD` | DB 비밀번호 | `sensor_monitor` |
 | `JWT_SECRET` | JWT 서명 키 (32자 이상) | 없음 (필수), 미설정 시 부팅 실패 |
 
 ---
