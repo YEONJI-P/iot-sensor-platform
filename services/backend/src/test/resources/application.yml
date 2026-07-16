@@ -1,4 +1,4 @@
-# 테스트 전용 설정. 실 인프라(Postgres/Redis) 없이 컨텍스트가 뜨도록 구성.
+# 테스트 전용 설정. 실 인프라(Postgres) 없이 컨텍스트가 뜨도록 구성.
 spring:
   datasource:
     url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
@@ -11,10 +11,6 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
-  data:
-    redis:
-      host: localhost
-      port: 6379
 
 jwt:
   secret-key: test-secret-key-for-ci-only-must-be-at-least-32-bytes

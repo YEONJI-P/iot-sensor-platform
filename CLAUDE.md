@@ -20,7 +20,7 @@ gradle 명령은 반드시 `services/backend/`에서 실행한다.
 
 ### 로컬 개발 환경 시작
 ```bash
-# 의존 서비스 시작 (PostgreSQL + Redis) — 루트에서
+# 의존 서비스 시작 (PostgreSQL) — 루트에서
 docker-compose up -d
 
 # JWT 서명 키 주입 (기본값 없음, 미설정 시 부팅 실패)
@@ -45,7 +45,7 @@ cd services/backend && ./gradlew bootRun
 ### 기술 스택
 - Java 17, Spring Boot 3.x (Web, Data JPA, Security, Validation)
 - PostgreSQL, 주 데이터베이스
-- Redis, Refresh Token 저장소
+- Refresh Token은 PostgreSQL `refresh_tokens` 테이블에 저장 (회전·서버측 로그아웃)
 - JWT (jjwt), stateless 인증
 - SSE (SseEmitter), 대시보드 실시간 스트림
 - Swagger/OpenAPI, `/swagger-ui/index.html` 에서 API 문서 확인

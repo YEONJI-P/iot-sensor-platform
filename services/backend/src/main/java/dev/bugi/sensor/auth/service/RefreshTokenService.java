@@ -1,31 +1,47 @@
 package dev.bugi.sensor.auth.service;
 
+import dev.bugi.sensor.auth.entity.RefreshToken;
+import dev.bugi.sensor.auth.repository.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenService {
-    private final StringRedisTemplate redisTemplate;
+    private final RefreshTokenRepository refreshTokenRepository;
 
-    private static final String KEY_PREFIX = "refresh:";
     private static final Duration TTL = Duration.ofDays(7);
 
-        public void save(String employeeId, String refreshToken){
-        redisTemplate.opsForValue().set(KEY_PREFIX + employeeId,refreshToken,TTL);
-    }
-    public String get(String employeeId){
-        return redisTemplate.opsForValue().get(KEY_PREFIX+employeeId);
+    @Transactional
+    public void save(String employeeId, String refreshToken) {
+        LocalDateTime expiresAt = LocalDateTime.now().plus(TTL);
+        refreshTokenRepository.findById(employeeId)
+                .ifPresentOrElse(
+                        existing -> existing.rotate(refreshToken, expiresAt),
+                        () -> refreshTokenRepository.save(new RefreshToken(employeeId, refreshToken, expiresAt))
+                );
     }
 
-    public void delete(String employeeId){
-        redisTemplate.delete(KEY_PREFIX+employeeId);
+    @Transactional(readOnly = true)
+    public String get(String employeeId) {
+        return refreshTokenRepository.findById(employeeId)
+                .filter(t -> !t.isExpired(LocalDateTime.now()))
+                .map(RefreshToken::getToken)
+                .orElse(null);
     }
-    public boolean validate(String employeeId,String refreshToken){
+
+    @Transactional
+    public void delete(String employeeId) {
+        refreshTokenRepository.deleteById(employeeId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean validate(String employeeId, String refreshToken) {
         String stored = get(employeeId);
-        return stored !=null && stored.equals(refreshToken);
+        return stored != null && stored.equals(refreshToken);
     }
 }

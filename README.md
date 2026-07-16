@@ -9,7 +9,6 @@
 ![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?style=flat-square&logo=springsecurity&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)
 ![Python](https://img.shields.io/badge/Python_3.11-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
@@ -70,7 +69,7 @@ graph LR
 |---|---|
 | Language | Java 17 |
 | Framework | Spring Boot 3.x, Spring Security |
-| Auth | JWT (JSON Web Token), Redis Refresh Token |
+| Auth | JWT (JSON Web Token), Refresh Token 회전 |
 | ORM | Spring Data JPA (Hibernate) |
 | Database | PostgreSQL |
 | Realtime | Server-Sent Events (SSE) |
@@ -104,7 +103,6 @@ graph TD
 
     AX[AX 분석 서비스<br>Python, FastAPI]
     DB[(PostgreSQL)]
-    REDIS[(Redis<br>Refresh Token)]
 
     SIM -->|POST /sensor-data| SENSOR
     CLI --> AUTH
@@ -115,7 +113,7 @@ graph TD
     SENSOR -->|커밋 후 이벤트| SSE
     SCHED -->|HTTP 요청-응답| AX
     SCHED --> DB
-    AUTH --> REDIS
+    AUTH -->|Refresh Token 저장| DB
 ```
 
 ---
@@ -324,7 +322,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 ### 인증
 
-- JWT 기반 stateless 인증, Redis에 Refresh Token 저장
+- JWT 기반 stateless 인증, Refresh Token 은 PostgreSQL 에 저장
 - Refresh Token 회전, 불일치 시 저장 토큰을 삭제해 강제 로그아웃 처리
 - Access, Refresh 토큰에 `type` 클레임을 두어 Refresh 토큰으로는 API에 접근 불가
 
@@ -355,7 +353,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 - SSE 기반 실시간 대시보드 (접근 범위 스코핑)
 - LLM 기반 이상 근거, 원인 진단 (Python 분석 서비스 HTTP 연동)
 - 실측 공개 센서 시계열(C-MAPSS 엔진, CNC 밀링) 리플레이로 시뮬레이터 데이터 교체
-- Redis Refresh Token 저장, 회전
+- Refresh Token 저장·회전 (PostgreSQL)
 
 ### 향후
 
@@ -370,7 +368,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 ### 사전 요구사항
 
 - Java 17
-- Docker, Docker Compose (PostgreSQL, Redis 로컬 실행)
+- Docker, Docker Compose (PostgreSQL 로컬 실행)
 
 ### 로컬 실행
 
@@ -382,7 +380,7 @@ cd sensor-monitor
 # 2. 환경변수 파일 생성 (docker-compose 의 PostgreSQL 이 .env 를 요구)
 cp .env.example .env
 
-# 3. PostgreSQL, Redis 실행
+# 3. PostgreSQL 실행
 docker-compose up -d
 
 # 4. JWT 서명 키 설정, 기본값이 없어 미설정 시 부팅 실패 (셸 export 또는 IDE 실행 구성)
@@ -402,7 +400,7 @@ cd services/backend
 ./gradlew test
 ```
 
-> 테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라(Postgres, Redis) 없이 실행됩니다. 설정은 `services/backend/src/test/resources/application.yml`.
+> 테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라(Postgres) 없이 실행됩니다. 설정은 `services/backend/src/test/resources/application.yml`.
 
 ### Swagger UI
 
@@ -460,8 +458,6 @@ python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 | `DB_USERNAME` | DB 사용자명 | `postgres` |
 | `DB_PASSWORD` | DB 비밀번호 | `postgres` |
 | `JWT_SECRET` | JWT 서명 키 (32자 이상) | 없음 (필수), 미설정 시 부팅 실패 |
-| `REDIS_HOST` | Redis 호스트 | `localhost` |
-| `REDIS_PORT` | Redis 포트 | `6379` |
 
 ---
 

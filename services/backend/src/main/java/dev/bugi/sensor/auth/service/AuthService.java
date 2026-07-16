@@ -85,8 +85,8 @@ public class AuthService {
 
         /*
         탈취 이슈 대응 (refresh token rotation)
-          정상 사용자 A 로그인 → Redis: refresh:EMP001 = "tokenB"(회전됨)
-          이후 A가 구 토큰 tokenA로 refresh → Redis 값과 불일치
+          정상 사용자 A 로그인 → refresh_tokens[EMP001] = "tokenB"(회전됨)
+          이후 A가 구 토큰 tokenA로 refresh → 저장 값과 불일치
           → 저장된 토큰을 즉시 삭제해 양쪽(정상/공격자) 모두 강제 로그아웃시키고 재로그인 유도
          */
 
