@@ -14,6 +14,7 @@ import dev.bugi.sensor.user.entity.UserStatus;
 import dev.bugi.sensor.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -21,6 +22,7 @@ import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
@@ -83,7 +85,14 @@ class DeviceServiceTest {
 
         deviceService.register(request, "DEV001");
 
-        verify(deviceRepository, times(1)).save(any(Device.class));
+        ArgumentCaptor<Device> captor = ArgumentCaptor.forClass(Device.class);
+        verify(deviceRepository).save(captor.capture());
+        Device saved = captor.getValue();
+        assertThat(saved.getName()).isEqualTo("온도센서1");
+        assertThat(saved.getType()).isEqualTo(Device.DeviceType.TEMPERATURE);
+        assertThat(saved.getLocation()).isEqualTo("공장1층");
+        assertThat(saved.getThresholdValue()).isEqualTo(80.0);
+        assertThat(saved.getZone()).isSameAs(zone);
     }
 
     @Test
@@ -113,7 +122,13 @@ class DeviceServiceTest {
 
         deviceService.update(1L, request, "DEV001");
 
-        verify(deviceRepository, times(1)).save(any(Device.class));
+        ArgumentCaptor<Device> captor = ArgumentCaptor.forClass(Device.class);
+        verify(deviceRepository).save(captor.capture());
+        Device saved = captor.getValue();
+        assertThat(saved.getName()).isEqualTo("온도센서1_update");
+        assertThat(saved.getType()).isEqualTo(Device.DeviceType.TEMPERATURE);
+        assertThat(saved.getLocation()).isEqualTo("공장2층");
+        assertThat(saved.getThresholdValue()).isEqualTo(75.0);
     }
 
     @Test

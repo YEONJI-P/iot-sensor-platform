@@ -1,7 +1,9 @@
 package dev.bugi.sensor.alert.service;
 
 import dev.bugi.sensor.alert.dto.AlertResponse;
+import dev.bugi.sensor.alert.dto.DailyAlertCountResponse;
 import dev.bugi.sensor.alert.entity.Alert;
+import dev.bugi.sensor.alert.entity.AlertSeverity;
 import dev.bugi.sensor.alert.repository.AlertRepository;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.repository.DeviceRepository;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -23,7 +26,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
-import javax.swing.text.html.Option;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,6 +44,9 @@ class AlertServiceTest {
     @Mock DeviceRepository deviceRepository;
     @Mock UserRepository userRepository;
     @Mock AccessControlService accessControlService;
+
+    private static final Instant FIXED = Instant.parse("2026-07-16T00:00:00Z");
+    @Spy Clock clock = Clock.fixed(FIXED, ZoneOffset.UTC);
 
     @InjectMocks
     AlertService alertService;
@@ -73,6 +81,7 @@ class AlertServiceTest {
                 .sensorValue(95.0)
                 .thresholdValue(80.0)
                 .message("[온도센서1] 임계값 초과! 현재값: 95.0, 임계값: 80.0")
+                .severity(AlertSeverity.CRITICAL)
                 .build();
     }
 
@@ -91,6 +100,11 @@ class AlertServiceTest {
         Page<AlertResponse> result = alertService.getAllAlerts("EMP001", pageable);
 
         assertThat(result.getContent()).hasSize(1);
+        AlertResponse mapped = result.getContent().get(0);
+        assertThat(mapped.getSensorValue()).isEqualTo(95.0);
+        assertThat(mapped.getThresholdValue()).isEqualTo(80.0);
+        assertThat(mapped.getSeverity()).isEqualTo(AlertSeverity.CRITICAL);
+        assertThat(mapped.getMessage()).isEqualTo("[온도센서1] 임계값 초과! 현재값: 95.0, 임계값: 80.0");
     }
 
     @Test
@@ -141,6 +155,10 @@ class AlertServiceTest {
         List<AlertResponse> result = alertService.getAllAlertsByDeviceId("EMP001", 1L);
 
         assertThat(result).hasSize(1);
+        assertThat(result.get(0).getSensorValue()).isEqualTo(95.0);
+        assertThat(result.get(0).getSeverity()).isEqualTo(AlertSeverity.CRITICAL);
+        assertThat(result.get(0).getMessage())
+                .isEqualTo("[온도센서1] 임계값 초과! 현재값: 95.0, 임계값: 80.0");
     }
 
     @Test
@@ -162,6 +180,45 @@ class AlertServiceTest {
 
         assertThrows(AccessDeniedException.class,
                 () -> alertService.getAllAlertsByDeviceId("EMP001", 1L));
+    }
+
+    @Test
+    void getDailyCount_maps_rows_and_uses_clock_for_window() {
+        User user = mockUser();
+        Device device = mockDevice();
+
+        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        doNothing().when(accessControlService).assertCanAccessDevice(user, device);
+        // 조회 시작 시각은 clock.instant() - 7일 이어야 한다.
+        Instant expectedStart = FIXED.minus(java.time.Duration.ofDays(7));
+        when(alertRepository.findDailyCountByDeviceId(eq(1L), eq(expectedStart)))
+                .thenReturn(List.of(
+                        new Object[]{"2026-07-15", 3L},
+                        new Object[]{"2026-07-16", 5L}));
+
+        List<DailyAlertCountResponse> result = alertService.getDailyCount("EMP001", 1L, 7);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getDate()).isEqualTo("2026-07-15");
+        assertThat(result.get(0).getCount()).isEqualTo(3L);
+        assertThat(result.get(1).getDate()).isEqualTo("2026-07-16");
+        assertThat(result.get(1).getCount()).isEqualTo(5L);
+    }
+
+    @Test
+    void getDailyCount_fail_access_denied() {
+        User user = mockUser();
+        Device device = mockDevice();
+
+        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        doThrow(new AccessDeniedException("접근 권한이 없어요"))
+                .when(accessControlService).assertCanAccessDevice(user, device);
+
+        assertThrows(AccessDeniedException.class,
+                () -> alertService.getDailyCount("EMP001", 1L, 7));
+        verify(alertRepository, never()).findDailyCountByDeviceId(any(), any());
     }
 
     @Test
