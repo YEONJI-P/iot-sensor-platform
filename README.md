@@ -75,7 +75,7 @@ graph LR
 | Realtime | Server-Sent Events (SSE) |
 | AI Service | Python 3.11, FastAPI, uv |
 | API Docs | Swagger (springdoc-openapi) |
-| Test | JUnit5, Mockito, H2, pytest |
+| Test | JUnit5, Mockito, H2(부팅 스모크), Testcontainers(DB 계층), pytest |
 | Container | Docker, Docker Compose |
 | CI | GitHub Actions |
 
@@ -419,7 +419,9 @@ cd services/backend
 ./gradlew test
 ```
 
-> 테스트는 인메모리 H2(PostgreSQL 호환 모드)로 동작해 별도 인프라(Postgres) 없이 실행됩니다. 설정은 `services/backend/src/test/resources/application.yml`.
+> 테스트는 두 갈래입니다.
+> - **컨텍스트 부팅 스모크**(`contextLoads`)는 인메모리 H2 로 동작해 별도 인프라 없이 실행됩니다(엔티티 매핑·설정 오류를 싸게 잡는 용도이며, DB 계층은 검증하지 않습니다). 설정은 `services/backend/src/test/resources/application.yml`.
+> - **DB 계층 검증**(리포지토리·네이티브 쿼리·제약·컬럼 타입)은 Testcontainers 로 프로덕션과 동일한 `postgres:15` 를 띄워 검증하므로 **로컬에 도커가 실행 중이어야 합니다**. 컨테이너는 한 번만 떠서 모든 리포지토리 테스트가 재사용합니다.
 
 ### Swagger UI
 
