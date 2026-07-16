@@ -36,6 +36,7 @@ import static org.mockito.Mockito.*;
 class SensorDataServiceTest {
 
     @Mock DeviceRepository deviceRepository;
+    @Mock dev.bugi.sensor.device.repository.DeviceStatusRepository deviceStatusRepository;
     @Mock SensorDataRepository sensorDataRepository;
     @Mock AlertRepository alertRepository;
     @Mock FailedReadingRepository failedReadingRepository;

@@ -5,7 +5,9 @@ import dev.bugi.sensor.alert.entity.Alert;
 import dev.bugi.sensor.alert.entity.AlertSeverity;
 import dev.bugi.sensor.alert.repository.AlertRepository;
 import dev.bugi.sensor.device.entity.Device;
+import dev.bugi.sensor.device.entity.DeviceStatus;
 import dev.bugi.sensor.device.repository.DeviceRepository;
+import dev.bugi.sensor.device.repository.DeviceStatusRepository;
 import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.sensordata.anomaly.AnomalyDetector;
 import dev.bugi.sensor.sensordata.dto.SensorDataRequest;
@@ -50,6 +52,7 @@ public class SensorDataService {
     private static final Duration COOLDOWN = Duration.ofMinutes(5);
 
     private final DeviceRepository deviceRepository;
+    private final DeviceStatusRepository deviceStatusRepository;
     private final SensorDataRepository sensorDataRepository;
     private final AlertRepository alertRepository;
     private final FailedReadingRepository failedReadingRepository;
@@ -78,7 +81,7 @@ public class SensorDataService {
                 .value(request.getValue())
                 .build();
         sensorDataRepository.save(sensorData);
-        device.markSeen(clock.instant());
+        markSeen(device);
         log.info("센서 데이터 저장 완료 - deviceId: {}, value: {}", request.getDeviceId(), request.getValue());
         // 실시간 전송은 커밋 후에 (SseBroadcastListener). 저장 트랜잭션 안에서 I/O를 하지 않는다.
         eventPublisher.publishEvent(
@@ -127,6 +130,16 @@ public class SensorDataService {
             log.info("Alert 해제 - device: {}, value: {}", device.getName(), value);
         }
         // breach && inAlarm → 억제(생성 안 함) / 여유 구간 → 알람 유지
+    }
+
+    // 수신 하트비트는 Device(설정)가 아니라 DeviceStatus(텔레메트리)에 찍는다 — 설정 감사 오염 방지.
+    private void markSeen(Device device) {
+        Instant now = clock.instant();
+        deviceStatusRepository.findById(device.getId())
+                .ifPresentOrElse(
+                        status -> status.markSeen(now),
+                        () -> deviceStatusRepository.save(new DeviceStatus(device, now))
+                );
     }
 
     private void recordFailure(SensorDataRequest request, String reason) {

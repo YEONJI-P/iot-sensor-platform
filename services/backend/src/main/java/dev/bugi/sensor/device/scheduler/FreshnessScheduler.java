@@ -8,7 +8,8 @@ import dev.bugi.sensor.ax.config.AxProperties;
 import dev.bugi.sensor.ax.dto.FreshnessDiagnoseRequest;
 import dev.bugi.sensor.ax.dto.FreshnessDiagnoseResponse;
 import dev.bugi.sensor.device.entity.Device;
-import dev.bugi.sensor.device.repository.DeviceRepository;
+import dev.bugi.sensor.device.entity.DeviceStatus;
+import dev.bugi.sensor.device.repository.DeviceStatusRepository;
 import dev.bugi.sensor.sensordata.failure.FailedReadingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +46,7 @@ public class FreshnessScheduler {
     // 구역 전체 침묵으로 볼 최소 장치 수(1대뿐이면 비교 대상 이웃이 없어 개별로 처리).
     private static final int COHORT_MIN = 2;
 
-    private final DeviceRepository deviceRepository;
+    private final DeviceStatusRepository deviceStatusRepository;
     private final FailedReadingRepository failedReadingRepository;
     private final AlertRepository alertRepository;
     private final AxClient axClient;
@@ -59,27 +60,28 @@ public class FreshnessScheduler {
 
     @Scheduled(fixedRateString = "60000")
     public void checkFreshness() {
-        List<Device> devices = deviceRepository.findMonitoredWithZone();
+        // 수신 이력이 있는(status 행 존재) 감시 대상만 조회된다.
+        List<DeviceStatus> statuses = deviceStatusRepository.findMonitoredWithDeviceAndZone();
         Instant now = clock.instant();
 
-        // 관측된(lastSeenAt 존재) 장치를 구역별로, 그중 침묵 장치도 구역별로 모은다.
-        Map<Long, List<Device>> seenByZone = new HashMap<>();
-        Map<Long, List<Device>> silentByZone = new HashMap<>();
-        for (Device device : devices) {
-            if (device.getLastSeenAt() == null || device.getZone() == null) {
+        // 관측된 장치를 구역별로, 그중 침묵 장치도 구역별로 모은다.
+        Map<Long, List<DeviceStatus>> seenByZone = new HashMap<>();
+        Map<Long, List<DeviceStatus>> silentByZone = new HashMap<>();
+        for (DeviceStatus status : statuses) {
+            if (status.getLastSeenAt() == null) {
                 continue;
             }
-            Long zoneId = device.getZone().getId();
-            seenByZone.computeIfAbsent(zoneId, k -> new ArrayList<>()).add(device);
-            long elapsed = Duration.between(device.getLastSeenAt(), now).getSeconds();
-            if (elapsed > device.getExpectedIntervalSeconds()) {
-                silentByZone.computeIfAbsent(zoneId, k -> new ArrayList<>()).add(device);
+            Long zoneId = status.getDevice().getZone().getId();
+            seenByZone.computeIfAbsent(zoneId, k -> new ArrayList<>()).add(status);
+            long elapsed = Duration.between(status.getLastSeenAt(), now).getSeconds();
+            if (elapsed > status.getDevice().getExpectedIntervalSeconds()) {
+                silentByZone.computeIfAbsent(zoneId, k -> new ArrayList<>()).add(status);
             }
         }
 
         // 이번 틱에 "구역 전체 침묵"(관측 장치 2대 이상 전부 침묵)인 구역.
         Set<Long> fullySilentZones = new HashSet<>();
-        for (Map.Entry<Long, List<Device>> e : silentByZone.entrySet()) {
+        for (Map.Entry<Long, List<DeviceStatus>> e : silentByZone.entrySet()) {
             int silent = e.getValue().size();
             int seen = seenByZone.get(e.getKey()).size();
             if (silent >= COHORT_MIN && silent == seen) {
@@ -89,39 +91,41 @@ public class FreshnessScheduler {
         // 전체 침묵이 풀린 구역은 코호트 디바운스에서 해제(다음 전체 침묵 때 재알림).
         cohortAlertedZones.retainAll(fullySilentZones);
 
-        for (Map.Entry<Long, List<Device>> e : silentByZone.entrySet()) {
+        for (Map.Entry<Long, List<DeviceStatus>> e : silentByZone.entrySet()) {
             Long zoneId = e.getKey();
-            List<Device> silent = e.getValue();
+            List<DeviceStatus> silent = e.getValue();
             if (fullySilentZones.contains(zoneId)) {
                 if (cohortAlertedZones.add(zoneId)) {
                     handleCohortSilence(silent, now);
                 }
             } else {
-                for (Device device : silent) {
-                    handleIndividualSilence(device, now);
+                for (DeviceStatus status : silent) {
+                    handleIndividualSilence(status, now);
                 }
             }
         }
     }
 
     // 구역 전체 동시 침묵 — 계획 정지/게이트웨이 장애 가능성. 대표 장치에 집계 1건(WARNING).
-    private void handleCohortSilence(List<Device> silentDevices, Instant now) {
-        Device rep = silentDevices.get(0);
+    private void handleCohortSilence(List<DeviceStatus> silentStatuses, Instant now) {
+        DeviceStatus repStatus = silentStatuses.get(0);
+        Device rep = repStatus.getDevice();
         String zoneName = rep.getZone().getName();
-        long elapsed = Duration.between(rep.getLastSeenAt(), now).getSeconds();
-        log.warn("구역 전체 수신 끊김 - zone={}, 장치 {}대 동시 침묵", zoneName, silentDevices.size());
+        long elapsed = Duration.between(repStatus.getLastSeenAt(), now).getSeconds();
+        log.warn("구역 전체 수신 끊김 - zone={}, 장치 {}대 동시 침묵", zoneName, silentStatuses.size());
         Alert alert = Alert.builder()
                 .device(rep)
                 .message(String.format("구역 전체 수신 끊김 - %s (%d대 동시 침묵, 경과 %ds) · 계획 정지/게이트웨이 장애 가능성",
-                        zoneName, silentDevices.size(), elapsed))
+                        zoneName, silentStatuses.size(), elapsed))
                 .severity(AlertSeverity.WARNING)
                 .build();
         alertRepository.save(alert);
     }
 
     // 이웃은 정상인데 혼자 침묵 — 개별 고장으로 보고 AX 원인진단 + CRITICAL.
-    private void handleIndividualSilence(Device device, Instant now) {
-        Instant lastSeenAt = device.getLastSeenAt();
+    private void handleIndividualSilence(DeviceStatus status, Instant now) {
+        Device device = status.getDevice();
+        Instant lastSeenAt = status.getLastSeenAt();
         if (lastSeenAt.equals(diagnosedEpisodes.get(device.getId()))) {
             return;
         }

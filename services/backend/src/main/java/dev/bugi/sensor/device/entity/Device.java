@@ -36,7 +36,7 @@ public class Device {
 
     private Integer expectedIntervalSeconds;
 
-    private Instant lastSeenAt;
+    // 수신 하트비트(lastSeenAt)는 설정 감사를 오염시키지 않도록 DeviceStatus 로 분리했다.
 
     @CreatedDate
     @Column(updatable = false)
@@ -67,10 +67,6 @@ public class Device {
         this.type = type;
         this.location = location;
         this.thresholdValue = thresholdValue;
-    }
-
-    public void markSeen(Instant at) {
-        this.lastSeenAt = at;
     }
 
     /** 임계 초과 진입: 알람 상태로 전환하고 발화 시각을 기록한다. */
