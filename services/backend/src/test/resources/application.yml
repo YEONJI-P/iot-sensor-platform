@@ -13,6 +13,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  # H2 컨텍스트 스모크는 migration 검증 대상이 아니다. prod 프로파일 통합 테스트만 Flyway를 켠다.
+  flyway:
+    enabled: false
 
 jwt:
   secret-key: test-secret-key-for-ci-only-must-be-at-least-32-bytes

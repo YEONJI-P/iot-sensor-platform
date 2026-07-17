@@ -22,6 +22,11 @@ services:
 
   backend:
     build: ./services/backend
+    # 이 compose 는 로컬 개발·데모 전용이다. 태그를 명시하지 않으면 compose 가 암묵적으로
+    # `sensor-monitor-backend:latest` 를 만들어, 배포용 GHCR 이미지와 이름이 겹쳐 보인다.
+    # `:local` 로 못박아 로컬 빌드 산출물과 배포 이미지를 눈으로 구분한다.
+    # 배포용 이미지는 ghcr.io/yeonji-p/sensor-monitor-backend:<git-sha> (README §배포 이미지 계약).
+    image: sensor-monitor-backend:local
     container_name: sensor-backend
     depends_on:
       postgres:
@@ -32,7 +37,9 @@ services:
         required: false
     environment:
       # 오케스트레이션 토폴로지 값만 둔다(내부 호스트명·데모 DB 크레덴셜). env_file 보다 우선 적용됨.
-      # 데모는 호스트 8080 유지 — 앱 기본 포트(23100)를 8080으로 핀 고정
+      # SERVER_PORT 는 이미지 기본값(8080)과 같은 값을 명시해 둔다 — 데모 호스트 매핑과 한눈에 맞춰 보라고.
+      # 이미지 기본값은 prod지만 이 compose는 로컬 데모이므로 기존 ddl-auto/update·SQL 로그 동작을 보존한다.
+      SPRING_PROFILES_ACTIVE: local
       SERVER_PORT: 8080
       DB_URL: jdbc:postgresql://postgres:5432/sensor_monitor
       DB_USERNAME: sensor_monitor
@@ -43,13 +50,16 @@ services:
 
   explain:
     build: ./services/explain
+    # backend 와 같은 이유로 로컬 태그를 명시한다(암묵적 :latest 금지).
+    # 배포용 이미지는 ghcr.io/yeonji-p/sensor-monitor-explain:<git-sha> (README §배포 이미지 계약).
+    image: sensor-monitor-explain:local
     container_name: sensor-explain
     # 서비스 소속 설정(EXPLAIN_PROVIDER, GEMINI_API_KEY, MODEL_NAME 등)은 여기서 읽는다. cp services/explain/.env.example services/explain/.env
     env_file:
       - path: ./services/explain/.env
         required: false
     environment:
-      # 데모는 호스트 8000 유지 — 앱 기본 포트(23200)를 8000으로 핀 고정. env_file 보다 우선 적용됨.
+      # PORT 는 이미지 기본값(8000)과 같은 값을 명시해 둔다. env_file 보다 우선 적용됨.
       PORT: 8000
     ports:
       - "8000:8000"

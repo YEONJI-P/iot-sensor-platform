@@ -1,0 +1,12 @@
+# 컨테이너 배포 프로파일. 이미지가 SPRING_PROFILES_ACTIVE=prod를 기본으로 제공한다.
+# Flyway가 버전 스키마를 먼저 적용하고 Hibernate는 결과를 변경하지 않고 검증만 한다.
+spring:
+  flyway:
+    enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false

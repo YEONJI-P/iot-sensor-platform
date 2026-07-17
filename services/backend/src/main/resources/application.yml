@@ -14,6 +14,10 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+  # 로컬 기본 동작은 기존 Hibernate update를 유지한다. 운영(prod)에서만 Flyway를 켜고
+  # Hibernate는 migration 결과를 validate한다(application-prod.yml).
+  flyway:
+    enabled: false
   jackson:
     serialization:
       # 시각 필드를 epoch 숫자가 아닌 ISO-8601 문자열로 직렬화 (Instant는 끝에 Z 부착)
@@ -45,7 +49,7 @@ explain:
   enabled: ${EXPLAIN_ENABLED:false}
 
 ---
-# local 프로파일: 개발 편의 설정 (SQL 로그 등). 기본 활성 프로파일.
+# local 프로파일: 개발 편의 설정 (SQL 로그 등). bootRun 등 프로파일 미지정 시 기본값.
 spring:
   config:
     activate:

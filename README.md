@@ -71,7 +71,7 @@ graph LR
 | Framework | Spring Boot 3.x, Spring Security |
 | Auth | JWT (JSON Web Token), Refresh Token 회전 |
 | ORM | Spring Data JPA (Hibernate) |
-| Database | PostgreSQL |
+| Database | PostgreSQL, Flyway |
 | Realtime | Server-Sent Events (SSE) |
 | AI Service | Python 3.11, FastAPI, uv |
 | API Docs | Swagger (springdoc-openapi) |
@@ -436,9 +436,10 @@ cd services/backend
 ./gradlew test
 ```
 
-> 테스트는 두 갈래입니다.
+> 테스트는 세 갈래입니다.
 > - **컨텍스트 부팅 스모크**(`contextLoads`)는 인메모리 H2 로 동작해 별도 인프라 없이 실행됩니다(엔티티 매핑·설정 오류를 싸게 잡는 용도이며, DB 계층은 검증하지 않습니다). 설정은 `services/backend/src/test/resources/application.yml`.
 > - **DB 계층 검증**(리포지토리·네이티브 쿼리·제약·컬럼 타입)은 Testcontainers 로 프로덕션과 동일한 `postgres:15` 를 띄워 검증하므로 **로컬에 도커가 실행 중이어야 합니다**. 컨테이너는 한 번만 떠서 모든 리포지토리 테스트가 재사용합니다.
+> - **운영 스키마 검증**(`FlywayMigrationTest`)은 빈 `postgres:15`에 prod 프로파일을 적용해 Flyway V1 실행과 Hibernate `ddl-auto=validate` 부팅을 함께 확인합니다.
 
 ### Swagger UI
 
@@ -450,7 +451,7 @@ http://localhost:23100/swagger-ui/index.html
 
 ### 초기 데이터 투입 (`services/simulator/seed.sql`)
 
-Spring Boot 기동 후 테이블이 생성된 상태에서 실행합니다.
+Spring Boot 기동 후 스키마가 준비된 상태에서 실행합니다. prod에서는 Flyway가 스키마를 만들고, local에서는 기존 Hibernate `ddl-auto=update`가 동작합니다.
 
 ```bash
 psql -U sensor_monitor -d sensor_monitor -f services/simulator/seed.sql
@@ -492,12 +493,71 @@ python services/simulator/simulator.py --devices 1 6 --interval 0.5 --limit 100
 
 ### 환경변수
 
-| 변수명 | 설명 | 기본값 |
-|---|---|---|
-| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/sensor_monitor` |
-| `DB_USERNAME` | DB 사용자명 | `sensor_monitor` |
-| `DB_PASSWORD` | DB 비밀번호 | `sensor_monitor` |
-| `JWT_SECRET` | JWT 서명 키 (32자 이상) | 없음 (필수), 미설정 시 부팅 실패 |
+backend (`services/backend/.env.example`, 소비처 `src/main/resources/application.yml`)
+
+| 변수명 | 설명 | 앱 기본값 | 컨테이너 이미지 기본값 |
+|---|---|---|---|
+| `JWT_SECRET` | JWT 서명 키 (32바이트 이상) | 없음 (필수), 미설정 시 부팅 실패 | 동일 (필수 주입) |
+| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/sensor_monitor` | 동일 |
+| `DB_USERNAME` | DB 사용자명 | `sensor_monitor` | 동일 |
+| `DB_PASSWORD` | DB 비밀번호 | `sensor_monitor` | 동일 |
+| `SERVER_PORT` | HTTP 포트 | `23100` | `8080` |
+| `SPRING_PROFILES_ACTIVE` | 실행 프로파일 | `local` (SQL·파일 로그) | `prod` (stdout 전용) |
+| `EXPLAIN_ENABLED` | explain 연동 토글 | `false` | 동일 |
+| `EXPLAIN_BASE_URL` | explain 서비스 주소 | `http://localhost:23200` | 동일 |
+
+explain (`services/explain/.env.example`, 소비처 `app/dependencies.py`)
+
+| 변수명 | 설명 | 앱 기본값 | 컨테이너 이미지 기본값 |
+|---|---|---|---|
+| `EXPLAIN_PROVIDER` | LLM provider (`echo` \| `gemini`) | `echo` | 동일 |
+| `GEMINI_API_KEY` | Gemini 인증 키 | 빈 값 — `gemini` 선택 시 필수 | 동일 |
+| `MODEL_NAME` | 사용 모델 (provider=gemini 일 때만) | `gemini-2.0-flash` (실호출 미검증) | 동일 |
+| `PORT` | HTTP 포트 | `23200` | `8000` |
+| `REQUEST_TIMEOUT` | LLM 호출 타임아웃(초) | `30` | 동일 |
+
+> **포트 기본값이 실행 모드마다 다른 이유** — 앱 기본값(23100/23200)은 `bootRun`·`uv run` 로컬 개발용이고, 컨테이너 이미지 기본값(8080/8000)은 배포 계약입니다. 이미지의 `EXPOSE`·`ENV` 는 항상 후자와 같은 값을 유지하므로, 배포 측이 포트 env 를 아예 안 줘도 계약대로 뜹니다. 호스트 포트 매핑은 이미지가 아니라 compose·배포 측이 정합니다.
+
+### 운영 DB 스키마와 Flyway
+
+- backend의 `prod` 프로파일은 Flyway migration을 먼저 실행하고 Hibernate는 `ddl-auto=validate`로 결과만 검증합니다. 첫 스키마는 `services/backend/src/main/resources/db/migration/V1__initial_schema.sql`입니다.
+- 저장소의 `docker-compose.yml`은 로컬 데모이므로 `SPRING_PROFILES_ACTIVE=local`을 명시하고 기존 `ddl-auto=update` 동작을 유지합니다.
+- 빈 운영 DB와 접속 role은 배포 인프라가 먼저 만들어야 합니다. Flyway는 **DB/role 생성, 백업, seed 투입 도구가 아니며**, 이미 만들어진 DB 안의 테이블·제약·인덱스 버전만 관리합니다.
+- V1에는 스키마만 있고 샘플 계정·장치 데이터는 없습니다. 필요할 때 `services/simulator/seed.sql`을 별도 실행합니다.
+- V1이 운영 DB에 한 번 적용된 뒤에는 내용을 수정하지 않고 다음 변경을 `V2__...sql`처럼 새 파일로 추가합니다.
+
+#### Hibernate가 이미 만든 DB의 1회 전환
+
+Flyway history가 없는데 테이블이 들어 있는 DB는 prod 첫 기동이 의도적으로 실패합니다. 자동으로 기존 스키마를 정상이라고 간주하면 누락 컬럼이나 제약을 숨길 수 있기 때문입니다.
+
+1. DB를 백업하고 복구 가능 여부를 확인합니다.
+2. 실제 테이블·컬럼·제약·인덱스가 V1과 현재 엔티티에 맞는지 비교합니다. 맞지 않으면 먼저 차이를 위한 별도 migration을 설계하고, history를 임의 수정하지 않습니다.
+3. V1과 같음이 확인된 기존 DB에만 아래 두 환경변수를 **한 번의 prod 기동에만** 추가합니다.
+
+   ```text
+   SPRING_FLYWAY_BASELINE_ON_MIGRATE=true
+   SPRING_FLYWAY_BASELINE_VERSION=1
+   ```
+
+   이 기동은 V1 SQL을 실행하지 않고 기존 스키마를 version 1로 기록한 뒤 Hibernate validation을 수행합니다. validation이 실패하면 배포를 중단하고 스키마 차이를 수정해야 합니다.
+4. 성공을 확인한 즉시 두 변수를 제거하고 평소 prod 설정으로 다시 기동합니다. 애플리케이션 기본 설정에는 `baseline-on-migrate`를 켜 두지 않습니다.
+
+> 위 baseline 절차를 스키마가 불완전하거나 출처를 모르는 DB에 쓰면 V1을 실행한 것처럼 기록해 버립니다. 새 홈서버 DB처럼 빈 DB에는 baseline 변수를 주지 않고 Flyway가 V1을 직접 적용하게 합니다.
+
+### 배포 이미지 계약
+
+컨테이너 이미지는 GHCR 로 발행하고, 소비자(홈서버 등)는 아래 reference 를 **커밋 SHA 로 pin** 해서 씁니다.
+
+```
+ghcr.io/yeonji-p/sensor-monitor-backend:<git-sha>
+ghcr.io/yeonji-p/sensor-monitor-explain:<git-sha>
+```
+
+- **`latest` 는 발행하지 않습니다.** 같은 태그가 다른 코드를 가리키면 무엇이 돌고 있는지 확인할 수도, 되돌릴 좌표를 잡을 수도 없습니다.
+- 발행은 `.github/workflows/publish-images.yml` 의 **수동 실행(workflow_dispatch)** 뿐입니다. main push 는 CI(`ci.yml`, 빌드·테스트)만 돌고 이미지를 덮어쓰지 않습니다.
+- 로컬 `docker compose` 가 만드는 이미지는 `sensor-monitor-backend:local`·`sensor-monitor-explain:local` 로, 배포 이미지와 태그가 겹치지 않습니다.
+- 최초 발행된 GHCR 패키지는 **private**입니다. workflow의 OCI source 라벨은 이미지 출처와 저장소 연결을 명시할 뿐 visibility를 public으로 바꾸지 않습니다.
+- private 유지 시 홈서버가 GHCR 로그인 자격증명을 가져야 합니다. 공개 전환은 발행 후 패키지 설정에서 별도로 결정하며, workflow가 자동으로 바꾸지 않습니다.
 
 ---
 
