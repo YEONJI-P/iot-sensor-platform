@@ -313,7 +313,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
   | `VIEWER` | 소속 구역 읽기 전용 (장치 변경 불가) |
 
 - 공장(Factory), 구역(Zone) 계층과 구역 소속 관계로 접근 범위를 계산하는 `AccessControlService`
-- 초기 데이터는 `services/simulator/seed.sql`(PostgreSQL) 일괄 투입
+- prod의 공개 데모 토폴로지는 Flyway V2가 자동 투입하고, local의 계정 포함 데모 데이터는 `services/simulator/seed.sql`로 별도 투입
 
 ### 센서 데이터 수신과 알림
 
@@ -439,7 +439,7 @@ cd services/backend
 > 테스트는 세 갈래입니다.
 > - **컨텍스트 부팅 스모크**(`contextLoads`)는 인메모리 H2 로 동작해 별도 인프라 없이 실행됩니다(엔티티 매핑·설정 오류를 싸게 잡는 용도이며, DB 계층은 검증하지 않습니다). 설정은 `services/backend/src/test/resources/application.yml`.
 > - **DB 계층 검증**(리포지토리·네이티브 쿼리·제약·컬럼 타입)은 Testcontainers 로 프로덕션과 동일한 `postgres:15` 를 띄워 검증하므로 **로컬에 도커가 실행 중이어야 합니다**. 컨테이너는 한 번만 떠서 모든 리포지토리 테스트가 재사용합니다.
-> - **운영 스키마 검증**(`FlywayMigrationTest`)은 빈 `postgres:15`에 prod 프로파일을 적용해 Flyway V1 실행과 Hibernate `ddl-auto=validate` 부팅을 함께 확인합니다.
+> - **운영 스키마 검증**(`FlywayMigrationTest`)은 빈 `postgres:15`에 prod 프로파일을 적용해 Flyway V1/V2 실행, 공개 데모 토폴로지와 Hibernate `ddl-auto=validate` 부팅을 함께 확인합니다.
 
 ### Swagger UI
 
@@ -449,15 +449,16 @@ http://localhost:23100/swagger-ui/index.html
 
 > bootRun 기본 포트는 `23100`. 컨테이너 데모(`docker compose up`)는 호스트 `8080`을 유지합니다.
 
-### 초기 데이터 투입 (`services/simulator/seed.sql`)
+### 로컬 데모 초기 데이터 투입 (`services/simulator/seed.sql`)
 
-Spring Boot 기동 후 스키마가 준비된 상태에서 실행합니다. prod에서는 Flyway가 스키마를 만들고, local에서는 기존 Hibernate `ddl-auto=update`가 동작합니다.
+이 절은 Flyway를 끄고 Hibernate `ddl-auto=update`를 사용하는 local 실행 전용입니다. Spring Boot 기동 후 스키마가 준비된 상태에서 실행합니다. prod는 이 파일을 실행하지 않고 Flyway V2의 공장·구역·장치 토폴로지를 사용합니다.
 
 ```bash
 psql -U sensor_monitor -d sensor_monitor -f services/simulator/seed.sql
 ```
 
 > 재실행이 필요한 경우 `seed.sql` 하단의 `TRUNCATE` 주석을 해제 후 먼저 실행하세요.
+> 이 파일의 알려진 관리자·구성원 비밀번호는 로컬 시연용입니다. 공개 홈서버나 운영 DB에 투입하지 않습니다.
 
 투입되는 샘플 계정
 
@@ -522,16 +523,18 @@ explain (`services/explain/.env.example`, 소비처 `app/dependencies.py`)
 
 - backend의 `prod` 프로파일은 Flyway migration을 먼저 실행하고 Hibernate는 `ddl-auto=validate`로 결과만 검증합니다. 첫 스키마는 `services/backend/src/main/resources/db/migration/V1__initial_schema.sql`입니다.
 - 저장소의 `docker-compose.yml`은 로컬 데모이므로 `SPRING_PROFILES_ACTIVE=local`을 명시하고 기존 `ddl-auto=update` 동작을 유지합니다.
-- 빈 운영 DB와 접속 role은 배포 인프라가 먼저 만들어야 합니다. Flyway는 **DB/role 생성, 백업, seed 투입 도구가 아니며**, 이미 만들어진 DB 안의 테이블·제약·인덱스 버전만 관리합니다.
-- V1에는 스키마만 있고 샘플 계정·장치 데이터는 없습니다. 필요할 때 `services/simulator/seed.sql`을 별도 실행합니다.
-- V1이 운영 DB에 한 번 적용된 뒤에는 내용을 수정하지 않고 다음 변경을 `V2__...sql`처럼 새 파일로 추가합니다.
+- 빈 운영 DB와 접속 role은 배포 인프라가 먼저 만들어야 합니다. Flyway는 DB/role 생성이나 백업 도구가 아니며, 이미 만들어진 DB 안에서 schema와 명시적으로 버전 관리하는 기준 데이터만 적용합니다.
+- V1은 schema만 만들고, V2(`V2__public_demo_topology.sql`)는 공개 홈서버와 새 prod DB에 공통인 공장 2개·구역 3개·simulator 장치 7개를 한 번만 넣습니다. 새 빈 DB에서는 장치 삽입 순서가 simulator 채널 ID 1~7과 일치합니다.
+- V2는 사용자, 구역 소속, 비밀번호를 만들지 않습니다. 따라서 공개 홈서버의 첫 계정과 최소 권한 bootstrap 절차는 배포 전에 별도로 확정해야 합니다.
+- local compose는 Flyway를 실행하지 않으므로 V2가 적용되지 않습니다. local의 여러 역할 계정이 필요할 때만 기존 `services/simulator/seed.sql`을 수동 실행합니다.
+- 운영 DB에 한 번 적용된 migration은 내용을 수정하지 않고 다음 변경을 새 `Vn__...sql` 파일로 추가합니다. V1과 V2 모두 적용 후 checksum 불변 대상입니다.
 
 #### Hibernate가 이미 만든 DB의 1회 전환
 
 Flyway history가 없는데 테이블이 들어 있는 DB는 prod 첫 기동이 의도적으로 실패합니다. 자동으로 기존 스키마를 정상이라고 간주하면 누락 컬럼이나 제약을 숨길 수 있기 때문입니다.
 
 1. DB를 백업하고 복구 가능 여부를 확인합니다.
-2. 실제 테이블·컬럼·제약·인덱스가 V1과 현재 엔티티에 맞는지 비교합니다. 맞지 않으면 먼저 차이를 위한 별도 migration을 설계하고, history를 임의 수정하지 않습니다.
+2. 실제 테이블·컬럼·제약·인덱스가 V1과 현재 엔티티에 맞는지 비교합니다. V2와 같은 이름의 데모 공장·구역·장치가 이미 있다면 중복 삽입과 simulator ID 충돌을 피할 별도 전환 migration을 먼저 설계합니다. history를 임의 수정하지 않습니다.
 3. V1과 같음이 확인된 기존 DB에만 아래 두 환경변수를 **한 번의 prod 기동에만** 추가합니다.
 
    ```text
@@ -539,7 +542,7 @@ Flyway history가 없는데 테이블이 들어 있는 DB는 prod 첫 기동이 
    SPRING_FLYWAY_BASELINE_VERSION=1
    ```
 
-   이 기동은 V1 SQL을 실행하지 않고 기존 스키마를 version 1로 기록한 뒤 Hibernate validation을 수행합니다. validation이 실패하면 배포를 중단하고 스키마 차이를 수정해야 합니다.
+   이 기동은 V1 SQL을 실행하지 않고 기존 스키마를 version 1로 기록한 뒤 V2를 적용하고 Hibernate validation을 수행합니다. migration이나 validation이 실패하면 배포를 중단하고 스키마·기존 데이터 차이를 수정해야 합니다.
 4. 성공을 확인한 즉시 두 변수를 제거하고 평소 prod 설정으로 다시 기동합니다. 애플리케이션 기본 설정에는 `baseline-on-migrate`를 켜 두지 않습니다.
 
 > 위 baseline 절차를 스키마가 불완전하거나 출처를 모르는 DB에 쓰면 V1을 실행한 것처럼 기록해 버립니다. 새 홈서버 DB처럼 빈 DB에는 baseline 변수를 주지 않고 Flyway가 V1을 직접 적용하게 합니다.
