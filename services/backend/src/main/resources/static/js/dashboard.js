@@ -1,510 +1,480 @@
-/* ============================================================
-   센서 대시보드 — 실시간 텔레메트리 모니터링
-   - window.Auth(공유 인증) 사용, Chart.js 라인/바 차트
-   - SSE 실시간 스트림 + 30초 폴링 폴백
-   ============================================================ */
+/* 장치 중심 대시보드: overview/detail + scoped SSE + 30초 resync */
 (function () {
   'use strict';
 
   const ALLOWED = ['SYSTEM_ADMIN', 'MEMBER', 'VIEWER'];
-
-  /* 산업 계기판 팔레트 — app.css 토큰에서 읽어 라이트/다크에 함께 반응 */
-  let C = { signal: '#2dd4bf', brand: '#f2a63b', alarm: '#ff5d52', grid: '#1f2630', tick: '#5c6775' };
-
-  function hexA(hex, a) {
-    const h = hex.replace('#', '').trim();
-    const n = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
-    const r = parseInt(n.slice(0, 2), 16), g = parseInt(n.slice(2, 4), 16), b = parseInt(n.slice(4, 6), 16);
-    return `rgba(${r},${g},${b},${a})`;
-  }
-  function readPalette() {
-    const cs = getComputedStyle(document.documentElement);
-    const g = (name, fb) => (cs.getPropertyValue(name).trim() || fb);
-    return {
-      signal: g('--signal', '#2dd4bf'),
-      brand:  g('--brand',  '#f2a63b'),
-      alarm:  g('--alarm',  '#ff5d52'),
-      grid:   g('--line-soft', '#1f2630'),
-      tick:   g('--text-faint', '#5c6775'),
-    };
-  }
-
   const MAX_POINTS = 50;
+  const FRESHNESS = {
+    NOT_MONITORED: { label: '미감시', lamp: 'idle' },
+    NEVER_SEEN: { label: '수신 없음', lamp: 'warn' },
+    ONLINE: { label: '온라인', lamp: 'ok' },
+    STALE: { label: '수신 지연', lamp: 'alarm' },
+  };
 
-  /* ── 상태 ── */
-  let lineChart = null;
-  let barChart = null;
-  let currentChannelId = '';
+  let C = { signal: '#2dd4bf', brand: '#f2a63b', alarm: '#ff5d52', grid: '#1f2630', tick: '#5c6775' };
+  let overview = null;
+  let deviceIndex = new Map();
   let currentDeviceId = null;
-  let currentThreshold = null;
-  let currentThresholdDirection = 'ABOVE';
+  let currentChannelId = null;
+  let lineChart = null;
   let pointAnomalies = [];
   let pollTimer = null;
   let clockTimer = null;
   let sse = null;
 
-  /* ── DOM 헬퍼 ── */
   const $ = (id) => document.getElementById(id);
 
-  function escapeHtml(s) {
-    if (s == null) return '';
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+  function escapeHtml(value) {
+    if (value == null) return '';
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  function num(v) {
-    return (typeof v === 'number' && isFinite(v)) ? v : null;
-  }
-  function fmtNum(v) {
-    const n = num(v);
-    return n == null ? '—' : (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  function number(value) {
+    return typeof value === 'number' && isFinite(value) ? value : null;
   }
 
-  function fmtTime(dt) {
-    if (!dt) return '';
-    const d = new Date(dt);
-    if (isNaN(d)) return '';
-    return d.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  function fmtNum(value) {
+    const n = number(value);
+    return n == null ? '—' : new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(n);
   }
-  function fmtDateTime(dt) {
-    if (!dt) return '';
-    const d = new Date(dt);
-    if (isNaN(d)) return '';
-    return d.toLocaleString('ko-KR', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+  function date(value) {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return isNaN(parsed) ? null : parsed;
+  }
+
+  function fmtTime(value) {
+    const d = date(value);
+    return d ? d.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+  }
+
+  function fmtDateTime(value) {
+    const d = date(value);
+    return d ? d.toLocaleString('ko-KR', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+  }
+
+  function fmtRelative(value) {
+    const d = date(value);
+    if (!d) return '수신 없음';
+    const seconds = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+    if (seconds < 60) return `${seconds}초 전`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}시간 전`;
+    return fmtDateTime(value);
   }
 
   let toastTimer = null;
-  function toast(msg, isErr) {
+  function toast(message, isError) {
     const el = $('toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.className = 'toast show' + (isErr ? ' err' : '');
+    el.textContent = message;
+    el.className = 'toast show' + (isError ? ' err' : '');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.className = 'toast' + (isErr ? ' err' : ''); }, 3200);
+    toastTimer = setTimeout(() => { el.className = 'toast' + (isError ? ' err' : ''); }, 3200);
   }
 
-  /* ── 시계 ── */
+  function readPalette() {
+    const cs = getComputedStyle(document.documentElement);
+    const token = (name, fallback) => cs.getPropertyValue(name).trim() || fallback;
+    return {
+      signal: token('--signal', '#2dd4bf'), brand: token('--brand', '#f2a63b'),
+      alarm: token('--alarm', '#ff5d52'), grid: token('--line-soft', '#1f2630'),
+      tick: token('--text-faint', '#5c6775'),
+    };
+  }
+
+  function hexA(hex, alpha) {
+    const raw = hex.replace('#', '').trim();
+    const h = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw;
+    return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${alpha})`;
+  }
+
   function startClock() {
-    const el = $('clock');
-    const tick = () => { el.textContent = new Date().toLocaleTimeString('ko-KR', { hour12: false }); };
+    const tick = () => { $('clock').textContent = new Date().toLocaleTimeString('ko-KR', { hour12: false }); };
     tick();
     if (!clockTimer) clockTimer = setInterval(tick, 1000);
   }
 
-  /* ── SSE 연결 램프 ── */
-  function setSseLamp(state) {
-    const lamp = $('sseLamp');
-    const label = $('sseLabel');
-    if (state === 'ok') {
-      lamp.className = 'lamp ok';
-      label.textContent = 'STREAM · 연결됨';
-    } else if (state === 'alarm') {
-      lamp.className = 'lamp alarm';
-      label.textContent = 'STREAM · 재연결 중';
-    } else {
-      lamp.className = 'lamp idle';
-      label.textContent = 'STREAM · 대기';
-    }
-  }
-
-  /* ── 정체성(사원번호·역할) ── */
   function renderIdentity() {
     const role = Auth.getRole();
-    const rl = Auth.ROLE_LABEL[role] || { text: role || '—', cls: '' };
+    const label = Auth.ROLE_LABEL[role] || { text: role || '—', cls: '' };
     $('navEmployee').textContent = Auth.getEmployeeId() || '';
-    const rt = $('navRole');
-    rt.textContent = rl.text;
-    rt.className = 'tag ' + rl.cls;
+    $('navRole').textContent = label.text;
+    $('navRole').className = 'tag ' + label.cls;
   }
 
-  /* ── 차트 초기화 ── */
-  function baseScales(yStep) {
-    return {
-      x: { ticks: { color: C.tick, maxTicksLimit: 8, font: { family: 'IBM Plex Mono' } }, grid: { color: C.grid } },
-      y: {
-        beginAtZero: yStep === 1 ? true : false,
-        ticks: { color: C.tick, font: { family: 'IBM Plex Mono' }, stepSize: yStep },
-        grid: { color: C.grid },
-      },
-    };
+  function setSseLamp(state) {
+    $('sseLamp').className = `lamp ${state === 'ok' ? 'ok' : state === 'alarm' ? 'alarm' : 'idle'}`;
+    $('sseLabel').textContent = state === 'ok' ? 'STREAM · 연결됨' : state === 'alarm' ? 'STREAM · 재연결 중' : 'STREAM · 대기';
   }
 
-  function initCharts() {
-    const lineCtx = $('lineChart').getContext('2d');
-    lineChart = new Chart(lineCtx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          {
-            label: '센서값 · 붉은 점=임계 초과(순간값)',
-            data: [],
-            borderColor: C.signal,
-            backgroundColor: hexA(C.signal, .08),
-            borderWidth: 2,
-            pointRadius: 3,
-            pointHoverRadius: 5,
-            pointBackgroundColor: [],
-            tension: 0.25,
-            fill: true,
-          },
-          {
-            label: '임계값',
-            data: [],
-            borderColor: C.brand,
-            borderWidth: 1.5,
-            borderDash: [6, 4],
-            pointRadius: 0,
-            fill: false,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { labels: { color: C.tick, boxWidth: 12, font: { family: 'IBM Plex Sans' } } } },
-        scales: baseScales(),
-        animation: { duration: 250 },
-      },
-    });
-
-    const barCtx = $('barChart').getContext('2d');
-    barChart = new Chart(barCtx, {
-      type: 'bar',
-      data: {
-        labels: [],
-        datasets: [{
-          label: '알림 건수',
-          data: [],
-          backgroundColor: hexA(C.alarm, .6),
-          borderColor: C.alarm,
-          borderWidth: 1,
-          borderRadius: 4,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: baseScales(1),
-        animation: { duration: 250 },
-      },
-    });
-  }
-
-  /* 테마 전환 시 차트 색을 토큰 기준으로 다시 칠한다 (캔버스는 CSS를 못 읽어 수동 갱신) */
-  function applyPalette() {
-    if (!lineChart || !barChart) return;
-    C = readPalette();
-    const l0 = lineChart.data.datasets[0], l1 = lineChart.data.datasets[1];
-    l0.borderColor = C.signal;
-    l0.backgroundColor = hexA(C.signal, .08);
-    l0.pointBackgroundColor = pointAnomalies.map(pointColor);
-    l1.borderColor = C.brand;
-    barChart.data.datasets[0].borderColor = C.alarm;
-    barChart.data.datasets[0].backgroundColor = hexA(C.alarm, .6);
-    [lineChart, barChart].forEach((ch) => {
-      ch.options.scales.x.ticks.color = C.tick; ch.options.scales.x.grid.color = C.grid;
-      ch.options.scales.y.ticks.color = C.tick; ch.options.scales.y.grid.color = C.grid;
-    });
-    lineChart.options.plugins.legend.labels.color = C.tick;
-    lineChart.update(); barChart.update();
-  }
-  window.addEventListener('sm-theme-change', applyPalette);
-
-  // 순간 임계 판정은 서버 ThresholdDetector 결과를 사용한다. 쿨다운·해제 상태와는 별개다.
   function pointColor(anomaly) {
     return anomaly === true ? C.alarm : C.signal;
   }
 
-  /* ── 차트/캔버스 표시 토글 ── */
+  function initChart() {
+    lineChart = new Chart($('lineChart').getContext('2d'), {
+      type: 'line',
+      data: { labels: [], datasets: [
+        {
+          label: '센서값 · 붉은 점=순간 이상', data: [], borderColor: C.signal,
+          backgroundColor: hexA(C.signal, .08), borderWidth: 2, pointRadius: 3,
+          pointHoverRadius: 5, pointBackgroundColor: [], tension: .25, fill: true,
+        },
+        { label: '임계값', data: [], borderColor: C.brand, borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0 },
+      ] },
+      options: {
+        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { labels: { color: C.tick, boxWidth: 12, font: { family: 'IBM Plex Sans' } } } },
+        scales: {
+          x: { ticks: { color: C.tick, maxTicksLimit: 8, font: { family: 'IBM Plex Mono' } }, grid: { color: C.grid } },
+          y: { ticks: { color: C.tick, font: { family: 'IBM Plex Mono' } }, grid: { color: C.grid } },
+        },
+        animation: { duration: 250 },
+      },
+    });
+  }
+
+  function applyPalette() {
+    if (!lineChart) return;
+    C = readPalette();
+    lineChart.data.datasets[0].borderColor = C.signal;
+    lineChart.data.datasets[0].backgroundColor = hexA(C.signal, .08);
+    lineChart.data.datasets[0].pointBackgroundColor = pointAnomalies.map(pointColor);
+    lineChart.data.datasets[1].borderColor = C.brand;
+    ['x', 'y'].forEach((axis) => {
+      lineChart.options.scales[axis].ticks.color = C.tick;
+      lineChart.options.scales[axis].grid.color = C.grid;
+    });
+    lineChart.options.plugins.legend.labels.color = C.tick;
+    lineChart.update();
+  }
+  window.addEventListener('sm-theme-change', applyPalette);
+
+  function allDevices() {
+    if (!overview || !Array.isArray(overview.factories)) return [];
+    return overview.factories.flatMap((factory) => (factory.zones || [])
+      .flatMap((zone) => (zone.devices || []).map((device) => ({ factory, zone, device }))));
+  }
+
+  function rebuildDeviceIndex() {
+    deviceIndex = new Map(allDevices().map((entry) => [String(entry.device.id), entry]));
+  }
+
+  function freshnessInfo(value) {
+    return FRESHNESS[value] || FRESHNESS.NOT_MONITORED;
+  }
+
+  function freshnessHtml(value) {
+    const info = freshnessInfo(value);
+    return `<span class="freshness"><span class="lamp ${info.lamp}"></span>${escapeHtml(info.label)}</span>`;
+  }
+
+  function renderSummary() {
+    const devices = allDevices().map((entry) => entry.device);
+    const online = devices.filter((device) => device.freshness === 'ONLINE').length;
+    const alarmCount = devices.reduce((sum, device) => sum + (Number(device.currentAlarmCount) || 0), 0);
+    const latest = devices.map((device) => date(device.lastSeenAt)).filter(Boolean)
+      .sort((a, b) => b.getTime() - a.getTime())[0];
+    const hasStale = devices.some((device) => device.freshness === 'STALE' || device.freshness === 'NEVER_SEEN');
+
+    $('summaryFreshness').textContent = `${online} / ${devices.length}`;
+    $('summaryFreshnessLamp').className = `lamp ${hasStale ? 'warn' : devices.length ? 'ok' : 'idle'}`;
+    $('summaryLastSeen').textContent = latest ? fmtRelative(latest.toISOString()) : '수신 없음';
+    $('summaryLastSeenLamp').className = `lamp ${latest ? 'ok' : 'idle'}`;
+    $('summaryAlarm').textContent = String(alarmCount);
+    $('summaryAlarmLamp').className = `lamp ${alarmCount ? 'alarm' : devices.length ? 'ok' : 'idle'}`;
+  }
+
+  function deviceCardHtml(device) {
+    const location = device.location || device.code || '위치 정보 없음';
+    return `<button class="device-card" type="button" data-device-id="${escapeHtml(String(device.id))}">
+      <div class="device-head"><div><h3>${escapeHtml(device.name || device.code || '이름 없는 장치')}</h3><div class="device-meta">${escapeHtml(location)}</div></div>${freshnessHtml(device.freshness)}</div>
+      <div class="device-metrics">
+        <div class="metric"><span>마지막 수신</span><b>${escapeHtml(fmtRelative(device.lastSeenAt))}</b></div>
+        <div class="metric"><span>현재 알람</span><b>${Number(device.currentAlarmCount) || 0} 채널</b></div>
+      </div>
+    </button>`;
+  }
+
+  function renderOverview() {
+    renderSummary();
+    const groups = $('factoryGroups');
+    if (!overview || !overview.factories || overview.factories.length === 0) {
+      groups.innerHTML = '';
+      $('overviewEmpty').classList.remove('hidden');
+      $('overviewEmpty').textContent = '접근 가능한 장치가 없습니다.';
+      return;
+    }
+    $('overviewEmpty').classList.add('hidden');
+    groups.innerHTML = overview.factories.map((factory) => `<section class="factory-block">
+      <div class="factory-name eyebrow">${escapeHtml(factory.name)}</div>
+      ${(factory.zones || []).map((zone) => `<div class="zone-block">
+        <div class="section-title"><h2>${escapeHtml(zone.name)}</h2><span class="tag">${(zone.devices || []).length} 장치</span></div>
+        <div class="device-grid">${(zone.devices || []).map(deviceCardHtml).join('')}</div>
+      </div>`).join('')}
+    </section>`).join('');
+  }
+
+  function currentEntry() {
+    return currentDeviceId == null ? null : deviceIndex.get(String(currentDeviceId));
+  }
+
+  function channelName(device, channelId) {
+    const channel = (device.channels || []).find((item) => String(item.id) === String(channelId));
+    return channel ? channel.code : '장치 freshness';
+  }
+
+  function thresholdText(channel) {
+    if (number(channel.thresholdValue) == null) return '임계값 없음';
+    return `${channel.thresholdDirection === 'BELOW' ? '미만' : '초과'} ${fmtNum(channel.thresholdValue)}${channel.unit ? ` ${channel.unit}` : ''}`;
+  }
+
+  function channelCardHtml(channel) {
+    const selected = String(channel.id) === String(currentChannelId) ? ' selected' : '';
+    const alarm = channel.inAlarm ? ' alarm' : '';
+    const state = channel.inAlarm ? '<span class="freshness"><span class="lamp alarm"></span>알람</span>'
+      : channel.anomaly ? '<span class="freshness"><span class="lamp warn"></span>순간 이상</span>'
+        : '<span class="freshness"><span class="lamp ok"></span>정상</span>';
+    return `<button class="channel-card${selected}${alarm}" type="button" data-channel-id="${escapeHtml(String(channel.id))}">
+      <div class="channel-head"><div><strong>${escapeHtml(channel.code)}</strong><div class="device-meta">${escapeHtml(channel.quantityKind || '측정 채널')}</div></div>${state}</div>
+      <div class="latest">${fmtNum(channel.latestValue)} <small>${escapeHtml(channel.unit || '')}</small></div>
+      <div class="channel-foot"><span>${escapeHtml(fmtRelative(channel.latestReceivedAt))}</span><span>${escapeHtml(thresholdText(channel))}</span></div>
+    </button>`;
+  }
+
+  function renderDetail() {
+    const entry = currentEntry();
+    if (!entry) return;
+    const { factory, zone, device } = entry;
+    const info = freshnessInfo(device.freshness);
+    $('detailName').textContent = device.name || device.code || '이름 없는 장치';
+    $('detailBreadcrumb').textContent = [factory.name, zone.name, device.location || device.code].filter(Boolean).join(' · ');
+    $('detailFreshness').textContent = info.label;
+    $('detailFreshness').className = device.freshness === 'STALE' ? 'tag tag-alarm' : device.freshness === 'ONLINE' ? 'tag tag-signal' : 'tag';
+    $('detailFreshnessValue').textContent = info.label;
+    $('detailFreshnessLamp').className = `lamp ${info.lamp}`;
+    $('detailLastSeen').textContent = fmtRelative(device.lastSeenAt);
+    $('detailLastSeenLamp').className = `lamp ${device.lastSeenAt ? 'ok' : 'idle'}`;
+    $('detailAlarmCount').textContent = String(Number(device.currentAlarmCount) || 0);
+    $('detailAlarmLamp').className = `lamp ${device.currentAlarmCount ? 'alarm' : 'ok'}`;
+    $('channelCount').textContent = `${(device.channels || []).length} 채널`;
+    $('channelGrid').innerHTML = (device.channels || []).length
+      ? device.channels.map(channelCardHtml).join('')
+      : '<div class="panel empty">등록된 채널이 없습니다.</div>';
+
+    const select = $('channelSelect');
+    select.innerHTML = (device.channels || []).map((channel) =>
+      `<option value="${escapeHtml(String(channel.id))}"${String(channel.id) === String(currentChannelId) ? ' selected' : ''}>${escapeHtml(channel.code)}${channel.unit ? ` (${escapeHtml(channel.unit)})` : ''}</option>`).join('');
+    const selectedChannel = (device.channels || []).find((channel) => String(channel.id) === String(currentChannelId));
+    $('thrBadge').textContent = selectedChannel ? thresholdText(selectedChannel) : '임계값 —';
+  }
+
+  function showOverview() {
+    currentDeviceId = null;
+    currentChannelId = null;
+    $('overviewView').classList.remove('hidden');
+    $('detailView').classList.add('hidden');
+  }
+
+  async function openDevice(deviceId) {
+    const entry = deviceIndex.get(String(deviceId));
+    if (!entry) return;
+    currentDeviceId = String(deviceId);
+    if (!(entry.device.channels || []).some((channel) => String(channel.id) === String(currentChannelId))) {
+      currentChannelId = entry.device.channels && entry.device.channels.length ? String(entry.device.channels[0].id) : null;
+    }
+    $('overviewView').classList.add('hidden');
+    $('detailView').classList.remove('hidden');
+    renderDetail();
+    await Promise.all([loadReadings(), loadDeviceAlerts()]);
+  }
+
+  async function loadOverview() {
+    const res = await Auth.apiFetch('/dashboard/overview');
+    if (!res || !res.ok) {
+      if (res && res.status === 403) toast('장치 현황 접근 권한이 없습니다.', true);
+      else toast('장치 현황을 불러오지 못했습니다.', true);
+      return false;
+    }
+    try { overview = await res.json(); } catch { return false; }
+    rebuildDeviceIndex();
+    renderOverview();
+    $('refreshTag').textContent = '기준 ' + fmtTime(overview.generatedAt);
+    if (currentDeviceId != null) {
+      if (currentEntry()) renderDetail();
+      else showOverview();
+    }
+    return true;
+  }
+
   function showLineChart(show) {
     $('lineChart').classList.toggle('hidden', !show);
     $('lineEmpty').classList.toggle('hidden', show);
   }
-  function showBarChart(show) {
-    $('barChart').classList.toggle('hidden', !show);
-    $('barEmpty').classList.toggle('hidden', show);
-  }
 
-  /* ── 채널 목록 로드(대시보드 드롭다운 소스) ── */
-  async function loadChannels() {
-    const sel = $('deviceSelect');
-    const res = await Auth.apiFetch('/channels');
-    if (!res) { sel.innerHTML = '<option value="">채널을 불러오지 못했습니다</option>'; return; }
-    if (res.status === 403) { toast('채널 목록 접근 권한이 없습니다.', true); return; }
-    if (!res.ok) { sel.innerHTML = '<option value="">채널을 불러오지 못했습니다</option>'; return; }
-
-    let channels;
-    try { channels = await res.json(); } catch { channels = []; }
-
-    if (!Array.isArray(channels) || channels.length === 0) {
-      sel.innerHTML = '<option value="">등록된 채널이 없습니다</option>';
-      return;
-    }
-
-    const opts = ['<option value="">채널을 선택하세요</option>'];
-    channels.forEach((c) => {
-      const text = `${c.deviceName} · ${c.code}${c.unit ? ` (${c.unit})` : ''}`;
-      opts.push(
-        `<option value="${escapeHtml(String(c.id))}"` +
-        ` data-device-id="${escapeHtml(String(c.deviceId))}"` +
-        ` data-threshold="${c.thresholdValue == null ? '' : escapeHtml(String(c.thresholdValue))}"` +
-        ` data-direction="${escapeHtml(c.thresholdDirection || 'ABOVE')}"` +
-        `>${escapeHtml(text)}</option>`
-      );
-    });
-    sel.innerHTML = opts.join('');
-
-    // 첫 채널 자동 선택 — 진입 즉시 데이터가 보이게 (빈 화면 방지)
-    if (sel.options.length > 1) {
-      sel.selectedIndex = 1;
-      onChannelChange();
-    }
-  }
-
-  /* ── 대시보드 리셋(미선택 상태) ── */
-  function resetDashboard() {
-    currentDeviceId = null;
-    currentThreshold = null;
-    currentThresholdDirection = 'ABOVE';
+  function resetChart() {
     pointAnomalies = [];
-    $('thrBadge').textContent = '임계값 —';
-    $('refreshTag').textContent = '갱신 대기';
-    ['roAlertCount', 'roWeekCount', 'roDataCount'].forEach((id) => { $(id).textContent = '—'; });
-    ['roAlertLamp', 'roWeekLamp', 'roDataLamp'].forEach((id) => { $(id).className = 'lamp idle'; });
-
     lineChart.data.labels = [];
     lineChart.data.datasets[0].data = [];
     lineChart.data.datasets[0].pointBackgroundColor = [];
     lineChart.data.datasets[1].data = [];
     lineChart.update();
-    barChart.data.labels = [];
-    barChart.data.datasets[0].data = [];
-    barChart.update();
-
     showLineChart(false);
-    showBarChart(false);
-    $('alertBody').innerHTML =
-      '<tr id="alertEmptyRow"><td colspan="6"><div class="empty">채널을 선택하면 최근 알림이 표시됩니다.</div></td></tr>';
   }
 
-  /* ── 채널 선택 ── */
-  function onChannelChange() {
-    const sel = $('deviceSelect');
-    currentChannelId = sel.value;
-    if (!currentChannelId) { resetDashboard(); return; }
-
-    const opt = sel.options[sel.selectedIndex];
-    currentDeviceId = opt ? (opt.dataset.deviceId || null) : null;
-    const thr = opt ? opt.dataset.threshold : '';
-    currentThreshold = (thr === '' || thr == null) ? null : parseFloat(thr);
-    currentThresholdDirection = (opt && opt.dataset.direction) || 'ABOVE';
-    const dirLabel = currentThresholdDirection === 'BELOW' ? '미만' : '초과';
-    $('thrBadge').textContent = currentThreshold == null ? '임계값 —' : `임계값 ${fmtNum(currentThreshold)} (${dirLabel})`;
-
-    loadAll();
-  }
-
-  /* ── 전체 데이터 로드 ── */
-  async function loadAll() {
-    if (!currentChannelId) return;
-    await Promise.all([loadReadings(), loadDailyCount(), loadRecentAlerts()]);
-    $('refreshTag').textContent = '갱신 ' + new Date().toLocaleTimeString('ko-KR', { hour12: false });
-  }
-
-  /* ── 센서 데이터(라인 차트) ── */
   async function loadReadings() {
-    const res = await Auth.apiFetch(`/channels/${encodeURIComponent(currentChannelId)}/readings?limit=500`);
-    if (!res || !res.ok) { if (res && res.status === 403) toast('센서 데이터 접근 권한이 없습니다.', true); return; }
-    let data;
-    try { data = await res.json(); } catch { return; }
-    if (!Array.isArray(data)) return;
-
-    $('roDataCount').textContent = data.length.toLocaleString('ko-KR');
-    $('roDataLamp').className = data.length > 0 ? 'lamp ok' : 'lamp idle';
-
-    // observed_at desc로 오므로 오래된 순으로 뒤집어 그린다.
-    const recent = data.slice(0, MAX_POINTS).reverse();
-    const labels = recent.map((d) => fmtTime(d.observedAt));
-    const values = recent.map((d) => d.value);
-    pointAnomalies = recent.map((d) => d.anomaly === true);
-
-    lineChart.data.labels = labels;
-    lineChart.data.datasets[0].data = values;
+    if (!currentChannelId) { resetChart(); return; }
+    const requestedChannel = String(currentChannelId);
+    const res = await Auth.apiFetch(`/channels/${encodeURIComponent(requestedChannel)}/readings?limit=500`);
+    if (!res || !res.ok) return;
+    let readings;
+    try { readings = await res.json(); } catch { return; }
+    if (requestedChannel !== String(currentChannelId) || !Array.isArray(readings)) return;
+    const entry = currentEntry();
+    const channel = entry && (entry.device.channels || []).find((item) => String(item.id) === requestedChannel);
+    const recent = readings.slice(0, MAX_POINTS).reverse();
+    pointAnomalies = recent.map((reading) => reading.anomaly === true);
+    lineChart.data.labels = recent.map((reading) => fmtTime(reading.observedAt));
+    lineChart.data.datasets[0].data = recent.map((reading) => reading.value);
     lineChart.data.datasets[0].pointBackgroundColor = pointAnomalies.map(pointColor);
-    lineChart.data.datasets[1].data =
-      currentThreshold == null ? [] : values.map(() => currentThreshold);
+    lineChart.data.datasets[1].data = channel && number(channel.thresholdValue) != null
+      ? recent.map(() => channel.thresholdValue) : [];
     lineChart.update();
-
     showLineChart(recent.length > 0);
   }
 
-  /* ── 일별 알림(바 차트) ── */
-  async function loadDailyCount() {
-    const res = await Auth.apiFetch(`/alerts/daily-count?channelId=${encodeURIComponent(currentChannelId)}&days=7`);
-    if (!res || !res.ok) { if (res && res.status === 403) toast('알림 통계 접근 권한이 없습니다.', true); return; }
-    let data;
-    try { data = await res.json(); } catch { return; }
-    if (!Array.isArray(data)) return;
-
-    const total = data.reduce((s, d) => s + (num(d.count) || 0), 0);
-    $('roWeekCount').textContent = total.toLocaleString('ko-KR');
-    $('roWeekLamp').className = total > 0 ? 'lamp warn' : 'lamp ok';
-
-    // 오늘(마지막 날) 알림 수 — 리드아웃 상단 카드
-    const today = data.length ? (num(data[data.length - 1].count) || 0) : 0;
-    $('roAlertCount').textContent = today.toLocaleString('ko-KR');
-    $('roAlertLamp').className = today > 0 ? 'lamp warn' : 'lamp ok';
-
-    barChart.data.labels = data.map((d) => (d.date ? String(d.date).substring(5) : ''));
-    barChart.data.datasets[0].data = data.map((d) => num(d.count) || 0);
-    barChart.update();
-
-    showBarChart(data.length > 0);
-  }
-
-  /* ── 최근 알림(테이블) ── */
-  async function loadRecentAlerts() {
-    const res = await Auth.apiFetch(`/alerts/recent?channelId=${encodeURIComponent(currentChannelId)}&limit=20`);
-    if (!res || !res.ok) { if (res && res.status === 403) toast('알림 접근 권한이 없습니다.', true); return; }
-    let alerts;
-    try { alerts = await res.json(); } catch { return; }
-    if (!Array.isArray(alerts)) return;
-
-    const tbody = $('alertBody');
-    if (alerts.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6"><div class="empty">최근 알림이 없습니다.</div></td></tr>';
-      return;
-    }
-    tbody.innerHTML = alerts.map(alertRowHtml).join('');
-  }
-
-  function alertRowHtml(a) {
-    // nullable 참조 관례상 sensorValue·thresholdValue가 있으면 임계 alert다.
-    const exceed = num(a.sensorValue) != null && num(a.thresholdValue) != null;
-    // 램프/행 강조는 severity 우선(freshness 알림은 sensorValue가 없어 임계 비교로는 약하게 보임).
-    const critical = a.severity === 'CRITICAL';
-    const lampCls = critical ? 'lamp alarm' : (a.severity === 'WARNING' ? 'lamp warn' : 'lamp ok');
-    const rowCls = (critical || exceed) ? 'row-alarm' : '';
-    const evi = eviHtml(a);
-    return `<tr class="${rowCls}">
-      <td><span class="${lampCls}"></span></td>
-      <td class="mono dim">${escapeHtml(String(a.deviceId ?? ''))}</td>
-      <td class="num ${exceed ? 'cell-alarm' : ''}">${fmtNum(a.sensorValue)}</td>
-      <td class="num dim">${fmtNum(a.thresholdValue)}</td>
-      <td>${escapeHtml(a.message || '')}${evi}</td>
-      <td class="mono faint" style="font-size:.8rem;">${escapeHtml(fmtDateTime(a.createdAt))}</td>
-    </tr>`;
-  }
-
-  function eviHtml(a) {
+  function evidenceHtml(alert) {
     const parts = [];
-    if (a.evidence) parts.push(`<span class="k">근거</span> ${escapeHtml(a.evidence)}`);
-    if (a.recommendation) parts.push(`<span class="k">권고</span> ${escapeHtml(a.recommendation)}`);
+    if (alert.evidence) parts.push(`근거 ${escapeHtml(alert.evidence)}`);
+    if (alert.recommendation) parts.push(`권고 ${escapeHtml(alert.recommendation)}`);
     return parts.length ? `<span class="evi">${parts.join(' · ')}</span>` : '';
   }
 
-  /* ── 실시간: 라이브 센서 점 추가 ── */
-  function appendLivePoint(reading) {
-    const ds = lineChart.data.datasets[0];
-    lineChart.data.labels.push(fmtTime(reading.observedAt));
-    ds.data.push(reading.value);
-    pointAnomalies.push(reading.anomaly === true);
-    if (!Array.isArray(ds.pointBackgroundColor)) ds.pointBackgroundColor = [];
-    ds.pointBackgroundColor.push(pointColor(reading.anomaly));
+  async function loadDeviceAlerts() {
+    const entry = currentEntry();
+    if (!entry) return;
+    const requestedDevice = String(entry.device.id);
+    const res = await Auth.apiFetch(`/alerts?deviceId=${encodeURIComponent(requestedDevice)}&size=20&sort=createdAt,desc`);
+    if (!res || !res.ok) return;
+    let page;
+    try { page = await res.json(); } catch { return; }
+    if (!currentEntry() || requestedDevice !== String(currentEntry().device.id)) return;
+    const alerts = Array.isArray(page.content) ? page.content : [];
+    $('alarmList').innerHTML = alerts.length ? alerts.map((alert) => {
+      const channel = channelName(entry.device, alert.channelId);
+      const lamp = alert.severity === 'CRITICAL' ? 'alarm' : alert.severity === 'WARNING' ? 'warn' : 'ok';
+      return `<li><div class="alarm-line"><span class="freshness"><span class="lamp ${lamp}"></span><strong>${escapeHtml(channel)}</strong></span><span class="alarm-time">${escapeHtml(fmtDateTime(alert.createdAt))}</span></div><div class="alarm-message">${escapeHtml(alert.message || '')}${evidenceHtml(alert)}</div></li>`;
+    }).join('') : '<li class="empty">최근 알림이 없습니다.</li>';
+  }
 
-    while (ds.data.length > MAX_POINTS) {
-      lineChart.data.labels.shift();
-      ds.data.shift();
-      pointAnomalies.shift();
-      ds.pointBackgroundColor.shift();
+  function appendLivePoint(value, anomaly, observedAt) {
+    const dataset = lineChart.data.datasets[0];
+    lineChart.data.labels.push(fmtTime(observedAt));
+    dataset.data.push(value);
+    pointAnomalies.push(anomaly === true);
+    if (!Array.isArray(dataset.pointBackgroundColor)) dataset.pointBackgroundColor = [];
+    dataset.pointBackgroundColor.push(pointColor(anomaly));
+    while (dataset.data.length > MAX_POINTS) {
+      lineChart.data.labels.shift(); dataset.data.shift(); pointAnomalies.shift(); dataset.pointBackgroundColor.shift();
     }
-    lineChart.data.datasets[1].data =
-      currentThreshold == null ? [] : ds.data.map(() => currentThreshold);
-
-    showLineChart(true);
+    const entry = currentEntry();
+    const channel = entry && (entry.device.channels || []).find((item) => String(item.id) === String(currentChannelId));
+    lineChart.data.datasets[1].data = channel && number(channel.thresholdValue) != null
+      ? dataset.data.map(() => channel.thresholdValue) : [];
     lineChart.update();
+    showLineChart(true);
   }
 
-  /* ── 실시간: 알림 행 prepend ── */
-  function prependAlertRow(a) {
-    const tbody = $('alertBody');
-    const placeholder = tbody.querySelector('td[colspan]');
-    if (placeholder) tbody.innerHTML = '';
-    tbody.insertAdjacentHTML('afterbegin', alertRowHtml(a));
+  function applySensorBatch(batch) {
+    if (!batch || !Array.isArray(batch.readings)) return;
+    const entry = deviceIndex.get(String(batch.deviceId));
+    if (!entry) return;
+    const byChannel = new Map((entry.device.channels || []).map((channel) => [String(channel.id), channel]));
+    let selectedReading = null;
+    batch.readings.forEach((reading) => {
+      const channel = byChannel.get(String(reading.channelId));
+      if (!channel) return;
+      channel.latestValue = reading.value;
+      channel.latestObservedAt = batch.observedAt;
+      channel.latestReceivedAt = batch.receivedAt;
+      channel.anomaly = reading.anomaly === true;
+      if (String(reading.channelId) === String(currentChannelId)) selectedReading = reading;
+    });
+    entry.device.lastSeenAt = batch.receivedAt;
+    entry.device.freshness = entry.device.expectedIntervalSeconds == null || entry.device.expectedIntervalSeconds <= 0
+      ? 'NOT_MONITORED' : 'ONLINE';
 
-    // 오늘 알림 카운트 +1 (라이브)
-    const n = parseInt($('roAlertCount').textContent.replace(/[^\d]/g, ''), 10);
-    $('roAlertCount').textContent = (isNaN(n) ? 1 : n + 1).toLocaleString('ko-KR');
-    $('roAlertLamp').className = 'lamp warn';
+    // 한 batch의 모든 channel 상태를 반영한 뒤 화면을 한 번만 그린다.
+    renderOverview();
+    if (String(currentDeviceId) === String(batch.deviceId)) {
+      renderDetail();
+      if (selectedReading) appendLivePoint(selectedReading.value, selectedReading.anomaly, batch.observedAt);
+    }
   }
 
-  /* ── SSE 스트림 ── */
   function initSse() {
     const token = Auth.getToken();
     if (!token || sse) return;
     sse = new EventSource('/dashboard/stream?token=' + encodeURIComponent(token));
-
-    sse.addEventListener('connected', () => { setSseLamp('ok'); });
-
-    sse.addEventListener('sensor-data', (e) => {
-      let d;
-      try { d = JSON.parse(e.data); } catch { return; }
-      if (!currentChannelId || !Array.isArray(d.readings)) return;
-      const reading = d.readings.find((r) => String(r.channelId) === String(currentChannelId));
-      if (!reading) return;
-      appendLivePoint({ value: reading.value, anomaly: reading.anomaly, observedAt: d.observedAt });
+    sse.addEventListener('connected', () => setSseLamp('ok'));
+    sse.addEventListener('sensor-data', (event) => {
+      try { applySensorBatch(JSON.parse(event.data)); } catch {}
     });
-
-    sse.addEventListener('alert', (e) => {
-      let a;
-      try { a = JSON.parse(e.data); } catch { return; }
-      if (!currentChannelId) return;
-      // 임계 alert 는 channelId 로, freshness alert(channelId=null) 는 현재 채널의 장치로 매칭.
-      const matchesChannel = a.channelId != null && String(a.channelId) === String(currentChannelId);
-      const matchesDeviceFreshness =
-        a.channelId == null && currentDeviceId != null && String(a.deviceId) === String(currentDeviceId);
-      if (!matchesChannel && !matchesDeviceFreshness) return;
-      prependAlertRow(a);
+    sse.addEventListener('alert', async (event) => {
+      let alert;
+      try { alert = JSON.parse(event.data); } catch { return; }
+      if (!deviceIndex.has(String(alert.deviceId))) return;
+      await loadOverview();
+      if (String(currentDeviceId) === String(alert.deviceId)) await loadDeviceAlerts();
     });
-
-    sse.onerror = () => {
-      setSseLamp('alarm');
-      console.warn('[SSE] 연결 오류 — 자동 재연결 대기');
-      // EventSource 기본 재연결에 위임 (수동 재연결 안 함)
-    };
+    sse.onerror = () => { setSseLamp('alarm'); console.warn('[SSE] 연결 오류 — 자동 재연결 대기'); };
   }
 
-  /* ── 30초 폴링 폴백 ── */
+  async function resync() {
+    const wasDetail = currentDeviceId != null;
+    await loadOverview();
+    if (wasDetail && currentEntry()) await Promise.all([loadReadings(), loadDeviceAlerts()]);
+  }
+
   function startPolling() {
-    if (pollTimer) return;
-    pollTimer = setInterval(() => { if (currentChannelId) loadAll(); }, 30000);
+    if (!pollTimer) pollTimer = setInterval(resync, 30000);
   }
 
-  /* ── 진입 ── */
-  function boot() {
-    if (!Auth.requireLogin()) return;
+  function bindEvents() {
+    $('factoryGroups').addEventListener('click', (event) => {
+      const card = event.target.closest('[data-device-id]');
+      if (card) openDevice(card.dataset.deviceId);
+    });
+    $('backButton').addEventListener('click', showOverview);
+    $('channelGrid').addEventListener('click', async (event) => {
+      const card = event.target.closest('[data-channel-id]');
+      if (!card) return;
+      currentChannelId = card.dataset.channelId;
+      renderDetail();
+      await loadReadings();
+    });
+    $('channelSelect').addEventListener('change', async (event) => {
+      currentChannelId = event.target.value || null;
+      renderDetail();
+      await loadReadings();
+    });
+  }
 
+  async function boot() {
+    if (!Auth.requireLogin()) return;
     startClock();
     renderIdentity();
-
     if (!Auth.hasRole(...ALLOWED)) {
       $('noAccess').classList.remove('hidden');
       return;
     }
-
     $('dash').classList.remove('hidden');
     C = readPalette();
-    initCharts();
-    $('deviceSelect').addEventListener('change', onChannelChange);
-
-    loadChannels();
+    initChart();
+    bindEvents();
+    await loadOverview();
     initSse();
     startPolling();
   }

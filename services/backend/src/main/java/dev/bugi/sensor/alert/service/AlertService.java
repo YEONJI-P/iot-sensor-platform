@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,11 +31,15 @@ public class AlertService {
     private final Clock clock;
 
     @Transactional(readOnly = true)
-    public Page<AlertResponse> getAllAlerts(String employeeId, Pageable pageable) {
+    public Page<AlertResponse> getAllAlerts(String employeeId, Long deviceId, Pageable pageable) {
         User user = accessControlService.getUser(employeeId);
         List<Long> deviceIds = accessControlService.getAccessibleDeviceIds(user);
         if (deviceIds.isEmpty()) return Page.empty(pageable);
-        return alertRepository.findByDeviceIdIn(deviceIds, pageable)
+        if (deviceId != null && !deviceIds.contains(deviceId)) {
+            throw new AccessDeniedException("접근 권한이 없는 장치예요");
+        }
+        List<Long> targetDeviceIds = deviceId == null ? deviceIds : List.of(deviceId);
+        return alertRepository.findByDeviceIdIn(targetDeviceIds, pageable)
                 .map(AlertResponse::from);
     }
 

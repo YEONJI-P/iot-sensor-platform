@@ -6,6 +6,7 @@ import dev.bugi.sensor.admin.service.FactoryService;
 import dev.bugi.sensor.alert.service.AlertService;
 import dev.bugi.sensor.auth.service.AuthService;
 import dev.bugi.sensor.auth.util.JwtUtil;
+import dev.bugi.sensor.dashboard.service.DashboardOverviewService;
 import dev.bugi.sensor.device.service.ChannelService;
 import dev.bugi.sensor.device.service.DeviceService;
 import dev.bugi.sensor.global.security.CustomAccessDeniedHandler;
@@ -61,6 +62,8 @@ public class SecurityConfigTest {
     AuthService authService;
     @MockitoBean
     DeviceService deviceService;
+    @MockitoBean
+    DashboardOverviewService dashboardOverviewService;
     @MockitoBean
     AlertService alertService;
     @MockitoBean
@@ -175,6 +178,12 @@ public class SecurityConfigTest {
     @Test
     void get_channels_no_auth() throws Exception {
         mockMvc.perform(get("/channels"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void get_dashboard_overview_no_auth() throws Exception {
+        mockMvc.perform(get("/dashboard/overview"))
                 .andExpect(status().isUnauthorized());
     }
 

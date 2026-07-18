@@ -25,8 +25,9 @@ public class AlertController {
     @GetMapping
     public ResponseEntity<Page<AlertResponse>> getAllAlerts(
             @AuthenticationPrincipal String employeeId,
+            @RequestParam(required = false) Long deviceId,
             @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(alertService.getAllAlerts(employeeId, pageable));
+        return ResponseEntity.ok(alertService.getAllAlerts(employeeId, deviceId, pageable));
     }
 
     // 채널별 알림 — 채널 화면.

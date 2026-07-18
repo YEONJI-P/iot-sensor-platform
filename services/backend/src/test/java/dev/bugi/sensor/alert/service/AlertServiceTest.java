@@ -87,7 +87,7 @@ class AlertServiceTest {
         when(alertRepository.findByDeviceIdIn(eq(List.of(1L)), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(alert)));
 
-        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", pageable);
+        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", null, pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getSensorValue()).isEqualTo(95.0);
@@ -100,7 +100,7 @@ class AlertServiceTest {
         when(accessControlService.getUser("EMP001")).thenReturn(user);
         when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of());
 
-        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", PageRequest.of(0, 50));
+        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", null, PageRequest.of(0, 50));
 
         assertThat(result).isEmpty();
         verify(alertRepository, never()).findByDeviceIdIn(any(), any());
@@ -114,7 +114,7 @@ class AlertServiceTest {
         when(alertRepository.findByDeviceIdIn(eq(List.of(1L)), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", PageRequest.of(0, 50));
+        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", null, PageRequest.of(0, 50));
 
         assertThat(result).isEmpty();
     }
@@ -125,7 +125,33 @@ class AlertServiceTest {
                 .thenThrow(new IllegalArgumentException("존재하지 않는 사원번호예요"));
 
         assertThrows(IllegalArgumentException.class,
-                () -> alertService.getAllAlerts("NOTEXIST", PageRequest.of(0, 50)));
+                () -> alertService.getAllAlerts("NOTEXIST", null, PageRequest.of(0, 50)));
+    }
+
+    @Test
+    void getAllAlerts_device_filter_narrows_within_accessible_scope() {
+        User user = mockUser();
+        Pageable pageable = PageRequest.of(0, 50);
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of(1L, 2L));
+        when(alertRepository.findByDeviceIdIn(List.of(2L), pageable))
+                .thenReturn(new PageImpl<>(List.of(mockAlert(mockChannel()))));
+
+        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", 2L, pageable);
+
+        assertThat(result).hasSize(1);
+        verify(alertRepository).findByDeviceIdIn(List.of(2L), pageable);
+    }
+
+    @Test
+    void getAllAlerts_device_filter_rejects_inaccessible_device() {
+        User user = mockUser();
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of(1L));
+
+        assertThrows(AccessDeniedException.class,
+                () -> alertService.getAllAlerts("EMP001", 2L, PageRequest.of(0, 50)));
+        verifyNoInteractions(alertRepository);
     }
 
     // ── 채널 스코프 조회 ────────────────────────────────────────────────

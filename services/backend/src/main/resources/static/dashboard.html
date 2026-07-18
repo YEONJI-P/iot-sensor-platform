@@ -4,49 +4,81 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('sm-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');}catch(e){document.documentElement.dataset.theme='dark';}</script>
-  <title>센서 대시보드 · Sensor Monitor</title>
+  <title>장치 현황 · Sensor Monitor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/css/app.css"/>
   <style>
-    /* 대시보드 전용 보조 스타일 (디자인 토큰·컴포넌트는 app.css) */
-    .ctl-row {
-      display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap;
-      margin-bottom: 1.4rem;
+    .dash-titlebar, .detail-titlebar, .section-title, .channel-head, .device-head {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
     }
-    .ctl-row .field { margin-bottom: 0; flex: 1 1 300px; min-width: 260px; max-width: 480px; }
-    .ctl-row .refresh-tag { margin-left: auto; align-self: center; }
-
-    .dash-grid { grid-template-columns: 2fr 1fr; align-items: start; margin-bottom: 1.1rem; }
-    @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
-
-    .chart-box { position: relative; height: 260px; padding: .7rem .4rem .3rem; }
-    .bar-box   { position: relative; height: 220px; padding: .7rem .4rem .3rem; }
-    .chart-box canvas, .bar-box canvas { max-width: 100%; }
-
-    .readout-stack { display: flex; flex-direction: column; }
-    .readout-stack .ro {
-      display: flex; align-items: flex-start; gap: .85rem;
-      padding: 1.15rem 1.3rem; border-bottom: 1px solid var(--line-soft);
+    .dash-titlebar { margin-bottom: 1.1rem; }
+    .dash-titlebar h1, .detail-titlebar h1 { font-size: 1.7rem; margin-top: .25rem; }
+    .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 1.35rem; }
+    .summary-card { display: flex; align-items: center; gap: .9rem; padding: 1.15rem 1.25rem; }
+    .summary-card .lamp { flex: 0 0 auto; }
+    .summary-card .val { font-size: 1.45rem; }
+    .factory-block { margin-bottom: 1.8rem; }
+    .factory-name { font-size: .78rem; color: var(--text-dim); margin-bottom: .75rem; }
+    .zone-block { margin-bottom: 1.25rem; }
+    .section-title { align-items: center; margin-bottom: .7rem; }
+    .section-title h2 { font-size: 1.02rem; }
+    .device-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
+    .device-card {
+      appearance: none; width: 100%; color: inherit; text-align: left; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 9px;
+      padding: 1.05rem 1.1rem; transition: border-color .16s ease, transform .16s ease, background .16s ease;
     }
-    .readout-stack .ro:last-child { border-bottom: none; }
-    .readout-stack .ro .lamp { margin-top: .45rem; }
-
-    .thr-badge {
-      font-family: var(--font-mono); font-size: .7rem; letter-spacing: .04em;
-      color: var(--brand); border: 1px dashed color-mix(in srgb, var(--brand) 50%, var(--line));
-      padding: .16rem .5rem; border-radius: 5px; white-space: nowrap;
+    .device-card:hover, .device-card:focus-visible {
+      border-color: color-mix(in srgb, var(--brand) 65%, var(--line));
+      background: var(--surface-2); transform: translateY(-1px); outline: none;
     }
-    .log-wrap { max-height: 480px; overflow: auto; }
-    .evi { display: block; font-size: .76rem; color: var(--text-faint); margin-top: .3rem; line-height: 1.4; }
-    .evi .k { font-family: var(--font-mono); letter-spacing: .04em; color: var(--text-dim); }
-    .cell-alarm { color: var(--alarm); font-weight: 600; }
+    .device-card h3 { font-size: 1rem; margin-bottom: .25rem; }
+    .device-meta { color: var(--text-faint); font-size: .78rem; min-height: 1.2rem; }
+    .device-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: 1rem; }
+    .metric { border-top: 1px solid var(--line-soft); padding-top: .65rem; }
+    .metric b { display: block; font-family: var(--font-mono); font-size: .9rem; margin-top: .22rem; }
+    .metric span { color: var(--text-faint); font-size: .7rem; }
+    .freshness { display: inline-flex; align-items: center; gap: .38rem; font-family: var(--font-mono); font-size: .7rem; }
+    .detail-titlebar { margin: .85rem 0 1.1rem; }
+    .breadcrumb { color: var(--text-faint); font-size: .78rem; margin-top: .3rem; }
+    .channel-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; margin-bottom: 1.1rem; }
+    .channel-card {
+      appearance: none; color: inherit; text-align: left; cursor: pointer; padding: .95rem 1rem;
+      background: transparent; border: 1px solid var(--line); border-radius: 8px;
+    }
+    .channel-card:hover, .channel-card.selected { border-color: var(--signal); background: color-mix(in srgb, var(--signal) 6%, transparent); }
+    .channel-card.alarm { border-color: color-mix(in srgb, var(--alarm) 65%, var(--line)); }
+    .channel-card .latest { font-family: var(--font-mono); font-size: 1.35rem; margin: .85rem 0 .35rem; }
+    .channel-card .latest small { font-size: .72rem; color: var(--text-dim); }
+    .channel-foot { display: flex; justify-content: space-between; gap: .5rem; color: var(--text-faint); font-size: .7rem; }
+    .detail-grid { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); align-items: start; margin-bottom: 1.1rem; }
+    .chart-box { position: relative; height: 290px; padding: .7rem .4rem .3rem; }
+    .chart-box canvas { max-width: 100%; }
+    .chart-control { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; }
+    .chart-control select { min-width: 220px; }
+    .thr-badge { font-family: var(--font-mono); font-size: .7rem; color: var(--brand); }
+    .alarm-panel { min-height: 360px; }
+    .alarm-list { list-style: none; }
+    .alarm-list li { padding: .9rem 1rem; border-bottom: 1px solid var(--line-soft); }
+    .alarm-list li:last-child { border-bottom: 0; }
+    .alarm-line { display: flex; justify-content: space-between; gap: .8rem; margin-bottom: .35rem; }
+    .alarm-message { font-size: .82rem; line-height: 1.45; }
+    .alarm-time { color: var(--text-faint); font-family: var(--font-mono); font-size: .7rem; white-space: nowrap; }
+    .evi { display: block; font-size: .74rem; color: var(--text-faint); margin-top: .35rem; line-height: 1.4; }
+    @media (max-width: 960px) {
+      .device-grid, .channel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .summary-grid, .device-grid, .channel-grid { grid-template-columns: 1fr; }
+      .topbar .clock, .identity { display: none; }
+      .dash-titlebar, .detail-titlebar { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
-
-<!-- ══ 상단바 ══ -->
 <div class="topbar">
   <a class="brand" href="/index.html" title="홈으로"><span class="mark">SM</span> Sensor Monitor</a>
   <div class="topbar-right">
@@ -65,106 +97,72 @@
   </div>
 </div>
 
-<!-- ══ 무권한 안내 ══ -->
 <div id="noAccess" class="noaccess hidden">
   <div class="flex items-center gap-sm" style="justify-content:center; margin-bottom:1rem;">
-    <span class="lamp idle"></span>
-    <span class="eyebrow">ACCESS · DENIED</span>
+    <span class="lamp idle"></span><span class="eyebrow">ACCESS · DENIED</span>
   </div>
   <h1 style="font-size:1.35rem; margin-bottom:.6rem;">접근 불가</h1>
   <p class="dim" style="margin-bottom:1.4rem;">이 역할은 대시보드 접근 권한이 없습니다.</p>
   <a class="btn btn-sm btn-ghost" href="/index.html">홈으로 돌아가기</a>
 </div>
 
-<!-- ══ 대시보드 ══ -->
-<div id="dash" class="stage hidden">
-  <div class="eyebrow" style="margin-bottom:.5rem;">TELEMETRY</div>
-  <h1 style="font-size:1.7rem; margin-bottom:1.3rem;">센서 대시보드</h1>
-
-  <div class="ctl-row">
-    <div class="field">
-      <label for="deviceSelect">채널</label>
-      <select class="input" id="deviceSelect">
-        <option value="">채널을 불러오는 중…</option>
-      </select>
+<main id="dash" class="stage hidden">
+  <section id="overviewView">
+    <div class="dash-titlebar">
+      <div><div class="eyebrow">DEVICE OVERVIEW</div><h1>장치 현황</h1></div>
+      <span class="tag" id="refreshTag">갱신 대기</span>
     </div>
-    <span class="tag refresh-tag" id="refreshTag">갱신 대기</span>
-  </div>
+    <div class="grid summary-grid">
+      <div class="panel summary-card"><span class="lamp idle" id="summaryFreshnessLamp"></span><div class="readout"><span class="val" id="summaryFreshness">—</span><span class="lbl">온라인 / 전체 장치</span></div></div>
+      <div class="panel summary-card"><span class="lamp idle" id="summaryLastSeenLamp"></span><div class="readout"><span class="val" id="summaryLastSeen">—</span><span class="lbl">마지막 수신</span></div></div>
+      <div class="panel summary-card"><span class="lamp idle" id="summaryAlarmLamp"></span><div class="readout"><span class="val" id="summaryAlarm">—</span><span class="lbl">현재 알람 채널</span></div></div>
+    </div>
+    <div id="overviewEmpty" class="panel empty">장치 현황을 불러오는 중입니다.</div>
+    <div id="factoryGroups"></div>
+  </section>
 
-  <!-- 실시간 라인 차트 + 텔레메트리 리드아웃 -->
-  <div class="grid dash-grid">
-    <div class="panel">
-      <div class="panel-head">
-        <h3>실시간 센서값</h3>
-        <span class="thr-badge" id="thrBadge">임계값 —</span>
+  <section id="detailView" class="hidden">
+    <button class="btn btn-sm btn-ghost" id="backButton" type="button">← 전체 장치</button>
+    <div class="detail-titlebar">
+      <div>
+        <div class="eyebrow">DEVICE DETAIL</div>
+        <h1 id="detailName">장치</h1>
+        <div class="breadcrumb" id="detailBreadcrumb"></div>
       </div>
-      <div class="chart-box">
-        <div class="empty" id="lineEmpty">채널을 선택하면 실시간 센서값이 표시됩니다.</div>
-        <canvas id="lineChart" class="hidden"></canvas>
-      </div>
+      <span id="detailFreshness" class="tag"></span>
+    </div>
+    <div class="grid summary-grid">
+      <div class="panel summary-card"><span class="lamp idle" id="detailFreshnessLamp"></span><div class="readout"><span class="val" id="detailFreshnessValue">—</span><span class="lbl">freshness</span></div></div>
+      <div class="panel summary-card"><span class="lamp idle" id="detailLastSeenLamp"></span><div class="readout"><span class="val" id="detailLastSeen">—</span><span class="lbl">마지막 수신</span></div></div>
+      <div class="panel summary-card"><span class="lamp idle" id="detailAlarmLamp"></span><div class="readout"><span class="val" id="detailAlarmCount">—</span><span class="lbl">현재 알람 채널</span></div></div>
     </div>
 
-    <div class="panel readout-stack">
-      <div class="ro">
-        <span class="lamp idle" id="roAlertLamp"></span>
-        <div class="readout">
-          <span class="val" id="roAlertCount">—</span>
-          <span class="lbl">오늘 알림</span>
+    <div class="section-title"><h2>채널 현황</h2><span class="tag" id="channelCount">0 채널</span></div>
+    <div id="channelGrid" class="channel-grid"></div>
+
+    <div class="grid detail-grid">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="chart-control">
+            <h3>채널 추이</h3>
+            <select class="input" id="channelSelect" aria-label="차트 채널 선택"></select>
+          </div>
+          <span class="thr-badge" id="thrBadge">임계값 —</span>
+        </div>
+        <div class="chart-box">
+          <div class="empty" id="lineEmpty">채널을 선택하면 최근 판독이 표시됩니다.</div>
+          <canvas id="lineChart" class="hidden"></canvas>
         </div>
       </div>
-      <div class="ro">
-        <span class="lamp idle" id="roWeekLamp"></span>
-        <div class="readout">
-          <span class="val" id="roWeekCount">—</span>
-          <span class="lbl">최근 7일 알림</span>
-        </div>
-      </div>
-      <div class="ro">
-        <span class="lamp idle" id="roDataLamp"></span>
-        <div class="readout">
-          <span class="val" id="roDataCount">—</span>
-          <span class="lbl">수집 데이터 수</span>
-        </div>
+      <div class="panel alarm-panel">
+        <div class="panel-head"><h3>장치 최근 알림</h3></div>
+        <ul id="alarmList" class="alarm-list"><li class="empty">알림을 불러오는 중입니다.</li></ul>
       </div>
     </div>
-  </div>
-
-  <!-- 일별 알림 바 차트 -->
-  <div class="panel" style="margin-bottom:1.1rem;">
-    <div class="panel-head"><h3>최근 7일 알림 발생</h3></div>
-    <div class="bar-box">
-      <div class="empty" id="barEmpty">채널을 선택하면 일별 알림 발생 건수가 표시됩니다.</div>
-      <canvas id="barChart" class="hidden"></canvas>
-    </div>
-  </div>
-
-  <!-- 최근 알림 로그 -->
-  <div class="panel">
-    <div class="panel-head"><h3>최근 알림</h3></div>
-    <div class="log-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th style="width:54px;">상태</th>
-            <th>장치</th>
-            <th style="width:98px;">센서값</th>
-            <th style="width:98px;">임계값</th>
-            <th>메시지</th>
-            <th style="width:150px;">발생시각</th>
-          </tr>
-        </thead>
-        <tbody id="alertBody">
-          <tr id="alertEmptyRow">
-            <td colspan="6"><div class="empty">채널을 선택하면 최근 알림이 표시됩니다.</div></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
+  </section>
+</main>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <script src="/js/theme.js"></script>
 <script src="/js/auth.js"></script>

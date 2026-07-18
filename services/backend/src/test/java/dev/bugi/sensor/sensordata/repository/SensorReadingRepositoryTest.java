@@ -83,4 +83,39 @@ class SensorReadingRepositoryTest extends AbstractPostgresTest {
         assertThatThrownBy(() -> sensorReadingRepository.saveAndFlush(dup))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
+
+    @Test
+    void findLatestByChannelIds는_채널별로_batch조회하고_동률은_reading_id가_큰_행을_선택한다() {
+        SensorChannel channel = persistChannel();
+        SensorChannel otherChannel = persistChannel();
+        Instant tiedAt = Instant.parse("2026-07-16T00:00:00Z");
+        MeasurementBatch firstBatch = persistBatch(channel.getDevice(), tiedAt);
+        MeasurementBatch secondBatch = persistBatch(channel.getDevice(), tiedAt);
+        SensorReading first = tem.persist(SensorReading.builder()
+                .batch(firstBatch).channel(channel).value(10.0).build());
+        SensorReading second = tem.persist(SensorReading.builder()
+                .batch(secondBatch).channel(channel).value(20.0).build());
+        MeasurementBatch otherBatch = persistBatch(otherChannel.getDevice(), tiedAt.plusSeconds(10));
+        tem.persist(SensorReading.builder()
+                .batch(otherBatch).channel(otherChannel).value(30.0).build());
+        Long expectedReadingId = second.getId();
+        tem.flush();
+        tem.clear();
+
+        List<SensorReadingRepository.LatestReadingProjection> latest =
+                sensorReadingRepository.findLatestByChannelIds(List.of(channel.getId(), otherChannel.getId()));
+
+        assertThat(latest).hasSize(2);
+        SensorReadingRepository.LatestReadingProjection tiedLatest = latest.stream()
+                .filter(row -> row.getChannelId().equals(channel.getId()))
+                .findFirst().orElseThrow();
+        assertThat(tiedLatest.getValue()).isEqualTo(20.0);
+        assertThat(tiedLatest.getObservedAt()).isEqualTo(tiedAt);
+        assertThat(tiedLatest.getReadingId()).isEqualTo(expectedReadingId);
+        assertThat(latest).anySatisfy(row -> {
+            assertThat(row.getChannelId()).isEqualTo(otherChannel.getId());
+            assertThat(row.getValue()).isEqualTo(30.0);
+        });
+        assertThat(expectedReadingId).isGreaterThan(first.getId());
+    }
 }
