@@ -1,9 +1,13 @@
 package dev.bugi.sensor.support;
 
+import dev.bugi.sensor.factory.entity.Factory;
+import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.global.config.ClockConfig;
 import dev.bugi.sensor.global.config.JpaConfig;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -50,5 +54,17 @@ public abstract class AbstractPostgresTest {
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         // 스키마는 ddl-auto 로 매 컨텍스트 생성한다(테스트 컨텍스트는 캐시되어 실질 1회).
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+    }
+
+    // 여러 리포지토리 테스트가 공유하던 Factory/Zone fixture 를 한곳으로 모은다.
+    @Autowired
+    protected TestEntityManager tem;
+
+    protected Factory persistFactory(String name) {
+        return tem.persist(Factory.builder().name(name).description(null).build());
+    }
+
+    protected Zone persistZone(Factory factory, String name) {
+        return tem.persist(Zone.builder().factory(factory).name(name).description(null).build());
     }
 }

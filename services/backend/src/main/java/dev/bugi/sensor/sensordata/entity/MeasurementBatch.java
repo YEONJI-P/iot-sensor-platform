@@ -37,7 +37,7 @@ public class MeasurementBatch {
     // 수신 시각(서버 기준). 서비스가 주입 Clock 으로 세팅한다.
     private Instant receivedAt;
 
-    // 원본 순서(예: C-MAPSS cycle, CNC 행 번호). 중복·재전송 판단 보조.
+    // 원본 순서 보존용(예: C-MAPSS cycle, CNC 행 번호). 재전송·중복 감지는 아직 구현하지 않았다.
     private Long sourceSeq;
 
     @Builder

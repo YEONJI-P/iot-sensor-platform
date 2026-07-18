@@ -3,10 +3,12 @@ package dev.bugi.sensor.global.service;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.SensorChannel;
 import dev.bugi.sensor.device.repository.DeviceRepository;
+import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.factory.repository.ZoneUserRepository;
 import dev.bugi.sensor.user.entity.Role;
 import dev.bugi.sensor.user.entity.User;
+import dev.bugi.sensor.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,22 @@ public class AccessControlService {
 
     private final DeviceRepository deviceRepository;
     private final ZoneUserRepository zoneUserRepository;
+    private final UserRepository userRepository;
+    private final SensorChannelRepository sensorChannelRepository;
+
+    // 사원번호로 사용자 로드(여러 서비스가 공유하던 중복 조회를 여기로 통합).
+    @Transactional(readOnly = true)
+    public User getUser(String employeeId) {
+        return userRepository.findByEmployeeId(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원번호예요"));
+    }
+
+    // 채널 로드(여러 서비스가 공유하던 findById().orElseThrow 중복을 통합).
+    @Transactional(readOnly = true)
+    public SensorChannel getChannel(Long channelId) {
+        return sensorChannelRepository.findById(channelId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 채널이에요 - channelId: " + channelId));
+    }
 
     @Transactional(readOnly = true)
     public List<Device> getAccessibleDevices(User user) {

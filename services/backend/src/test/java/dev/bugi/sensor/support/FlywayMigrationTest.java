@@ -85,6 +85,8 @@ class FlywayMigrationTest {
         assertThat(indexExists("sensor_reading", "uk_sensor_reading_batch_channel")).isTrue();
         assertThat(indexExists("device", "uk_device_code")).isTrue();
         assertThat(indexExists("sensor_channel", "uk_sensor_channel_device_code")).isTrue();
+        // 채널 화면 알림 조회(channel_id 필터 + created_at 정렬)용 인덱스.
+        assertThat(indexExists("alert", "idx_alert_channel_created")).isTrue();
 
         // device 는 설정만 남겼다: type/threshold_value 제거, code 추가.
         assertThat(columnExists("device", "type")).isFalse();

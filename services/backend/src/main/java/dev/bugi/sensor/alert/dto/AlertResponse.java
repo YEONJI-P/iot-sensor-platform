@@ -13,9 +13,10 @@ import java.time.Instant;
 @AllArgsConstructor
 public class AlertResponse {
     private Long id;
-    // 임계 alert 는 device·channel 둘 다, freshness alert 는 device 만 세팅된다(channelId=null).
+    // 임계 alert 는 device·channel·batch 셋 다, freshness alert 는 device 만 세팅된다(channelId·batchId=null).
     private Long deviceId;
     private Long channelId;
+    private Long batchId;
     private Double sensorValue;
     private Double thresholdValue;
     private String message;
@@ -29,6 +30,7 @@ public class AlertResponse {
                 alert.getId(),
                 alert.getDevice() != null ? alert.getDevice().getId() : null,
                 alert.getChannel() != null ? alert.getChannel().getId() : null,
+                alert.getBatch() != null ? alert.getBatch().getId() : null,
                 alert.getSensorValue(),
                 alert.getThresholdValue(),
                 alert.getMessage(),

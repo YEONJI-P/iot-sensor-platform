@@ -91,9 +91,7 @@ public class AlertEnrichmentScheduler {
 
     /** 채널의 최근 판독값을 시간순(과거→현재)으로 반환. 추세 계산이 쉬우라고 뒤집는다. */
     private List<Double> recentValues(Long channelId) {
-        if (channelId == null) {
-            return List.of();
-        }
+        // channelId 는 findEnrichTargets 가 'a.channel is not null' 로 걸러 항상 non-null 이라 방어 체크를 두지 않는다.
         List<SensorReading> recent = sensorReadingRepository
                 .findByChannelIdOrderByObservedAtDesc(channelId, PageRequest.of(0, WINDOW));
         List<Double> values = new ArrayList<>(recent.size());

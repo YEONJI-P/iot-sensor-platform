@@ -4,10 +4,8 @@ import dev.bugi.sensor.alert.dto.AlertResponse;
 import dev.bugi.sensor.alert.dto.DailyAlertCountResponse;
 import dev.bugi.sensor.alert.repository.AlertRepository;
 import dev.bugi.sensor.device.entity.SensorChannel;
-import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.user.entity.User;
-import dev.bugi.sensor.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,14 +26,12 @@ public class AlertService {
     private static final int MAX_RECENT = 500; // 채널별 조회 상한
 
     private final AlertRepository alertRepository;
-    private final SensorChannelRepository sensorChannelRepository;
-    private final UserRepository userRepository;
     private final AccessControlService accessControlService;
     private final Clock clock;
 
     @Transactional(readOnly = true)
     public Page<AlertResponse> getAllAlerts(String employeeId, Pageable pageable) {
-        User user = getUser(employeeId);
+        User user = accessControlService.getUser(employeeId);
         List<Long> deviceIds = accessControlService.getAccessibleDeviceIds(user);
         if (deviceIds.isEmpty()) return Page.empty(pageable);
         return alertRepository.findByDeviceIdIn(deviceIds, pageable)
@@ -44,8 +40,8 @@ public class AlertService {
 
     @Transactional(readOnly = true)
     public List<AlertResponse> getAlertsByChannel(String employeeId, Long channelId) {
-        User user = getUser(employeeId);
-        SensorChannel channel = getChannel(channelId);
+        User user = accessControlService.getUser(employeeId);
+        SensorChannel channel = accessControlService.getChannel(channelId);
         accessControlService.assertCanAccessChannel(user, channel);
         // 무제한 로드 방지 — 최근 N건만 반환.
         return alertRepository
@@ -55,8 +51,8 @@ public class AlertService {
 
     @Transactional(readOnly = true)
     public List<AlertResponse> getRecentAlerts(String employeeId, Long channelId, int limit) {
-        User user = getUser(employeeId);
-        SensorChannel channel = getChannel(channelId);
+        User user = accessControlService.getUser(employeeId);
+        SensorChannel channel = accessControlService.getChannel(channelId);
         accessControlService.assertCanAccessChannel(user, channel);
         return alertRepository.findRecentByChannelId(channelId, limit)
                 .stream().map(AlertResponse::from).toList();
@@ -64,8 +60,8 @@ public class AlertService {
 
     @Transactional(readOnly = true)
     public List<DailyAlertCountResponse> getDailyCount(String employeeId, Long channelId, int days) {
-        User user = getUser(employeeId);
-        SensorChannel channel = getChannel(channelId);
+        User user = accessControlService.getUser(employeeId);
+        SensorChannel channel = accessControlService.getChannel(channelId);
         accessControlService.assertCanAccessChannel(user, channel);
 
         Instant startDate = clock.instant().minus(Duration.ofDays(days));
@@ -78,15 +74,5 @@ public class AlertService {
             result.add(new DailyAlertCountResponse(date, count));
         }
         return result;
-    }
-
-    private User getUser(String employeeId) {
-        return userRepository.findByEmployeeId(employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원번호예요"));
-    }
-
-    private SensorChannel getChannel(Long channelId) {
-        return sensorChannelRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 채널이에요 - channelId: " + channelId));
     }
 }

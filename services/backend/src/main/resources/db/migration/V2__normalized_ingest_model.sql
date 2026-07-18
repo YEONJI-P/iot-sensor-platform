@@ -71,6 +71,8 @@ ALTER TABLE alert ADD COLUMN channel_id bigint;
 ALTER TABLE alert ADD COLUMN batch_id bigint;
 ALTER TABLE alert ADD CONSTRAINT fk_alert_channel FOREIGN KEY (channel_id) REFERENCES sensor_channel (id);
 ALTER TABLE alert ADD CONSTRAINT fk_alert_batch FOREIGN KEY (batch_id) REFERENCES measurement_batch (id);
+-- 채널 화면의 알림 조회(channel_id 필터 + created_at 정렬)를 받쳐 준다.
+CREATE INDEX idx_alert_channel_created ON alert (channel_id, created_at DESC);
 
 -- 8) failed_reading: 새 API 는 문자열 식별자(deviceCode/channelCode)로 실패를 기록한다.
 ALTER TABLE failed_reading ADD COLUMN device_code varchar(255);

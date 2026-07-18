@@ -9,7 +9,6 @@ import dev.bugi.sensor.device.repository.DeviceRepository;
 import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.user.entity.User;
-import dev.bugi.sensor.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,14 +19,22 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ChannelService {
 
-    private final UserRepository userRepository;
     private final DeviceRepository deviceRepository;
     private final SensorChannelRepository sensorChannelRepository;
     private final AccessControlService accessControlService;
 
+    /**
+     * 접근 가능한 채널 목록. deviceId 가 있으면 그 장치의 채널만(접근 검사 후), 없으면 접근 범위 전체.
+     */
     @Transactional(readOnly = true)
-    public List<ChannelResponse> getMyChannels(String employeeId) {
-        User user = getUser(employeeId);
+    public List<ChannelResponse> getMyChannels(String employeeId, Long deviceId) {
+        User user = accessControlService.getUser(employeeId);
+        if (deviceId != null) {
+            Device device = getDevice(deviceId);
+            accessControlService.assertCanAccessDevice(user, device);
+            return sensorChannelRepository.findByDeviceIdInWithDeviceAndZone(List.of(deviceId))
+                    .stream().map(ChannelResponse::from).toList();
+        }
         List<Long> deviceIds = accessControlService.getAccessibleDeviceIds(user);
         if (deviceIds.isEmpty()) {
             return List.of();
@@ -38,10 +45,9 @@ public class ChannelService {
 
     @Transactional
     public ChannelResponse createChannel(Long deviceId, ChannelCreateRequest request, String employeeId) {
-        User user = getUser(employeeId);
+        User user = accessControlService.getUser(employeeId);
         accessControlService.assertCanMutateDevice(user);
-        Device device = deviceRepository.findById(deviceId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 장치예요 - deviceId: " + deviceId));
+        Device device = getDevice(deviceId);
         accessControlService.assertCanAccessDevice(user, device);
 
         SensorChannel channel = SensorChannel.builder()
@@ -58,10 +64,9 @@ public class ChannelService {
 
     @Transactional
     public ChannelResponse updateChannel(Long channelId, ChannelUpdateRequest request, String employeeId) {
-        User user = getUser(employeeId);
+        User user = accessControlService.getUser(employeeId);
         accessControlService.assertCanMutateDevice(user);
-        SensorChannel channel = sensorChannelRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 채널이에요 - channelId: " + channelId));
+        SensorChannel channel = accessControlService.getChannel(channelId);
         accessControlService.assertCanAccessChannel(user, channel);
 
         channel.update(request.getUnit(), request.getQuantityKind(),
@@ -70,8 +75,8 @@ public class ChannelService {
         return ChannelResponse.from(channel);
     }
 
-    private User getUser(String employeeId) {
-        return userRepository.findByEmployeeId(employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원번호예요"));
+    private Device getDevice(Long deviceId) {
+        return deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 장치예요 - deviceId: " + deviceId));
     }
 }

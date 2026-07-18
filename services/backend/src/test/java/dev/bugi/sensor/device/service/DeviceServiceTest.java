@@ -11,7 +11,6 @@ import dev.bugi.sensor.factory.repository.ZoneRepository;
 import dev.bugi.sensor.user.entity.Role;
 import dev.bugi.sensor.user.entity.User;
 import dev.bugi.sensor.user.entity.UserStatus;
-import dev.bugi.sensor.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,7 +29,6 @@ import static org.mockito.Mockito.*;
 class DeviceServiceTest {
 
     @Mock DeviceRepository deviceRepository;
-    @Mock UserRepository userRepository;
     @Mock ZoneRepository zoneRepository;
     @Mock AccessControlService accessControlService;
 
@@ -62,7 +60,7 @@ class DeviceServiceTest {
         Zone zone = mockZone();
         DeviceRegisterRequest request = new DeviceRegisterRequest("CNC-EXP01", "CNC 1호기", "CNC exp01", 10, 1L);
 
-        when(userRepository.findByEmployeeId("DEV001")).thenReturn(Optional.of(user));
+        when(accessControlService.getUser("DEV001")).thenReturn(user);
         when(zoneRepository.findById(1L)).thenReturn(Optional.of(zone));
         doNothing().when(accessControlService).assertCanManageZone(user, zone);
 
@@ -83,7 +81,7 @@ class DeviceServiceTest {
         User user = mockUser();
         DeviceRegisterRequest request = new DeviceRegisterRequest("CNC-EXP01", "CNC 1호기", "L", 10, 99L);
 
-        when(userRepository.findByEmployeeId("DEV001")).thenReturn(Optional.of(user));
+        when(accessControlService.getUser("DEV001")).thenReturn(user);
         when(zoneRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> deviceService.register(request, "DEV001"));
@@ -95,7 +93,7 @@ class DeviceServiceTest {
         Device device = mockDevice(mockZone());
         DeviceUpdateRequest request = new DeviceUpdateRequest("엔진 유닛1-수정", "공장2층", 20);
 
-        when(userRepository.findByEmployeeId("DEV001")).thenReturn(Optional.of(user));
+        when(accessControlService.getUser("DEV001")).thenReturn(user);
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         doNothing().when(accessControlService).assertCanAccessDevice(user, device);
 
@@ -113,7 +111,7 @@ class DeviceServiceTest {
     @Test
     void update_fail_device_not_found() {
         User user = mockUser();
-        when(userRepository.findByEmployeeId("DEV001")).thenReturn(Optional.of(user));
+        when(accessControlService.getUser("DEV001")).thenReturn(user);
         when(deviceRepository.findById(1L)).thenReturn(Optional.empty());
         DeviceUpdateRequest request = new DeviceUpdateRequest("x", "y", 10);
 
@@ -125,7 +123,7 @@ class DeviceServiceTest {
         User user = mockUser();
         Device device = mockDevice(mockZone());
 
-        when(userRepository.findByEmployeeId("DEV001")).thenReturn(Optional.of(user));
+        when(accessControlService.getUser("DEV001")).thenReturn(user);
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
         doNothing().when(accessControlService).assertCanAccessDevice(user, device);
 
@@ -137,7 +135,7 @@ class DeviceServiceTest {
     @Test
     void delete_fail_device_not_found() {
         User user = mockUser();
-        when(userRepository.findByEmployeeId("DEV001")).thenReturn(Optional.of(user));
+        when(accessControlService.getUser("DEV001")).thenReturn(user);
         when(deviceRepository.findById(1L)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> deviceService.delete(1L, "DEV001"));
@@ -148,7 +146,7 @@ class DeviceServiceTest {
         User viewer = viewerUser();
         DeviceRegisterRequest request = new DeviceRegisterRequest("CNC-EXP01", "CNC 1호기", "L", 10, 1L);
 
-        when(userRepository.findByEmployeeId("VWR001")).thenReturn(Optional.of(viewer));
+        when(accessControlService.getUser("VWR001")).thenReturn(viewer);
         doThrow(new AccessDeniedException("열람 전용 계정은 장치를 변경할 수 없어요"))
                 .when(accessControlService).assertCanMutateDevice(viewer);
 

@@ -23,7 +23,6 @@ import dev.bugi.sensor.sensordata.failure.FailedReadingRepository;
 import dev.bugi.sensor.sensordata.repository.MeasurementBatchRepository;
 import dev.bugi.sensor.sensordata.repository.SensorReadingRepository;
 import dev.bugi.sensor.sse.SseBroadcastEvent;
-import dev.bugi.sensor.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,7 +60,6 @@ class SensorDataServiceTest {
     @Mock AnomalyDetector anomalyDetector;
     @Mock org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock AccessControlService accessControlService;
-    @Mock UserRepository userRepository;
     @Mock Clock clock;
 
     @Captor ArgumentCaptor<Alert> alertCaptor;
@@ -94,7 +92,8 @@ class SensorDataServiceTest {
 
         lenient().when(deviceRepository.findByCode("CMAPSS-U1")).thenReturn(Optional.of(device));
         lenient().when(sensorChannelRepository.findByDeviceId(any())).thenReturn(List.of(channel));
-        lenient().when(channelStatusRepository.findById(any())).thenReturn(Optional.of(channelStatus));
+        // 상태 일괄 로드: 같은 인스턴스를 돌려줘 receive 호출 간 알람 상태가 이어진다.
+        lenient().when(channelStatusRepository.findAllById(any())).thenReturn(List.of(channelStatus));
         lenient().when(deviceStatusRepository.findById(any()))
                 .thenReturn(Optional.of(new DeviceStatus(device, FIXED)));
         lenient().when(measurementBatchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -175,7 +174,39 @@ class SensorDataServiceTest {
         assertThat(result.response().rejected().get(0).reason()).isEqualTo("UNKNOWN_CHANNEL");
         verify(measurementBatchRepository, times(1)).save(any());
         verify(sensorReadingRepository, times(1)).save(any());
-        verify(failedReadingRepository, times(1)).save(any(FailedReading.class));
+        // 거부 판독은 saveAll 로 한 번에 적재한다.
+        verify(failedReadingRepository, times(1)).saveAll(any());
+        verify(failedReadingRepository, never()).save(any());
+    }
+
+    @Test
+    void 미지_채널_실패적재에_deviceId가_채워진다() {
+        // freshness 원인진단(countByDeviceIdAndCreatedAtAfter)이 세려면 deviceId 가 있어야 한다.
+        Device dev = mock(Device.class);
+        when(dev.getId()).thenReturn(42L);
+        SensorChannel ch = SensorChannel.builder().device(dev).code("s4").unit("°R")
+                .quantityKind("temperature").thresholdValue(1416.0)
+                .thresholdDirection(ThresholdDirection.ABOVE).build();
+        when(deviceRepository.findByCode("CMAPSS-U1")).thenReturn(Optional.of(dev));
+        when(sensorChannelRepository.findByDeviceId(42L)).thenReturn(List.of(ch));
+        when(measurementBatchRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(deviceStatusRepository.findById(any())).thenReturn(Optional.of(new DeviceStatus(dev, FIXED)));
+        when(channelStatusRepository.findAllById(any())).thenReturn(List.of());
+        when(channelStatusRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Map<String, Double> m = new LinkedHashMap<>();
+        m.put("s4", 100.0);     // known
+        m.put("bogus", 5.0);    // unknown
+        sensorDataService.receive(new BatchIngestRequest("CMAPSS-U1", null, null, m));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<FailedReading>> captor = ArgumentCaptor.forClass(List.class);
+        verify(failedReadingRepository).saveAll(captor.capture());
+        FailedReading failed = captor.getValue().get(0);
+        assertThat(failed.getReason()).isEqualTo("UNKNOWN_CHANNEL");
+        assertThat(failed.getChannelCode()).isEqualTo("bogus");
+        assertThat(failed.getDeviceCode()).isEqualTo("CMAPSS-U1");
+        assertThat(failed.getDeviceId()).isEqualTo(42L);
     }
 
     @Test
@@ -190,7 +221,7 @@ class SensorDataServiceTest {
         assertThat(result.response().batchId()).isNull();
         verify(measurementBatchRepository, never()).save(any());
         verify(deviceStatusRepository, never()).findById(any()); // markSeen 안 함
-        verify(failedReadingRepository, times(1)).save(any(FailedReading.class));
+        verify(failedReadingRepository, times(1)).saveAll(any());
     }
 
     @Test
@@ -219,6 +250,17 @@ class SensorDataServiceTest {
         verify(deviceStatusRepository).save(captor.capture());
         assertThat(captor.getValue().getDevice()).isSameAs(device);
         assertThat(captor.getValue().getLastSeenAt()).isEqualTo(FIXED);
+    }
+
+    @Test
+    void 기존_DeviceStatus가_있으면_lastSeenAt이_현재시각으로_갱신된다() {
+        arrange(1416.0);
+        DeviceStatus existing = new DeviceStatus(device, FIXED.minus(Duration.ofHours(1)));
+        when(deviceStatusRepository.findById(any())).thenReturn(Optional.of(existing));
+
+        sensorDataService.receive(req(1000.0));
+
+        assertThat(existing.getLastSeenAt()).isEqualTo(FIXED);
     }
 
     // ── SSE 브로드캐스트 ────────────────────────────────────────────────

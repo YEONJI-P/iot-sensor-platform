@@ -2,7 +2,6 @@ package dev.bugi.sensor.device.repository;
 
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.DeviceStatus;
-import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.support.AbstractPostgresTest;
 import jakarta.persistence.EntityManager;
@@ -10,7 +9,6 @@ import jakarta.persistence.PersistenceContext;
 import org.hibernate.Hibernate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
@@ -25,15 +23,11 @@ class DeviceStatusRepositoryTest extends AbstractPostgresTest {
     @Autowired
     DeviceStatusRepository deviceStatusRepository;
 
-    @Autowired
-    TestEntityManager tem;
-
     @PersistenceContext
     EntityManager em;
 
     private Zone freshZone() {
-        Factory f = tem.persist(Factory.builder().name("F").description(null).build());
-        return tem.persist(Zone.builder().factory(f).name("Z").description(null).build());
+        return persistZone(persistFactory("F"), "Z");
     }
 
     // device.code 는 NOT NULL UNIQUE 라 매번 고유 코드를 부여한다.

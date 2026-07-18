@@ -4,14 +4,12 @@ import dev.bugi.sensor.device.entity.ChannelStatus;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.SensorChannel;
 import dev.bugi.sensor.device.entity.SensorChannel.ThresholdDirection;
-import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.support.AbstractPostgresTest;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
@@ -29,15 +27,11 @@ class ChannelStatusRepositoryTest extends AbstractPostgresTest {
     @Autowired
     ChannelStatusRepository channelStatusRepository;
 
-    @Autowired
-    TestEntityManager tem;
-
     @PersistenceContext
     EntityManager em;
 
     private SensorChannel persistChannel() {
-        Factory f = tem.persist(Factory.builder().name("F").description(null).build());
-        Zone z = tem.persist(Zone.builder().factory(f).name("Z").description(null).build());
+        Zone z = persistZone(persistFactory("F"), "Z");
         Device d = tem.persist(Device.builder()
                 .zone(z).code("D-" + UUID.randomUUID()).name("D").location("L").expectedIntervalSeconds(10).build());
         return tem.persist(SensorChannel.builder()

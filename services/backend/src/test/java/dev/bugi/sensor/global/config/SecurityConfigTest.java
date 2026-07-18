@@ -11,6 +11,7 @@ import dev.bugi.sensor.device.service.DeviceService;
 import dev.bugi.sensor.global.security.CustomAccessDeniedHandler;
 import dev.bugi.sensor.global.security.CustomAuthenticationEntryPoint;
 import dev.bugi.sensor.global.service.AccessControlService;
+import dev.bugi.sensor.sensordata.failure.FailedReadingRepository;
 import dev.bugi.sensor.sensordata.service.SensorDataService;
 import dev.bugi.sensor.sse.SseService;
 import dev.bugi.sensor.user.repository.UserRepository;
@@ -24,6 +25,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -62,6 +65,9 @@ public class SecurityConfigTest {
     UserRepository userRepository;
     @MockitoBean
     JwtUtil jwtUtil;
+    // GlobalExceptionHandler(@RestControllerAdvice)가 요구하는 의존.
+    @MockitoBean
+    FailedReadingRepository failedReadingRepository;
 
     // -- 공개 endpoint(C1: deviceCode + measurements) --
     @Test
@@ -70,6 +76,16 @@ public class SecurityConfigTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"deviceCode\":\"CMAPSS-U1\",\"measurements\":{\"s4\":100.0}}"))
                 .andExpect(status().is(not(401)));
+    }
+
+    // -- C2 계약: 잘못된 수신 요청은 400(500 아님) + 실패 적재 --
+    @Test
+    void post_sensor_data_invalid_returns_400_and_records_failure() throws Exception {
+        mockMvc.perform(post("/sensor-data")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deviceCode\":\"\",\"measurements\":{}}"))
+                .andExpect(status().isBadRequest());
+        verify(failedReadingRepository).save(any());
     }
 
     // -- 보호 endpoint --

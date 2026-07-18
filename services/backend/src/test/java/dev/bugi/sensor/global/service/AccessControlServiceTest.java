@@ -1,13 +1,16 @@
 package dev.bugi.sensor.global.service;
 
 import dev.bugi.sensor.device.entity.Device;
+import dev.bugi.sensor.device.entity.SensorChannel;
 import dev.bugi.sensor.device.repository.DeviceRepository;
+import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.factory.entity.ZoneUser;
 import dev.bugi.sensor.factory.repository.ZoneUserRepository;
 import dev.bugi.sensor.user.entity.Role;
 import dev.bugi.sensor.user.entity.User;
+import dev.bugi.sensor.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -27,9 +31,43 @@ class AccessControlServiceTest {
 
     @Mock DeviceRepository deviceRepository;
     @Mock ZoneUserRepository zoneUserRepository;
+    @Mock UserRepository userRepository;
+    @Mock SensorChannelRepository sensorChannelRepository;
 
     @InjectMocks
     AccessControlService accessControlService;
+
+    // ── getUser / getChannel : 여러 서비스가 공유하는 조회 ────────────────
+
+    @Test
+    void getUser_returns_user_by_employeeId() {
+        User user = mock(User.class);
+        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
+
+        assertThat(accessControlService.getUser("EMP001")).isSameAs(user);
+    }
+
+    @Test
+    void getUser_missing_throws() {
+        when(userRepository.findByEmployeeId("NOPE")).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () -> accessControlService.getUser("NOPE"));
+    }
+
+    @Test
+    void getChannel_returns_channel_by_id() {
+        SensorChannel channel = mock(SensorChannel.class);
+        when(sensorChannelRepository.findById(7L)).thenReturn(Optional.of(channel));
+
+        assertThat(accessControlService.getChannel(7L)).isSameAs(channel);
+    }
+
+    @Test
+    void getChannel_missing_throws() {
+        when(sensorChannelRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () -> accessControlService.getChannel(99L));
+    }
 
     // 엔티티 id 는 생성 자동값(세터 없음)이라 목으로 통제한다.
     private User user(Role role, Long userId, Long factoryId) {

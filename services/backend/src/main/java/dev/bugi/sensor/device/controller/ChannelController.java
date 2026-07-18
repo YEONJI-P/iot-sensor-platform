@@ -25,10 +25,12 @@ public class ChannelController {
     private final ChannelService channelService;
     private final SensorDataService sensorDataService;
 
-    // 대시보드 드롭다운 소스(접근 범위 필터).
+    // 대시보드 드롭다운 소스(접근 범위 필터). deviceId 를 주면 그 장치의 채널만 반환한다.
     @GetMapping("/channels")
-    public ResponseEntity<List<ChannelResponse>> getMyChannels(@AuthenticationPrincipal String employeeId) {
-        return ResponseEntity.ok(channelService.getMyChannels(employeeId));
+    public ResponseEntity<List<ChannelResponse>> getMyChannels(
+            @RequestParam(required = false) Long deviceId,
+            @AuthenticationPrincipal String employeeId) {
+        return ResponseEntity.ok(channelService.getMyChannels(employeeId, deviceId));
     }
 
     // 채널별 최근 판독(observed_at desc).

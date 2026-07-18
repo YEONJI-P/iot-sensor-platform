@@ -8,14 +8,12 @@ import dev.bugi.sensor.alert.repository.AlertRepository;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.SensorChannel;
 import dev.bugi.sensor.device.entity.SensorChannel.ThresholdDirection;
-import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.user.entity.Role;
 import dev.bugi.sensor.user.entity.User;
 import dev.bugi.sensor.user.entity.UserStatus;
-import dev.bugi.sensor.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -32,7 +30,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,8 +41,6 @@ import static org.mockito.Mockito.*;
 class AlertServiceTest {
 
     @Mock AlertRepository alertRepository;
-    @Mock SensorChannelRepository sensorChannelRepository;
-    @Mock UserRepository userRepository;
     @Mock AccessControlService accessControlService;
 
     private static final Instant FIXED = Instant.parse("2026-07-16T00:00:00Z");
@@ -87,7 +82,7 @@ class AlertServiceTest {
         Alert alert = mockAlert(mockChannel());
         Pageable pageable = PageRequest.of(0, 50);
 
-        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
         when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of(1L));
         when(alertRepository.findByDeviceIdIn(eq(List.of(1L)), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(alert)));
@@ -95,15 +90,14 @@ class AlertServiceTest {
         Page<AlertResponse> result = alertService.getAllAlerts("EMP001", pageable);
 
         assertThat(result.getContent()).hasSize(1);
-        AlertResponse mapped = result.getContent().get(0);
-        assertThat(mapped.getSensorValue()).isEqualTo(95.0);
-        assertThat(mapped.getSeverity()).isEqualTo(AlertSeverity.CRITICAL);
+        assertThat(result.getContent().get(0).getSensorValue()).isEqualTo(95.0);
+        assertThat(result.getContent().get(0).getSeverity()).isEqualTo(AlertSeverity.CRITICAL);
     }
 
     @Test
     void getAllAlerts_returns_empty_when_no_accessible_devices() {
         User user = mockUser();
-        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
         when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of());
 
         Page<AlertResponse> result = alertService.getAllAlerts("EMP001", PageRequest.of(0, 50));
@@ -113,8 +107,22 @@ class AlertServiceTest {
     }
 
     @Test
+    void getAllAlerts_returns_empty_when_no_alerts_for_accessible_devices() {
+        User user = mockUser();
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(accessControlService.getAccessibleDeviceIds(user)).thenReturn(List.of(1L));
+        when(alertRepository.findByDeviceIdIn(eq(List.of(1L)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        Page<AlertResponse> result = alertService.getAllAlerts("EMP001", PageRequest.of(0, 50));
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
     void getAllAlerts_fail_user_not_found() {
-        when(userRepository.findByEmployeeId("NOTEXIST")).thenReturn(Optional.empty());
+        when(accessControlService.getUser("NOTEXIST"))
+                .thenThrow(new IllegalArgumentException("존재하지 않는 사원번호예요"));
 
         assertThrows(IllegalArgumentException.class,
                 () -> alertService.getAllAlerts("NOTEXIST", PageRequest.of(0, 50)));
@@ -128,8 +136,8 @@ class AlertServiceTest {
         SensorChannel channel = mockChannel();
         Alert alert = mockAlert(channel);
 
-        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
-        when(sensorChannelRepository.findById(1L)).thenReturn(Optional.of(channel));
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(accessControlService.getChannel(1L)).thenReturn(channel);
         doNothing().when(accessControlService).assertCanAccessChannel(user, channel);
         when(alertRepository.findByChannelIdOrderByCreatedAtDesc(eq(1L), any(Pageable.class)))
                 .thenReturn(List.of(alert));
@@ -143,8 +151,9 @@ class AlertServiceTest {
     @Test
     void getAlertsByChannel_fail_channel_not_found() {
         User user = mockUser();
-        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
-        when(sensorChannelRepository.findById(99L)).thenReturn(Optional.empty());
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(accessControlService.getChannel(99L))
+                .thenThrow(new IllegalArgumentException("존재하지 않는 채널이에요 - channelId: 99"));
 
         assertThrows(IllegalArgumentException.class,
                 () -> alertService.getAlertsByChannel("EMP001", 99L));
@@ -155,8 +164,8 @@ class AlertServiceTest {
         User user = mockUser();
         SensorChannel channel = mockChannel();
 
-        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
-        when(sensorChannelRepository.findById(1L)).thenReturn(Optional.of(channel));
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(accessControlService.getChannel(1L)).thenReturn(channel);
         doThrow(new AccessDeniedException("접근 권한이 없어요"))
                 .when(accessControlService).assertCanAccessChannel(user, channel);
 
@@ -169,8 +178,8 @@ class AlertServiceTest {
         User user = mockUser();
         SensorChannel channel = mockChannel();
 
-        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
-        when(sensorChannelRepository.findById(1L)).thenReturn(Optional.of(channel));
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(accessControlService.getChannel(1L)).thenReturn(channel);
         doNothing().when(accessControlService).assertCanAccessChannel(user, channel);
         Instant expectedStart = FIXED.minus(java.time.Duration.ofDays(7));
         when(alertRepository.findDailyCountByChannelId(eq(1L), eq(expectedStart)))
@@ -191,8 +200,8 @@ class AlertServiceTest {
         User user = mockUser();
         SensorChannel channel = mockChannel();
 
-        when(userRepository.findByEmployeeId("EMP001")).thenReturn(Optional.of(user));
-        when(sensorChannelRepository.findById(1L)).thenReturn(Optional.of(channel));
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(accessControlService.getChannel(1L)).thenReturn(channel);
         doThrow(new AccessDeniedException("접근 권한이 없어요"))
                 .when(accessControlService).assertCanAccessChannel(user, channel);
 

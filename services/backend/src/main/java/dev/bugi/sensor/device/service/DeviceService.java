@@ -9,7 +9,6 @@ import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.factory.repository.ZoneRepository;
 import dev.bugi.sensor.user.entity.User;
-import dev.bugi.sensor.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,14 +19,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DeviceService {
 
-    private final UserRepository userRepository;
     private final DeviceRepository deviceRepository;
     private final ZoneRepository zoneRepository;
     private final AccessControlService accessControlService;
 
     @Transactional
     public DeviceResponse register(DeviceRegisterRequest request, String employeeId) {
-        User user = getUser(employeeId);
+        User user = accessControlService.getUser(employeeId);
         accessControlService.assertCanMutateDevice(user);
         Zone zone = zoneRepository.findById(request.getZoneId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 구역이에요"));
@@ -46,7 +44,7 @@ public class DeviceService {
 
     @Transactional
     public DeviceResponse update(Long deviceId, DeviceUpdateRequest request, String employeeId) {
-        User user = getUser(employeeId);
+        User user = accessControlService.getUser(employeeId);
         accessControlService.assertCanMutateDevice(user);
         Device device = getDevice(deviceId);
         accessControlService.assertCanAccessDevice(user, device);
@@ -58,7 +56,7 @@ public class DeviceService {
 
     @Transactional(readOnly = true)
     public List<DeviceResponse> getMyDevices(String employeeId) {
-        User user = getUser(employeeId);
+        User user = accessControlService.getUser(employeeId);
         return accessControlService.getAccessibleDevices(user).stream()
                 .map(DeviceResponse::from)
                 .toList();
@@ -66,16 +64,11 @@ public class DeviceService {
 
     @Transactional
     public void delete(Long deviceId, String employeeId) {
-        User user = getUser(employeeId);
+        User user = accessControlService.getUser(employeeId);
         accessControlService.assertCanMutateDevice(user);
         Device device = getDevice(deviceId);
         accessControlService.assertCanAccessDevice(user, device);
         deviceRepository.delete(device);
-    }
-
-    private User getUser(String employeeId) {
-        return userRepository.findByEmployeeId(employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원번호예요"));
     }
 
     private Device getDevice(Long deviceId) {

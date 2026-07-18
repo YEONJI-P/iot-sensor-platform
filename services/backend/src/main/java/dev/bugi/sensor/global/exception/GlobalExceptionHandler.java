@@ -1,22 +1,43 @@
 package dev.bugi.sensor.global.exception;
 
+import dev.bugi.sensor.sensordata.dto.BatchIngestRequest;
+import dev.bugi.sensor.sensordata.failure.FailedReading;
+import dev.bugi.sensor.sensordata.failure.FailedReadingRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.DisabledException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+
+    private final FailedReadingRepository failedReadingRepository;
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse("BAD_REQUEST", e.getMessage()));
+    }
+
+    // @Valid 검증 실패 → 400. C2 계약(잘못된 요청은 400)을 지키고,
+    // 수신 요청이면 '데이터 안 옴 신호 소스'로 failed_reading 도 적재한다(구 모델 행동 복원).
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
+        Object target = e.getBindingResult().getTarget();
+        if (target instanceof BatchIngestRequest req) {
+            failedReadingRepository.save(FailedReading.builder()
+                    .deviceCode(req.getDeviceCode()).reason("INVALID_REQUEST").build());
+        }
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse("BAD_REQUEST", "요청 형식이 올바르지 않습니다."));
     }
 
     @ExceptionHandler(DisabledException.class)

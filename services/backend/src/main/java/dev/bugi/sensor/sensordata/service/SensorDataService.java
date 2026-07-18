@@ -28,7 +28,6 @@ import dev.bugi.sensor.sensordata.repository.MeasurementBatchRepository;
 import dev.bugi.sensor.sensordata.repository.SensorReadingRepository;
 import dev.bugi.sensor.sse.SseBroadcastEvent;
 import dev.bugi.sensor.user.entity.User;
-import dev.bugi.sensor.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -71,7 +70,6 @@ public class SensorDataService {
     private final AnomalyDetector anomalyDetector;
     private final ApplicationEventPublisher eventPublisher;
     private final AccessControlService accessControlService;
-    private final UserRepository userRepository;
     private final Clock clock;
 
     /**
@@ -100,6 +98,7 @@ public class SensorDataService {
         }
 
         List<RejectedReading> rejected = new ArrayList<>();
+        List<FailedReading> failures = new ArrayList<>();
         Map<SensorChannel, Double> known = new LinkedHashMap<>();
         for (Map.Entry<String, Double> entry : request.getMeasurements().entrySet()) {
             String code = entry.getKey();
@@ -107,15 +106,22 @@ public class SensorDataService {
             SensorChannel channel = channelsByCode.get(code);
             if (channel == null) {
                 rejected.add(new RejectedReading(code, "UNKNOWN_CHANNEL"));
-                failedReadingRepository.save(FailedReading.builder()
-                        .deviceCode(deviceCode).channelCode(code).value(value).reason("UNKNOWN_CHANNEL").build());
+                // deviceId 를 채워 freshness 원인진단(countByDeviceIdAndCreatedAtAfter)이 실패를 셀 수 있게 한다.
+                failures.add(FailedReading.builder()
+                        .deviceId(device.getId()).deviceCode(deviceCode).channelCode(code).value(value)
+                        .reason("UNKNOWN_CHANNEL").build());
             } else if (value == null) {
                 rejected.add(new RejectedReading(code, "NULL_VALUE"));
-                failedReadingRepository.save(FailedReading.builder()
-                        .deviceCode(deviceCode).channelCode(code).reason("NULL_VALUE").build());
+                failures.add(FailedReading.builder()
+                        .deviceId(device.getId()).deviceCode(deviceCode).channelCode(code)
+                        .reason("NULL_VALUE").build());
             } else {
                 known.put(channel, value);
             }
+        }
+        // 거부된 판독은 한 번에 적재한다(개별 save round-trip 회피).
+        if (!failures.isEmpty()) {
+            failedReadingRepository.saveAll(failures);
         }
 
         if (known.isEmpty()) {
@@ -144,9 +150,16 @@ public class SensorDataService {
         eventPublisher.publishEvent(new SseBroadcastEvent("sensor-data", device.getId(),
                 new BatchSsePayload(batch.getId(), device.getId(), observedAt, receivedAt, sseReadings)));
 
+        // 채널 상태를 채널 Map 로딩과 같은 패턴으로 일괄 로드(채널별 findById round-trip 회피).
+        Map<Long, ChannelStatus> statusByChannelId = new HashMap<>();
+        for (ChannelStatus status : channelStatusRepository.findAllById(
+                known.keySet().stream().map(SensorChannel::getId).toList())) {
+            statusByChannelId.put(status.getChannelId(), status);
+        }
+
         // 저장한 reading 마다 채널별 알람 판정.
         for (Map.Entry<SensorChannel, Double> entry : known.entrySet()) {
-            evaluateAlarm(device, batch, entry.getKey(), entry.getValue(), receivedAt);
+            evaluateAlarm(device, batch, entry.getKey(), entry.getValue(), receivedAt, statusByChannelId);
         }
 
         log.info("batch 수신 저장 - deviceCode: {}, saved: {}, rejected: {}",
@@ -158,11 +171,16 @@ public class SensorDataService {
      * 엣지 트리거 알람 판정(채널 경계). 임계 초과가 '시작'되는 순간에만 Alert 를 만들고,
      * 초과가 이어지는 동안은 억제한다. 재발화 방지 여유 아래로 복귀하면 알람만 해제한다.
      * 알람 상태는 설정(SensorChannel)이 아니라 ChannelStatus(런타임)에 둔다.
+     * 상태 Map 은 receive 가 일괄 로드해 넘긴다(없으면 최초 판독이라 여기서 생성).
      */
-    private void evaluateAlarm(Device device, MeasurementBatch batch, SensorChannel channel, double value, Instant now) {
+    private void evaluateAlarm(Device device, MeasurementBatch batch, SensorChannel channel, double value,
+                               Instant now, Map<Long, ChannelStatus> statusByChannelId) {
         boolean breach = anomalyDetector.isAnomaly(channel, value);
-        ChannelStatus status = channelStatusRepository.findById(channel.getId())
-                .orElseGet(() -> channelStatusRepository.save(new ChannelStatus(channel)));
+        ChannelStatus status = statusByChannelId.get(channel.getId());
+        if (status == null) {
+            status = channelStatusRepository.save(new ChannelStatus(channel));
+            statusByChannelId.put(channel.getId(), status);
+        }
         Double threshold = channel.getThresholdValue();
 
         if (breach && !status.isInAlarm()) {
@@ -229,18 +247,12 @@ public class SensorDataService {
 
     @Transactional(readOnly = true)
     public List<ReadingResponse> getReadingsByChannel(String employeeId, Long channelId, int limit) {
-        User user = getUser(employeeId);
-        SensorChannel channel = sensorChannelRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 채널이에요 - channelId: " + channelId));
+        User user = accessControlService.getUser(employeeId);
+        SensorChannel channel = accessControlService.getChannel(channelId);
         accessControlService.assertCanAccessChannel(user, channel);
         int capped = Math.min(Math.max(limit, 1), MAX_RECENT);
         return sensorReadingRepository
                 .findByChannelIdOrderByObservedAtDesc(channelId, PageRequest.of(0, capped))
                 .stream().map(ReadingResponse::from).toList();
-    }
-
-    private User getUser(String employeeId) {
-        return userRepository.findByEmployeeId(employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원번호예요"));
     }
 }

@@ -3,14 +3,12 @@ package dev.bugi.sensor.alert.repository;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.SensorChannel;
 import dev.bugi.sensor.device.entity.SensorChannel.ThresholdDirection;
-import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.support.AbstractPostgresTest;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -30,15 +28,11 @@ class AlertRepositoryTest extends AbstractPostgresTest {
     @Autowired
     AlertRepository alertRepository;
 
-    @Autowired
-    TestEntityManager tem;
-
     @PersistenceContext
     EntityManager em;
 
     private Device persistDevice() {
-        Factory factory = tem.persist(Factory.builder().name("F1").description(null).build());
-        Zone zone = tem.persist(Zone.builder().factory(factory).name("Z1").description(null).build());
+        Zone zone = persistZone(persistFactory("F1"), "Z1");
         return tem.persist(Device.builder()
                 .zone(zone).code("D-" + UUID.randomUUID()).name("D1")
                 .location("L1").expectedIntervalSeconds(60).build());
@@ -92,6 +86,7 @@ class AlertRepositoryTest extends AbstractPostgresTest {
         // 엔티티 매핑(severity/evidence/recommendation 및 신규 channel FK)
         assertThat(recent.get(0).getSeverity()).isEqualTo(dev.bugi.sensor.alert.entity.AlertSeverity.CRITICAL);
         assertThat(recent.get(0).getEvidence()).isEqualTo("ev-new");
+        assertThat(recent.get(0).getRecommendation()).isEqualTo("rec-new");
         assertThat(recent.get(0).getChannel().getId()).isEqualTo(channel.getId());
     }
 
