@@ -21,6 +21,7 @@ public class AlertController {
 
     private final AlertService alertService;
 
+    // 전체 알림(대시보드) — 접근 가능한 device 범위.
     @GetMapping
     public ResponseEntity<Page<AlertResponse>> getAllAlerts(
             @AuthenticationPrincipal String employeeId,
@@ -28,28 +29,29 @@ public class AlertController {
         return ResponseEntity.ok(alertService.getAllAlerts(employeeId, pageable));
     }
 
-    @GetMapping("/{deviceId}")
-    public ResponseEntity<List<AlertResponse>> getAllAlertsByDeviceId(
-            @PathVariable Long deviceId,
+    // 채널별 알림 — 채널 화면.
+    @GetMapping("/channel/{channelId}")
+    public ResponseEntity<List<AlertResponse>> getAlertsByChannel(
+            @PathVariable Long channelId,
             @AuthenticationPrincipal String employeeId) {
-        return ResponseEntity.ok(alertService.getAllAlertsByDeviceId(employeeId, deviceId));
+        return ResponseEntity.ok(alertService.getAlertsByChannel(employeeId, channelId));
     }
 
-    // GET /alerts/recent?deviceId={deviceId}&limit=20
+    // GET /alerts/recent?channelId={channelId}&limit=20
     @GetMapping("/recent")
     public ResponseEntity<List<AlertResponse>> getRecentAlerts(
-            @RequestParam Long deviceId,
+            @RequestParam Long channelId,
             @RequestParam(defaultValue = "20") int limit,
             @AuthenticationPrincipal String employeeId) {
-        return ResponseEntity.ok(alertService.getRecentAlerts(employeeId, deviceId, limit));
+        return ResponseEntity.ok(alertService.getRecentAlerts(employeeId, channelId, limit));
     }
 
-    // GET /alerts/daily-count?deviceId={deviceId}&days=7
+    // GET /alerts/daily-count?channelId={channelId}&days=7
     @GetMapping("/daily-count")
     public ResponseEntity<List<DailyAlertCountResponse>> getDailyCount(
-            @RequestParam Long deviceId,
+            @RequestParam Long channelId,
             @RequestParam(defaultValue = "7") int days,
             @AuthenticationPrincipal String employeeId) {
-        return ResponseEntity.ok(alertService.getDailyCount(employeeId, deviceId, days));
+        return ResponseEntity.ok(alertService.getDailyCount(employeeId, channelId, days));
     }
 }

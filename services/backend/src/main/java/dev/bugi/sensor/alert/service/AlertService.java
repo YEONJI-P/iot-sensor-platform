@@ -3,8 +3,8 @@ package dev.bugi.sensor.alert.service;
 import dev.bugi.sensor.alert.dto.AlertResponse;
 import dev.bugi.sensor.alert.dto.DailyAlertCountResponse;
 import dev.bugi.sensor.alert.repository.AlertRepository;
-import dev.bugi.sensor.device.entity.Device;
-import dev.bugi.sensor.device.repository.DeviceRepository;
+import dev.bugi.sensor.device.entity.SensorChannel;
+import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.user.entity.User;
 import dev.bugi.sensor.user.repository.UserRepository;
@@ -25,10 +25,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AlertService {
 
-    private static final int MAX_RECENT = 500; // 장치별 조회 상한
+    private static final int MAX_RECENT = 500; // 채널별 조회 상한
 
     private final AlertRepository alertRepository;
-    private final DeviceRepository deviceRepository;
+    private final SensorChannelRepository sensorChannelRepository;
     private final UserRepository userRepository;
     private final AccessControlService accessControlService;
     private final Clock clock;
@@ -43,33 +43,33 @@ public class AlertService {
     }
 
     @Transactional(readOnly = true)
-    public List<AlertResponse> getAllAlertsByDeviceId(String employeeId, Long deviceId) {
+    public List<AlertResponse> getAlertsByChannel(String employeeId, Long channelId) {
         User user = getUser(employeeId);
-        Device device = getDevice(deviceId);
-        accessControlService.assertCanAccessDevice(user, device);
+        SensorChannel channel = getChannel(channelId);
+        accessControlService.assertCanAccessChannel(user, channel);
         // 무제한 로드 방지 — 최근 N건만 반환.
         return alertRepository
-                .findByDeviceIdOrderByCreatedAtDesc(device.getId(), PageRequest.of(0, MAX_RECENT))
+                .findByChannelIdOrderByCreatedAtDesc(channelId, PageRequest.of(0, MAX_RECENT))
                 .stream().map(AlertResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
-    public List<AlertResponse> getRecentAlerts(String employeeId, Long deviceId, int limit) {
+    public List<AlertResponse> getRecentAlerts(String employeeId, Long channelId, int limit) {
         User user = getUser(employeeId);
-        Device device = getDevice(deviceId);
-        accessControlService.assertCanAccessDevice(user, device);
-        return alertRepository.findRecentByDeviceId(deviceId, limit)
+        SensorChannel channel = getChannel(channelId);
+        accessControlService.assertCanAccessChannel(user, channel);
+        return alertRepository.findRecentByChannelId(channelId, limit)
                 .stream().map(AlertResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
-    public List<DailyAlertCountResponse> getDailyCount(String employeeId, Long deviceId, int days) {
+    public List<DailyAlertCountResponse> getDailyCount(String employeeId, Long channelId, int days) {
         User user = getUser(employeeId);
-        Device device = getDevice(deviceId);
-        accessControlService.assertCanAccessDevice(user, device);
+        SensorChannel channel = getChannel(channelId);
+        accessControlService.assertCanAccessChannel(user, channel);
 
         Instant startDate = clock.instant().minus(Duration.ofDays(days));
-        List<Object[]> rows = alertRepository.findDailyCountByDeviceId(deviceId, startDate);
+        List<Object[]> rows = alertRepository.findDailyCountByChannelId(channelId, startDate);
 
         List<DailyAlertCountResponse> result = new ArrayList<>();
         for (Object[] row : rows) {
@@ -85,8 +85,8 @@ public class AlertService {
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원번호예요"));
     }
 
-    private Device getDevice(Long deviceId) {
-        return deviceRepository.findById(deviceId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 장치예요 - deviceId: " + deviceId));
+    private SensorChannel getChannel(Long channelId) {
+        return sensorChannelRepository.findById(channelId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 채널이에요 - channelId: " + channelId));
     }
 }

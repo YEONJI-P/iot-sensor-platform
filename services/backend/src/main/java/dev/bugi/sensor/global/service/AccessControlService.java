@@ -1,6 +1,7 @@
 package dev.bugi.sensor.global.service;
 
 import dev.bugi.sensor.device.entity.Device;
+import dev.bugi.sensor.device.entity.SensorChannel;
 import dev.bugi.sensor.device.repository.DeviceRepository;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.factory.repository.ZoneUserRepository;
@@ -64,6 +65,12 @@ public class AccessControlService {
         if (device.getZone() == null || !zoneIds.contains(device.getZone().getId())) {
             throw new AccessDeniedException("접근 권한이 없는 장치예요");
         }
+    }
+
+    // 채널 접근은 소속 물리 Device 접근 권한에 위임한다(채널은 device 의 자식 설정).
+    @Transactional(readOnly = true)
+    public void assertCanAccessChannel(User user, SensorChannel channel) {
+        assertCanAccessDevice(user, channel.getDevice());
     }
 
     // VIEWER는 읽기 전용 — 장치 등록·수정·삭제 불가

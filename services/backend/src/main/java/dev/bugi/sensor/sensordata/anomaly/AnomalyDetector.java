@@ -1,8 +1,9 @@
 package dev.bugi.sensor.sensordata.anomaly;
 
-import dev.bugi.sensor.device.entity.Device;
+import dev.bugi.sensor.device.entity.SensorChannel;
 
 public interface AnomalyDetector {
 
-    boolean isAnomaly(Device device, double value);
+    // 임계 판정은 채널 경계에서 한다(임계값·방향은 SensorChannel 이 가진다).
+    boolean isAnomaly(SensorChannel channel, double value);
 }

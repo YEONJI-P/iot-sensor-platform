@@ -12,7 +12,8 @@ import java.util.Optional;
 @EnableJpaAuditing(dateTimeProviderRef = "auditingDateTimeProvider")
 public class JpaConfig {
 
-    // @CreatedDate 감사 필드(Alert.createdAt, SensorData.recordedAt)를 Instant(UTC)로 채운다.
+    // @CreatedDate/@LastModifiedDate 감사 필드(Alert, Device, SensorChannel, FailedReading 등)를
+    // Instant(UTC)로 채운다. MeasurementBatch.receivedAt 은 감사 필드가 아니라 서비스가 직접 세팅한다.
     // 주입한 Clock을 쓰므로 테스트에서 시각을 고정할 수 있다.
     @Bean
     public DateTimeProvider auditingDateTimeProvider(Clock clock) {

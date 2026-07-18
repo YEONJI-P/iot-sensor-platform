@@ -24,19 +24,22 @@ class SchemaColumnTypeTest extends AbstractPostgresTest {
 
     @ParameterizedTest
     @CsvSource({
-            "alert,        created_at",
-            "alert,        updated_at",
-            "device,       created_at",
-            "device,       updated_at",
-            "device_status,last_seen_at",
-            "device_status,last_alert_at",
-            "sensor_data,  recorded_at",
-            "factories,    created_at",
-            "zones,        created_at",
-            "zone_users,   created_at",
-            "users,        created_at",
-            "refresh_tokens,expires_at",
-            "failed_reading,created_at",
+            "alert,           created_at",
+            "alert,           updated_at",
+            "device,          created_at",
+            "device,          updated_at",
+            "device_status,   last_seen_at",
+            "sensor_channel,  created_at",
+            "sensor_channel,  updated_at",
+            "measurement_batch,observed_at",
+            "measurement_batch,received_at",
+            "channel_status,  last_alert_at",
+            "factories,       created_at",
+            "zones,           created_at",
+            "zone_users,      created_at",
+            "users,           created_at",
+            "refresh_tokens,  expires_at",
+            "failed_reading,  created_at",
     })
     void 모든_Instant_시각컬럼은_timestamptz로_생성된다(String table, String column) {
         String dataType = (String) em.createNativeQuery("""

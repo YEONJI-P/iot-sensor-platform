@@ -35,10 +35,10 @@ public class DeviceService {
 
         Device device = Device.builder()
                 .zone(zone)
+                .code(request.getCode())
                 .name(request.getName())
-                .type(request.getType())
                 .location(request.getLocation())
-                .thresholdValue(request.getThresholdValue())
+                .expectedIntervalSeconds(request.getExpectedIntervalSeconds())
                 .build();
         deviceRepository.save(device);
         return DeviceResponse.from(device);
@@ -51,7 +51,7 @@ public class DeviceService {
         Device device = getDevice(deviceId);
         accessControlService.assertCanAccessDevice(user, device);
 
-        device.update(request.getName(), request.getType(), request.getLocation(), request.getThresholdValue());
+        device.update(request.getName(), request.getLocation(), request.getExpectedIntervalSeconds());
         deviceRepository.save(device);
         return DeviceResponse.from(device);
     }

@@ -1,6 +1,7 @@
 package dev.bugi.sensor.sensordata.anomaly;
 
-import dev.bugi.sensor.device.entity.Device;
+import dev.bugi.sensor.device.entity.SensorChannel;
+import dev.bugi.sensor.device.entity.SensorChannel.ThresholdDirection;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -10,42 +11,37 @@ class ThresholdDetectorTest {
 
     private final ThresholdDetector detector = new ThresholdDetector();
 
-    @Test
-    @DisplayName("값이 임계값을 초과하면 이상으로 판정한다")
-    void isAnomaly_whenValueExceedsThreshold_returnsTrue() {
-        Device device = Device.builder()
-                .name("온도센서")
-                .type(Device.DeviceType.TEMPERATURE)
-                .location("공장 A")
-                .thresholdValue(80.0)
+    private SensorChannel channel(Double threshold, ThresholdDirection direction) {
+        return SensorChannel.builder()
+                .code("s4").unit("°R").quantityKind("temperature")
+                .thresholdValue(threshold).thresholdDirection(direction)
                 .build();
-
-        assertThat(detector.isAnomaly(device, 90.0)).isTrue();
     }
 
     @Test
-    @DisplayName("값이 임계값 이하이면 정상으로 판정한다")
-    void isAnomaly_whenValueBelowThreshold_returnsFalse() {
-        Device device = Device.builder()
-                .name("온도센서")
-                .type(Device.DeviceType.TEMPERATURE)
-                .location("공장 A")
-                .thresholdValue(80.0)
-                .build();
-
-        assertThat(detector.isAnomaly(device, 70.0)).isFalse();
+    @DisplayName("ABOVE: 값이 임계값을 초과하면 이상으로 판정한다")
+    void above_whenValueExceedsThreshold_returnsTrue() {
+        assertThat(detector.isAnomaly(channel(80.0, ThresholdDirection.ABOVE), 90.0)).isTrue();
     }
 
     @Test
-    @DisplayName("임계값이 null이면 정상으로 판정한다")
-    void isAnomaly_whenThresholdIsNull_returnsFalse() {
-        Device device = Device.builder()
-                .name("온도센서")
-                .type(Device.DeviceType.TEMPERATURE)
-                .location("공장 A")
-                .thresholdValue(null)
-                .build();
+    @DisplayName("ABOVE: 값이 임계값 이하이면 정상으로 판정한다(경계 포함)")
+    void above_whenValueAtOrBelowThreshold_returnsFalse() {
+        assertThat(detector.isAnomaly(channel(80.0, ThresholdDirection.ABOVE), 80.0)).isFalse();
+        assertThat(detector.isAnomaly(channel(80.0, ThresholdDirection.ABOVE), 70.0)).isFalse();
+    }
 
-        assertThat(detector.isAnomaly(device, 90.0)).isFalse();
+    @Test
+    @DisplayName("BELOW: 값이 임계값 미만이면 이상으로 판정한다(최소 구현)")
+    void below_whenValueUnderThreshold_returnsTrue() {
+        assertThat(detector.isAnomaly(channel(80.0, ThresholdDirection.BELOW), 70.0)).isTrue();
+        assertThat(detector.isAnomaly(channel(80.0, ThresholdDirection.BELOW), 80.0)).isFalse();
+    }
+
+    @Test
+    @DisplayName("임계값이 null이면 방향과 무관하게 정상으로 판정한다")
+    void whenThresholdIsNull_returnsFalse() {
+        assertThat(detector.isAnomaly(channel(null, ThresholdDirection.ABOVE), 90.0)).isFalse();
+        assertThat(detector.isAnomaly(channel(null, ThresholdDirection.BELOW), 10.0)).isFalse();
     }
 }

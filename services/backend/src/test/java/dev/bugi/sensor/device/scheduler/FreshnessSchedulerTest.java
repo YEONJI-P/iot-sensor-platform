@@ -207,6 +207,39 @@ class FreshnessSchedulerTest {
         assertThat(alert.getRecommendation()).isNull();
     }
 
+    // ── DeviceStatus 축소(inAlarm 제거) 이후 경계 확인 ───────────────────
+    // freshness Alert 는 device 만 알고 어떤 channel·batch 에서 났는지 모른다(수신 자체가 끊긴 사건).
+    // Alert.channel/batch 를 device_status 축소와 무관하게 항상 null 로 남기는지 회귀 고정한다.
+
+    @Test
+    void 개별_침묵_Alert는_channel과_batch가_null이다() {
+        DeviceStatus d1 = silent(1, 100);
+        when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1));
+        when(explainProperties.isEnabled()).thenReturn(false);
+
+        scheduler.checkFreshness();
+
+        ArgumentCaptor<Alert> captor = ArgumentCaptor.forClass(Alert.class);
+        verify(alertRepository).save(captor.capture());
+        assertThat(captor.getValue().getChannel()).isNull();
+        assertThat(captor.getValue().getBatch()).isNull();
+        assertThat(captor.getValue().getDevice()).isNotNull();
+    }
+
+    @Test
+    void 구역_전체_침묵_Alert도_channel과_batch가_null이다() {
+        DeviceStatus d1 = silent(1, 100), d2 = silent(2, 100);
+        when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(d1, d2));
+
+        scheduler.checkFreshness();
+
+        ArgumentCaptor<Alert> captor = ArgumentCaptor.forClass(Alert.class);
+        verify(alertRepository).save(captor.capture());
+        assertThat(captor.getValue().getChannel()).isNull();
+        assertThat(captor.getValue().getBatch()).isNull();
+        assertThat(captor.getValue().getDevice()).isNotNull();
+    }
+
     @Test
     void 수신시각_없는_상태행은_건너뛴다() {
         // 한 번도 수신 없는 장치는 device_status 행 자체가 없어 조회(JOIN)에서 빠진다.

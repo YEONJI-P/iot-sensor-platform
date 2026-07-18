@@ -6,8 +6,8 @@ import dev.bugi.sensor.explain.client.ExplainClient;
 import dev.bugi.sensor.explain.config.ExplainProperties;
 import dev.bugi.sensor.explain.dto.AnomalyExplainRequest;
 import dev.bugi.sensor.explain.dto.AnomalyExplainResponse;
-import dev.bugi.sensor.sensordata.entity.SensorData;
-import dev.bugi.sensor.sensordata.repository.SensorDataRepository;
+import dev.bugi.sensor.sensordata.entity.SensorReading;
+import dev.bugi.sensor.sensordata.repository.SensorReadingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * evidence가 비어 있는 Alert를 주기적으로 explain 서비스로 보강한다.
+ * evidence가 비어 있는 임계 Alert를 주기적으로 explain 서비스로 보강한다.
  * 수신 hot path 밖(스케줄 트리거)에서만 explain을 호출한다.
  *
  * 외부 HTTP(explain) 호출은 트랜잭션 밖에서 수행한다. 트랜잭션을 열어둔 채로
@@ -33,11 +33,11 @@ public class AlertEnrichmentScheduler {
 
     // 설명용 윈도우 크기(최근 판독 건수). 탐지가 아니라 근거·권고를 만드는 데만 쓴다.
     private static final int WINDOW = 20;
-    // 지표를 신뢰할 최소 표본. 이보다 적으면(신규 장치 등) 지표 없이 단건 근거로 보강한다.
+    // 지표를 신뢰할 최소 표본. 이보다 적으면(신규 채널 등) 지표 없이 단건 근거로 보강한다.
     private static final int MIN_SAMPLES = 5;
 
     private final AlertRepository alertRepository;
-    private final SensorDataRepository sensorDataRepository;
+    private final SensorReadingRepository sensorReadingRepository;
     private final ExplainClient explainClient;
     private final ExplainProperties explainProperties;
 
@@ -54,14 +54,14 @@ public class AlertEnrichmentScheduler {
                 continue;
             }
 
-            // 설명용 윈도우: 최근 판독을 읽어 규칙으로 추세·초과율·변동성을 계산(탐지엔 안 씀).
-            List<Double> recentValues = recentValues(target.deviceId());
+            // 설명용 윈도우: 채널의 최근 판독을 읽어 규칙으로 추세·초과율·변동성을 계산(탐지엔 안 씀).
+            List<Double> recentValues = recentValues(target.channelId());
             WindowMetrics metrics = WindowMetrics.of(recentValues, target.thresholdValue());
 
             AnomalyExplainRequest request = new AnomalyExplainRequest(
                     target.deviceName(),
-                    target.sensorType() != null ? target.sensorType().name() : null,
-                    target.sensorType() != null ? target.sensorType().getUnit() : null,
+                    target.quantityKind(),
+                    target.unit(),
                     target.sensorValue(),
                     target.thresholdValue(),
                     target.message(),
@@ -89,13 +89,13 @@ public class AlertEnrichmentScheduler {
         }
     }
 
-    /** 장치의 최근 판독값을 시간순(과거→현재)으로 반환. 추세 계산이 쉬우라고 뒤집는다. */
-    private List<Double> recentValues(Long deviceId) {
-        if (deviceId == null) {
+    /** 채널의 최근 판독값을 시간순(과거→현재)으로 반환. 추세 계산이 쉬우라고 뒤집는다. */
+    private List<Double> recentValues(Long channelId) {
+        if (channelId == null) {
             return List.of();
         }
-        List<SensorData> recent = sensorDataRepository
-                .findByDeviceIdOrderByRecordedAtDesc(deviceId, PageRequest.of(0, WINDOW));
+        List<SensorReading> recent = sensorReadingRepository
+                .findByChannelIdOrderByObservedAtDesc(channelId, PageRequest.of(0, WINDOW));
         List<Double> values = new ArrayList<>(recent.size());
         for (int i = recent.size() - 1; i >= 0; i--) {
             values.add(recent.get(i).getValue());

@@ -6,9 +6,8 @@ import dev.bugi.sensor.explain.client.ExplainClient;
 import dev.bugi.sensor.explain.config.ExplainProperties;
 import dev.bugi.sensor.explain.dto.AnomalyExplainRequest;
 import dev.bugi.sensor.explain.dto.AnomalyExplainResponse;
-import dev.bugi.sensor.device.entity.Device;
-import dev.bugi.sensor.sensordata.entity.SensorData;
-import dev.bugi.sensor.sensordata.repository.SensorDataRepository;
+import dev.bugi.sensor.sensordata.entity.SensorReading;
+import dev.bugi.sensor.sensordata.repository.SensorReadingRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -22,13 +21,14 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AlertEnrichmentSchedulerTest {
 
     @Mock AlertRepository alertRepository;
-    @Mock SensorDataRepository sensorDataRepository;
+    @Mock SensorReadingRepository sensorReadingRepository;
     @Mock ExplainClient explainClient;
     @Mock ExplainProperties explainProperties;
 
@@ -37,23 +37,20 @@ class AlertEnrichmentSchedulerTest {
     @InjectMocks
     AlertEnrichmentScheduler scheduler;
 
+    // 채널 기반 프로젝션: channelId 7, quantityKind=temperature, unit=°R
     private EnrichTarget target(Double threshold) {
-        return new EnrichTarget(
-                1L, 7L, "엔진1-온도", Device.DeviceType.TEMPERATURE, 1500.0, threshold, "임계 초과");
+        return new EnrichTarget(1L, 7L, "엔진 유닛1", "temperature", "°R", 1500.0, threshold, "임계 초과");
     }
 
-    private SensorData reading(double value) {
-        return SensorData.builder()
-                .device(Device.builder().name("엔진1-온도").type(Device.DeviceType.TEMPERATURE).build())
-                .value(value)
-                .build();
+    private SensorReading reading(double value) {
+        return SensorReading.builder().value(value).build();
     }
 
     @Test
-    void explain_요청에_센서_단위가_포함된다() {
+    void explain_요청에_채널_단위와_측정종류가_포함된다() {
         when(explainProperties.isEnabled()).thenReturn(true);
         when(alertRepository.findEnrichTargets(any())).thenReturn(List.of(target(1416.0)));
-        when(sensorDataRepository.findByDeviceIdOrderByRecordedAtDesc(eq(7L), any()))
+        when(sensorReadingRepository.findByChannelIdOrderByObservedAtDesc(eq(7L), any()))
                 .thenReturn(List.of());
         when(explainClient.explainAnomaly(any()))
                 .thenReturn(new AnomalyExplainResponse("근거", "권고", "WARNING", "echo"));
@@ -61,8 +58,8 @@ class AlertEnrichmentSchedulerTest {
         scheduler.enrichAlerts();
 
         verify(explainClient).explainAnomaly(requestCaptor.capture());
-        assertThat(requestCaptor.getValue().unit())
-                .isEqualTo(Device.DeviceType.TEMPERATURE.getUnit());
+        assertThat(requestCaptor.getValue().unit()).isEqualTo("°R");
+        assertThat(requestCaptor.getValue().sensorType()).isEqualTo("temperature");
     }
 
     @Test
@@ -70,7 +67,7 @@ class AlertEnrichmentSchedulerTest {
         when(explainProperties.isEnabled()).thenReturn(true);
         when(alertRepository.findEnrichTargets(any())).thenReturn(List.of(target(100.0)));
         // 임계 100 기준: 10건 중 4건 초과 → 초과율 0.4, 뒤로 갈수록 상승 추세.
-        when(sensorDataRepository.findByDeviceIdOrderByRecordedAtDesc(eq(7L), any()))
+        when(sensorReadingRepository.findByChannelIdOrderByObservedAtDesc(eq(7L), any()))
                 .thenReturn(List.of( // 최신순(desc)으로 반환된다고 가정
                         reading(130), reading(120), reading(110), reading(105),
                         reading(95), reading(90), reading(85), reading(80),
@@ -92,7 +89,7 @@ class AlertEnrichmentSchedulerTest {
     void 표본_부족이면_지표는_null이고_보강은_계속된다() {
         when(explainProperties.isEnabled()).thenReturn(true);
         when(alertRepository.findEnrichTargets(any())).thenReturn(List.of(target(100.0)));
-        when(sensorDataRepository.findByDeviceIdOrderByRecordedAtDesc(eq(7L), any()))
+        when(sensorReadingRepository.findByChannelIdOrderByObservedAtDesc(eq(7L), any()))
                 .thenReturn(List.of(reading(130), reading(120))); // MIN_SAMPLES 미만
         when(explainClient.explainAnomaly(any()))
                 .thenReturn(new AnomalyExplainResponse("근거", "권고", "WARNING", "echo"));

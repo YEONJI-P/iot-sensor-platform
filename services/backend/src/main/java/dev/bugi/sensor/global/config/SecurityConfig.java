@@ -71,6 +71,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/alerts", "/alerts/**")
                         .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
 
+                        // 채널 조회 — 센서 데이터 조회와 같은 계열(FACTORY_ADMIN 제외, VIEWER 읽기 가능)
+                        .requestMatchers(HttpMethod.GET, "/channels", "/channels/**")
+                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
+
+                        // 채널 변경(등록·임계 수정) — 장치 변경과 같은 계열. VIEWER는 읽기 전용.
+                        // 등록은 /devices/{deviceId}/channels 아래라 device POST 규칙보다 먼저 둔다.
+                        .requestMatchers(HttpMethod.POST, "/devices/*/channels")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER")
+                        .requestMatchers(HttpMethod.PUT, "/channels/**")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER")
+
                         // 장치 변경(등록·수정·삭제) — SYSTEM_ADMIN, 소속 공장 FACTORY_ADMIN, 소속 구역 MEMBER.
                         // 세부 범위(공장/구역)는 서비스 계층에서 스코핑. VIEWER는 읽기 전용.
                         .requestMatchers(HttpMethod.POST, "/devices")

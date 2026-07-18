@@ -1,6 +1,8 @@
 package dev.bugi.sensor.alert.entity;
 
 import dev.bugi.sensor.device.entity.Device;
+import dev.bugi.sensor.device.entity.SensorChannel;
+import dev.bugi.sensor.sensordata.entity.MeasurementBatch;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -18,10 +20,18 @@ public class Alert {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    // 임계 alert 는 device·channel·batch 를 모두 세팅한다.
+    // freshness(수신 끊김) alert 는 채널·batch 가 없어 device 만 세팅한다(device_id nullable).
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "device_id")
     private Device device;
-    // SensorData FK 대신 값 직접 저장 (스냅샷 방식 - SensorData 삭제돼도 이력 보존)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "channel_id")
+    private SensorChannel channel;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "batch_id")
+    private MeasurementBatch batch;
+    // reading FK 대신 값 직접 저장 (스냅샷 방식 - reading 삭제돼도 이력 보존)
     private Double sensorValue;
     private Double thresholdValue;
     private String message;
@@ -38,9 +48,12 @@ public class Alert {
     private Instant updatedAt;
 
     @Builder
-    public Alert(Device device, Double sensorValue, Double thresholdValue, String message,
+    public Alert(Device device, SensorChannel channel, MeasurementBatch batch,
+                 Double sensorValue, Double thresholdValue, String message,
                  AlertSeverity severity, String evidence, String recommendation) {
         this.device = device;
+        this.channel = channel;
+        this.batch = batch;
         this.sensorValue = sensorValue;
         this.thresholdValue = thresholdValue;
         this.message = message;
