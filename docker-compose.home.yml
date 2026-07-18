@@ -24,7 +24,9 @@ services:
 
   explain:
     image: ghcr.io/yeonji-p/sensor-monitor-explain:${SENSOR_MONITOR_IMAGE_TAG:?SENSOR_MONITOR_IMAGE_TAG is required}
-    env_file: ./services/explain/.env
+    env_file:
+      - path: ./services/explain/.env
+        required: false
     environment:
       PORT: 8000
     networks:

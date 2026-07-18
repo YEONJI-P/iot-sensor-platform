@@ -471,9 +471,11 @@ cd services/backend
 평가자·로컬 통합 확인용입니다. postgres + backend + explain을 함께 기동하며 외부 DB가 필요 없습니다. backend는 local 프로파일로 스키마를 만든 뒤 `seed.sql`이 계정과 데모 토폴로지를 넣습니다.
 
 ```bash
-# 서비스별 설정 준비. backend JWT_SECRET은 실행 전에 반드시 교체
+# backend 설정 준비. JWT_SECRET은 실행 전에 반드시 교체
 cp services/backend/.env.example services/backend/.env
-cp services/explain/.env.example services/explain/.env
+
+# (선택) Gemini provider를 사용할 때만 준비
+# cp services/explain/.env.example services/explain/.env
 
 docker compose up --build -d  # postgres + backend + explain
 
@@ -508,12 +510,14 @@ docker compose --profile live up -d simulator-live
 # Compose 보간값: 이미지 SHA와 외부 network 이름
 cp .env.example .env
 
-# 서비스가 직접 소비하는 설정
+# backend 설정
 cp services/backend/.env.example services/backend/.env
-cp services/explain/.env.example services/explain/.env
 
 # services/backend/.env에서 JWT_SECRET과 홈서버 DB_URL/계정/비밀번호를 설정
 # DB_URL의 host는 localhost가 아니라 외부 DB network의 PostgreSQL 서비스 이름
+
+# (선택) Gemini provider를 사용할 때만 준비
+# cp services/explain/.env.example services/explain/.env
 
 # backend + explain. 빈 database에는 prod/Flyway V1~V3가 자동 적용
 docker compose -f docker-compose.home.yml up -d
@@ -603,34 +607,15 @@ device는 `deviceCode`(`CMAPSS-U1`/`CMAPSS-U2`/`CNC-EXP01`)로 식별합니다. 
 
 ### 환경변수
 
-루트 `.env.example`은 홈서버 Compose의 이미지 tag와 외부 Docker network 이름만 소유합니다. JWT·DB·provider 설정을 루트에 중복하지 않습니다. 독립 풀 데모는 루트 `.env`를 사용하지 않습니다.
+| 파일 | 필요한 실행 방식 | 사용자가 설정하는 값 |
+|---|---|---|
+| 루트 `.env` | 홈서버 | 이미지 SHA tag, 기존 DB network, reverse proxy network |
+| `services/backend/.env` | 독립 풀 데모·홈서버 | JWT 서명 키. 홈서버는 DB URL·사용자·비밀번호도 설정 |
+| `services/explain/.env` | Gemini 사용 시에만 선택 | provider, API key, 필요한 경우 모델명 |
 
-backend (`services/backend/.env.example`, 소비처 `src/main/resources/application.yml`)
+독립 풀 데모는 backend의 DB 값·프로파일·포트·explain 내부 주소를 Compose가 덮어쓰므로 JWT만 교체하면 됩니다. 홈서버 DB URL의 host는 `localhost`가 아니라 외부 DB network에서 해석되는 PostgreSQL 서비스 이름이어야 합니다. 기본 echo provider는 explain `.env` 없이 동작합니다.
 
-| 변수명 | 설명 | 앱 기본값 | 컨테이너 이미지 기본값 |
-|---|---|---|---|
-| `JWT_SECRET` | JWT 서명 키 (32바이트 이상) | 없음 (필수), 미설정 시 부팅 실패 | 동일 (필수 주입) |
-| `DB_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/sensor_monitor` | 동일 |
-| `DB_USERNAME` | DB 사용자명 | `sensor_monitor` | 동일 |
-| `DB_PASSWORD` | DB 비밀번호 | `sensor_monitor` | 동일 |
-| `SERVER_PORT` | HTTP 포트 | `23100` | `8080` |
-| `SPRING_PROFILES_ACTIVE` | 실행 프로파일 | `local` (SQL·파일 로그) | `prod` (stdout 전용) |
-| `EXPLAIN_ENABLED` | explain 연동 토글 | `false` | 동일 |
-| `EXPLAIN_BASE_URL` | explain 서비스 주소 | `http://localhost:23200` | 동일 |
-
-explain (`services/explain/.env.example`, 소비처 `app/dependencies.py`)
-
-| 변수명 | 설명 | 앱 기본값 | 컨테이너 이미지 기본값 |
-|---|---|---|---|
-| `EXPLAIN_PROVIDER` | LLM provider (`echo` \| `gemini`) | `echo` | 동일 |
-| `GEMINI_API_KEY` | Gemini 인증 키 | 빈 값 — `gemini` 선택 시 필수 | 동일 |
-| `MODEL_NAME` | 사용 모델 (provider=gemini 일 때만) | `gemini-2.0-flash` (실호출 미검증) | 동일 |
-| `PORT` | HTTP 포트 | `23200` | `8000` |
-| `REQUEST_TIMEOUT` | LLM 호출 타임아웃(초) | `30` | 동일 |
-
-> **포트 기본값이 실행 모드마다 다른 이유** — 앱 기본값(23100/23200)은 `bootRun`·`uv run` 로컬 개발용이고, 컨테이너 이미지 기본값(8080/8000)은 배포 계약입니다. 이미지의 `EXPOSE`·`ENV` 는 항상 후자와 같은 값을 유지하므로, 배포 측이 포트 env 를 아예 안 줘도 계약대로 뜹니다. 호스트 포트 매핑은 이미지가 아니라 compose·배포 측이 정합니다.
-
-simulator는 환경변수를 소비하지 않고 CLI 인자만 사용합니다. 비밀값이 아닌 전송 모드·간격·운영시간은 각 Compose의 `command`가 실행 정책으로 명시합니다.
+`bootRun`은 `.env`를 자동으로 읽지 않으므로 직접 실행할 때는 셸이나 IDE에 환경변수를 주입합니다. simulator는 환경변수 없이 CLI 인자만 사용하며, Compose의 `command`가 모드·간격·운영시간을 정합니다.
 
 ### 운영 DB 스키마와 Flyway
 

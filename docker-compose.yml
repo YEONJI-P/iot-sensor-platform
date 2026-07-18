@@ -52,8 +52,10 @@ services:
     # backend 와 같은 이유로 로컬 태그를 명시한다(암묵적 :latest 금지).
     # 배포용 이미지는 ghcr.io/yeonji-p/sensor-monitor-explain:<git-sha> (README §배포 이미지 계약).
     image: sensor-monitor-explain:local
-    # 서비스 소속 설정(EXPLAIN_PROVIDER, GEMINI_API_KEY, MODEL_NAME 등)은 여기서 읽는다. cp services/explain/.env.example services/explain/.env
-    env_file: ./services/explain/.env
+    # echo가 기본이므로 env 파일은 선택 사항이다. Gemini를 사용할 때만 example을 복사한다.
+    env_file:
+      - path: ./services/explain/.env
+        required: false
     environment:
       # PORT 는 이미지 기본값(8000)과 같은 값을 명시해 둔다. env_file 보다 우선 적용됨.
       PORT: 8000
