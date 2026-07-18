@@ -28,6 +28,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install explain dependencies
+        run: |
+          python -m pip install uv
+          uv sync --frozen
+        working-directory: services/explain
+      - name: Test explain
+        run: uv run pytest
+        working-directory: services/explain
       - name: Install simulator dependencies
         run: pip install -r requirements.txt
         working-directory: services/simulator
