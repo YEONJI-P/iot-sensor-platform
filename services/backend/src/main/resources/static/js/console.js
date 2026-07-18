@@ -499,21 +499,19 @@
   }
 
   /* ==========================================================
-     탭 4) 장치 (SYSTEM_ADMIN, MEMBER)
+     탭 4) 장치 + 채널 (SYSTEM_ADMIN, MEMBER)
      ========================================================== */
-  const DEVICE_TYPES = ['TEMPERATURE', 'PRESSURE', 'CURRENT', 'POWER', 'ACCELERATION'];
+  const THRESHOLD_DIRECTIONS = ['ABOVE', 'BELOW'];
 
   function renderDevices(root) {
     root.innerHTML = `
       <div class="panel panel-pad">
         <div class="eyebrow" style="margin-bottom:.9rem;">CREATE · 장치 등록</div>
         <div class="form-grid">
-          <div class="field"><label for="dName">이름</label><input id="dName" class="input" type="text" placeholder="예: TEMP-01"/></div>
-          <div class="field"><label for="dType">타입</label>
-            <select id="dType" class="input">${DEVICE_TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}</select>
-          </div>
+          <div class="field"><label for="dCode">코드</label><input id="dCode" class="input" type="text" placeholder="예: DEV-01"/></div>
+          <div class="field"><label for="dName">이름</label><input id="dName" class="input" type="text" placeholder="예: 라인A 온도계"/></div>
           <div class="field"><label for="dLoc">위치</label><input id="dLoc" class="input" type="text" placeholder="예: A라인 3번"/></div>
-          <div class="field"><label for="dThr">임계값</label><input id="dThr" class="input" type="number" step="any" placeholder="예: 80"/></div>
+          <div class="field"><label for="dInterval">주기(초)</label><input id="dInterval" class="input" type="number" placeholder="예: 60"/></div>
           <div class="field"><label for="dZone">구역</label>
             <select id="dZone" class="input"><option value="">— 직접 입력 —</option></select>
           </div>
@@ -525,9 +523,36 @@
       <div class="panel">
         <div class="panel-head"><div class="flex items-center gap-sm"><span class="lamp ok"></span><h3>장치 목록</h3></div></div>
         <div class="table-wrap" id="devList"><div class="empty">불러오는 중…</div></div>
+      </div>
+      <div class="panel panel-pad">
+        <div class="eyebrow" style="margin-bottom:.9rem;">CHANNELS · 채널 관리</div>
+        <div class="form-grid">
+          <div class="field"><label for="chDevice">장치</label>
+            <select id="chDevice" class="input"><option value="">장치를 선택하세요</option></select>
+          </div>
+        </div>
+        <div class="table-wrap" id="chList"><div class="empty">장치를 선택하면 채널 목록이 표시됩니다.</div></div>
+        <div class="eyebrow" style="margin:1.1rem 0 .9rem;">CREATE · 채널 등록</div>
+        <div class="form-grid">
+          <div class="field"><label for="chCode">코드</label><input id="chCode" class="input" type="text" placeholder="예: s1"/></div>
+          <div class="field"><label for="chUnit">단위</label><input id="chUnit" class="input" type="text" placeholder="예: °C"/></div>
+          <div class="field"><label for="chKind">측정 종류</label><input id="chKind" class="input" type="text" placeholder="예: temperature"/></div>
+          <div class="field"><label for="chThr">임계값</label><input id="chThr" class="input" type="number" step="any" placeholder="예: 80"/></div>
+          <div class="field"><label for="chDir">방향</label>
+            <select id="chDir" class="input">
+              <option value="ABOVE">초과(ABOVE)</option>
+              <option value="BELOW">미만(BELOW)</option>
+            </select>
+          </div>
+          <div class="field"><button id="chCreate" class="btn btn-primary" disabled>채널 등록</button></div>
+        </div>
+        <div class="hint">장치를 먼저 선택해야 채널을 등록할 수 있습니다.</div>
       </div>`;
     const listNode = $('#devList', root);
     const zoneSelect = $('#dZone', root);
+    const chDeviceSelect = $('#chDevice', root);
+    const chListNode = $('#chList', root);
+    const chCreateBtn = $('#chCreate', root);
 
     function fillZoneOptions(devices) {
       const seen = new Map();
@@ -537,24 +562,33 @@
       zoneSelect.innerHTML = opts.join('');
     }
 
+    function fillChannelDeviceOptions(devices) {
+      const prev = chDeviceSelect.value;
+      const opts = ['<option value="">장치를 선택하세요</option>']
+        .concat((devices || []).map(d => `<option value="${d.id}">${escapeHtml(d.name)} · ${escapeHtml(d.code)}</option>`));
+      chDeviceSelect.innerHTML = opts.join('');
+      if (prev && (devices || []).some(d => String(d.id) === String(prev))) chDeviceSelect.value = prev;
+    }
+
     async function load() {
       setLoading(listNode);
       try {
         const devices = await apiGet('/devices');
         fillZoneOptions(devices);
+        fillChannelDeviceOptions(devices);
         if (!devices || devices.length === 0) { setEmpty(listNode, '등록된 장치가 없습니다.'); return; }
         listNode.innerHTML = `<table class="table">
-          <thead><tr><th>이름</th><th>타입</th><th>위치</th><th>임계값</th><th>구역</th><th>액션</th></tr></thead>
+          <thead><tr><th>코드</th><th>이름</th><th>위치</th><th>주기(초)</th><th>구역</th><th>액션</th></tr></thead>
           <tbody>${devices.map(d => `<tr>
+            <td class="mono">${escapeHtml(d.code)}</td>
             <td>${escapeHtml(d.name)}</td>
-            <td><span class="tag tag-signal">${escapeHtml(d.deviceType)}</span></td>
             <td class="dim">${escapeHtml(d.location) || '—'}</td>
-            <td class="num">${d.thresholdValue != null ? escapeHtml(d.thresholdValue) : '—'}</td>
+            <td class="num dim">${d.expectedIntervalSeconds != null ? d.expectedIntervalSeconds : '—'}</td>
             <td class="dim">${escapeHtml(d.zoneName) || '#' + d.zoneId}</td>
             <td><div class="actions-cell">
               <button class="btn btn-sm" data-act="edit" data-id="${d.id}"
-                data-name="${escapeHtml(d.name)}" data-type="${escapeHtml(d.deviceType)}"
-                data-loc="${escapeHtml(d.location || '')}" data-thr="${d.thresholdValue != null ? escapeHtml(d.thresholdValue) : ''}">수정</button>
+                data-name="${escapeHtml(d.name)}" data-loc="${escapeHtml(d.location || '')}"
+                data-interval="${d.expectedIntervalSeconds != null ? d.expectedIntervalSeconds : ''}">수정</button>
               <button class="btn btn-sm btn-danger" data-act="del" data-id="${d.id}" data-name="${escapeHtml(d.name)}">삭제</button>
             </div></td>
           </tr>`).join('')}</tbody></table>`;
@@ -567,16 +601,16 @@
         const name = prompt('장치 이름', b.dataset.name);
         if (name == null) return;
         if (!name.trim()) { toast('이름은 필수입니다.', true); return; }
-        let type = prompt(`타입 (${DEVICE_TYPES.join('/')})`, b.dataset.type);
-        if (type == null) return;
-        type = type.trim().toUpperCase();
-        if (!DEVICE_TYPES.includes(type)) { toast('유효한 타입이 아닙니다.', true); return; }
         const loc = prompt('위치', b.dataset.loc);
         if (loc == null) return;
-        const thrStr = prompt('임계값 (숫자)', b.dataset.thr);
-        if (thrStr == null) return;
-        if (thrStr.trim() === '' || isNaN(Number(thrStr))) { toast('임계값은 숫자여야 합니다.', true); return; }
-        update(b.dataset.id, { name: name.trim(), type, location: loc.trim(), thresholdValue: Number(thrStr) });
+        const intervalStr = prompt('주기(초)', b.dataset.interval);
+        if (intervalStr == null) return;
+        let expectedIntervalSeconds = null;
+        if (intervalStr.trim() !== '') {
+          if (isNaN(Number(intervalStr))) { toast('주기는 숫자여야 합니다.', true); return; }
+          expectedIntervalSeconds = Number(intervalStr);
+        }
+        update(b.dataset.id, { name: name.trim(), location: loc.trim(), expectedIntervalSeconds });
       }));
       listNode.querySelectorAll('button[data-act="del"]').forEach(b => b.addEventListener('click', () => {
         if (!confirm(`장치 "${b.dataset.name}"을(를) 삭제할까요?`)) return;
@@ -592,20 +626,25 @@
     }
 
     async function create() {
+      const code = $('#dCode', root).value.trim();
       const name = $('#dName', root).value.trim();
-      const type = $('#dType', root).value;
       const location = $('#dLoc', root).value.trim();
-      const thrRaw = $('#dThr', root).value.trim();
+      const intervalStr = $('#dInterval', root).value.trim();
       const zoneId = currentZoneId();
+      if (!code) { toast('코드는 필수입니다.', true); return; }
       if (!name) { toast('이름은 필수입니다.', true); return; }
-      if (thrRaw === '' || isNaN(Number(thrRaw))) { toast('임계값은 숫자여야 합니다.', true); return; }
       if (zoneId == null) { toast('구역을 선택하거나 구역 ID를 입력하세요.', true); return; }
+      let expectedIntervalSeconds = null;
+      if (intervalStr !== '') {
+        if (isNaN(Number(intervalStr))) { toast('주기는 숫자여야 합니다.', true); return; }
+        expectedIntervalSeconds = Number(intervalStr);
+      }
       try {
         const msg = await apiMutate('/devices', 'POST',
-          { name, type, location, thresholdValue: Number(thrRaw), zoneId }, '장치가 등록되었습니다.');
+          { code, name, location, expectedIntervalSeconds, zoneId }, '장치가 등록되었습니다.');
         toast(msg);
-        $('#dName', root).value = ''; $('#dLoc', root).value = ''; $('#dThr', root).value = '';
-        $('#dZoneId', root).value = '';
+        $('#dCode', root).value = ''; $('#dName', root).value = ''; $('#dLoc', root).value = '';
+        $('#dInterval', root).value = ''; $('#dZoneId', root).value = '';
         load();
       } catch (e) { toast(e.message, true); }
     }
@@ -622,6 +661,85 @@
       } catch (e) { toast(e.message, true); }
     }
 
+    /* ── 채널 관리(선택된 장치의 채널만 클라이언트에서 필터) ── */
+    async function loadChannelsForDevice(deviceId) {
+      if (!deviceId) {
+        chListNode.innerHTML = '<div class="empty">장치를 선택하면 채널 목록이 표시됩니다.</div>';
+        chCreateBtn.disabled = true;
+        return;
+      }
+      chCreateBtn.disabled = false;
+      setLoading(chListNode);
+      try {
+        const channels = await apiGet('/channels');
+        const mine = (channels || []).filter(c => String(c.deviceId) === String(deviceId));
+        if (mine.length === 0) { setEmpty(chListNode, '등록된 채널이 없습니다.'); return; }
+        chListNode.innerHTML = `<table class="table">
+          <thead><tr><th>코드</th><th>단위</th><th>측정 종류</th><th>임계값</th><th>방향</th><th>액션</th></tr></thead>
+          <tbody>${mine.map(c => `<tr>
+            <td class="mono">${escapeHtml(c.code)}</td>
+            <td class="dim">${escapeHtml(c.unit) || '—'}</td>
+            <td class="dim">${escapeHtml(c.quantityKind) || '—'}</td>
+            <td class="num">${c.thresholdValue != null ? escapeHtml(String(c.thresholdValue)) : '—'}</td>
+            <td class="dim">${escapeHtml(c.thresholdDirection) || '—'}</td>
+            <td><div class="actions-cell">
+              <button class="btn btn-sm" data-act="chedit" data-id="${c.id}"
+                data-unit="${escapeHtml(c.unit || '')}" data-kind="${escapeHtml(c.quantityKind || '')}"
+                data-thr="${c.thresholdValue != null ? escapeHtml(String(c.thresholdValue)) : ''}"
+                data-dir="${escapeHtml(c.thresholdDirection || 'ABOVE')}">임계값 수정</button>
+            </div></td>
+          </tr>`).join('')}</tbody></table>`;
+        chListNode.querySelectorAll('button[data-act="chedit"]').forEach(b => b.addEventListener('click', () => {
+          const unit = prompt('단위', b.dataset.unit);
+          if (unit == null) return;
+          const kind = prompt('측정 종류', b.dataset.kind);
+          if (kind == null) return;
+          const thrStr = prompt('임계값 (숫자)', b.dataset.thr);
+          if (thrStr == null) return;
+          if (thrStr.trim() === '' || isNaN(Number(thrStr))) { toast('임계값은 숫자여야 합니다.', true); return; }
+          const dir = prompt(`방향 (${THRESHOLD_DIRECTIONS.join('/')})`, b.dataset.dir);
+          if (dir == null) return;
+          const dirNorm = dir.trim().toUpperCase();
+          if (!THRESHOLD_DIRECTIONS.includes(dirNorm)) { toast('방향은 ABOVE 또는 BELOW여야 합니다.', true); return; }
+          updateChannel(b.dataset.id, {
+            unit: unit.trim(), quantityKind: kind.trim(),
+            thresholdValue: Number(thrStr), thresholdDirection: dirNorm,
+          });
+        }));
+      } catch (e) { setError(chListNode, e.message); }
+    }
+
+    async function updateChannel(id, body) {
+      try {
+        const msg = await apiMutate(`/channels/${id}`, 'PUT', body, '채널이 수정되었습니다.');
+        toast(msg);
+        loadChannelsForDevice(chDeviceSelect.value);
+      } catch (e) { toast(e.message, true); }
+    }
+
+    async function createChannel() {
+      const deviceId = chDeviceSelect.value;
+      if (!deviceId) { toast('장치를 먼저 선택하세요.', true); return; }
+      const code = $('#chCode', root).value.trim();
+      const unit = $('#chUnit', root).value.trim();
+      const quantityKind = $('#chKind', root).value.trim();
+      const thrStr = $('#chThr', root).value.trim();
+      const thresholdDirection = $('#chDir', root).value;
+      if (!code) { toast('코드는 필수입니다.', true); return; }
+      if (thrStr !== '' && isNaN(Number(thrStr))) { toast('임계값은 숫자여야 합니다.', true); return; }
+      const thresholdValue = thrStr === '' ? null : Number(thrStr);
+      try {
+        const msg = await apiMutate(`/devices/${deviceId}/channels`, 'POST',
+          { code, unit, quantityKind, thresholdValue, thresholdDirection }, '채널이 등록되었습니다.');
+        toast(msg);
+        $('#chCode', root).value = ''; $('#chUnit', root).value = '';
+        $('#chKind', root).value = ''; $('#chThr', root).value = '';
+        loadChannelsForDevice(deviceId);
+      } catch (e) { toast(e.message, true); }
+    }
+
+    chDeviceSelect.addEventListener('change', () => loadChannelsForDevice(chDeviceSelect.value));
+    $('#chCreate', root).addEventListener('click', createChannel);
     $('#dCreate', root).addEventListener('click', create);
     load();
   }
