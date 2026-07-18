@@ -67,7 +67,7 @@ INSERT INTO zone_users (zone_id, user_id, created_at) VALUES
 
 -- =============================================================================
 -- 5. Devices  (물리 노드. 설정만 가진다 — 측정 종류·임계값은 채널 경계로 이동)
---    code 는 simulator.py REPLAY_PRESET 의 deviceCode 와 일치해야 한다.
+--    code 는 simulator.py DEVICE_PRESETS 의 deviceCode 와 일치해야 한다.
 -- =============================================================================
 INSERT INTO device (
     zone_id, code, name, location, expected_interval_seconds, created_at, updated_at
@@ -80,7 +80,7 @@ INSERT INTO device (
 -- =============================================================================
 -- 6. Sensor Channels  (물리 device 아래 측정 채널. 임계값·임계 방향은 채널이 가진다)
 --    threshold_value 는 실데이터 건강구간 분포에서 산출(대략치, 튜닝 가능).
---    code 는 simulator.py REPLAY_PRESET 의 채널 code 와 일치해야 한다.
+--    code 는 simulator.py DEVICE_PRESETS 의 채널 code 와 일치해야 한다.
 -- =============================================================================
 INSERT INTO sensor_channel (
     device_id, code, unit, quantity_kind, threshold_value, threshold_direction, created_at, updated_at

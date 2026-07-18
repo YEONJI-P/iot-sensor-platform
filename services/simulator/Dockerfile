@@ -6,5 +6,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# 실측 CSV 리플레이 배치. data/ 는 볼륨으로 마운트하고, 실행 인자는 compose command 로 전달.
+# replay는 data/를 볼륨으로 받고, synthetic은 파일 없이 실행한다. 모드와 정책은 compose command로 전달한다.
+ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["python", "simulator.py"]
