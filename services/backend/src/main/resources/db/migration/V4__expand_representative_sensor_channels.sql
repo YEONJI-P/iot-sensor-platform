@@ -15,20 +15,26 @@ ALTER TABLE sensor_channel ADD CONSTRAINT ck_sensor_channel_direction
 
 INSERT INTO sensor_channel (
     device_id, code, unit, quantity_kind, threshold_value, threshold_direction, created_at, updated_at
-) VALUES
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's2',  '°R',    'temperature', 643.4,  'ABOVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's7',  'psia',  'pressure',    552.4,  'BELOW', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's15', NULL,    'ratio',          8.485, 'ABOVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's21', 'lbm/s', 'coolant_flow', 23.165, 'BELOW', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's2',  '°R',    'temperature', 643.4,  'ABOVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's7',  'psia',  'pressure',    552.4,  'BELOW', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's15', NULL,    'ratio',          8.485, 'ABOVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's21', 'lbm/s', 'coolant_flow', 23.165, 'BELOW', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'Y1_ActualAcceleration', 'mm/s²', 'acceleration', 500.0,  'ABS_ABOVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'Z1_ActualAcceleration', 'mm/s²', 'acceleration', 1000.0, 'ABS_ABOVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'X1_CurrentFeedback',    'A',     'current',        14.0, 'ABS_ABOVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'S1_ActualVelocity',     NULL,    'velocity',       NULL,  NULL,        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'M1_CURRENT_FEEDRATE',   NULL,    'feedrate',       NULL,  NULL,        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+)
+SELECT d.id, v.channel_code, v.unit, v.quantity_kind, v.threshold_value, v.threshold_direction,
+       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM (VALUES
+    ('CMAPSS-U1', 's2',  '°R',    'temperature', 643.4,  'ABOVE'),
+    ('CMAPSS-U1', 's7',  'psia',  'pressure',    552.4,  'BELOW'),
+    ('CMAPSS-U1', 's15', NULL,    'ratio',         8.485, 'ABOVE'),
+    ('CMAPSS-U1', 's21', 'lbm/s', 'coolant_flow', 23.165, 'BELOW'),
+    ('CMAPSS-U2', 's2',  '°R',    'temperature', 643.4,  'ABOVE'),
+    ('CMAPSS-U2', 's7',  'psia',  'pressure',    552.4,  'BELOW'),
+    ('CMAPSS-U2', 's15', NULL,    'ratio',         8.485, 'ABOVE'),
+    ('CMAPSS-U2', 's21', 'lbm/s', 'coolant_flow', 23.165, 'BELOW'),
+    ('CNC-EXP01', 'Y1_ActualAcceleration', 'mm/s²', 'acceleration', 500.0,  'ABS_ABOVE'),
+    ('CNC-EXP01', 'Z1_ActualAcceleration', 'mm/s²', 'acceleration', 1000.0, 'ABS_ABOVE'),
+    ('CNC-EXP01', 'X1_CurrentFeedback',    'A',     'current',        14.0, 'ABS_ABOVE'),
+    ('CNC-EXP01', 'S1_ActualVelocity',     NULL,    'velocity',       NULL,  NULL),
+    ('CNC-EXP01', 'M1_CURRENT_FEEDRATE',   NULL,    'feedrate',       NULL,  NULL)
+) AS v(device_code, channel_code, unit, quantity_kind, threshold_value, threshold_direction)
+JOIN device d ON d.code = v.device_code
+ON CONFLICT (device_id, code) DO NOTHING;
 
 UPDATE sensor_channel
 SET threshold_value = 800.0,

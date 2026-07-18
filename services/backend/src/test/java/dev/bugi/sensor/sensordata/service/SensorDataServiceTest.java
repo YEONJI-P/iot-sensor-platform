@@ -322,10 +322,10 @@ class SensorDataServiceTest {
 
     @Test
     void 여유구간에서는_해제도_재발화도_없다() {
-        arrange(100.0); // 해제 경계 = 97
+        arrange(100.0); // 해제 경계 = 99.9
 
         sensorDataService.receive(req(200.0)); // 발화 → inAlarm
-        sensorDataService.receive(req(99.0));  // 여유구간(97~100): 초과 아님이나 해제도 안 함
+        sensorDataService.receive(req(99.95)); // 여유구간(99.9~100): 초과 아님이나 해제도 안 함
         assertThat(channelStatus.isInAlarm()).isTrue();
 
         sensorDataService.receive(req(200.0)); // 여전히 inAlarm → 억제
@@ -405,21 +405,31 @@ class SensorDataServiceTest {
     // ── 히스테리시스(해제) 경계 ─────────────────────────────────────────
 
     @Test
-    void 해제경계_정확히_임계0점97배면_알람유지() {
-        arrange(100.0); // 100 * 0.97 = 97, 해제 조건은 value < 97 이므로 97 은 유지
+    void 해제경계_정확히_임계0점999배면_알람유지() {
+        arrange(100.0); // 100 * 0.999 = 99.9, 해제 조건은 value < 99.9 이므로 경계는 유지
 
         sensorDataService.receive(req(200.0)); // 발화 → inAlarm
-        sensorDataService.receive(req(97.0));  // 경계값 → 해제 안 됨
+        sensorDataService.receive(req(99.9));  // 경계값 → 해제 안 됨
 
         assertThat(channelStatus.isInAlarm()).isTrue();
     }
 
     @Test
-    void 해제경계_임계0점97배_미만이면_알람해제() {
+    void 해제경계_임계0점999배_미만이면_알람해제() {
         arrange(100.0);
 
         sensorDataService.receive(req(200.0)); // 발화 → inAlarm
-        sensorDataService.receive(req(96.99)); // 경계 아래 → 해제
+        sensorDataService.receive(req(99.89)); // 경계 아래 → 해제
+
+        assertThat(channelStatus.isInAlarm()).isFalse();
+    }
+
+    @Test
+    void C_MAPSS_offset_채널은_정상값으로_복귀하면_알람해제() {
+        arrange(643.4);
+
+        sensorDataService.receive(req(644.1));
+        sensorDataService.receive(req(642.4));
 
         assertThat(channelStatus.isInAlarm()).isFalse();
     }

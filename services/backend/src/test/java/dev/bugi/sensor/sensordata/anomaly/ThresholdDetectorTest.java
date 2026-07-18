@@ -39,6 +39,13 @@ class ThresholdDetectorTest {
     }
 
     @Test
+    @DisplayName("임계 방향이 null인 기존 채널은 ABOVE로 해석한다")
+    void nullDirection_fallsBackToAbove() {
+        assertThat(detector.isAnomaly(channel(80.0, null), 80.01)).isTrue();
+        assertThat(detector.isAnomaly(channel(80.0, null), 80.0)).isFalse();
+    }
+
+    @Test
     @DisplayName("ABS_ABOVE: 양·음 값의 절댓값이 임계값을 초과하면 이상으로 판정한다")
     void absoluteAbove_detectsPositiveAndNegativeAnomalies() {
         SensorChannel channel = channel(100.0, ThresholdDirection.ABS_ABOVE);

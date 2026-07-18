@@ -50,9 +50,9 @@ public class SensorDataService {
 
     private static final int MAX_RECENT = 500; // 채널별 조회 상한
 
-    // 재발화 방지 여유(데드밴드): ABOVE 는 임계*RELEASE_RATIO 아래로 내려와야 알람 해제.
-    // 임계값 근처에서 값이 떨려도 껐다 켰다 반복하지 않게 한다.
-    private static final double RELEASE_RATIO = 0.97;
+    // 재발화 방지 여유(데드밴드): offset이 큰 C-MAPSS 채널도 정상 범위에서 해제되도록
+    // 임계값의 0.1%만 사용한다. 더 큰 흔들림은 5분 쿨다운으로 재발화를 억제한다.
+    private static final double RELEASE_RATIO = 0.999;
     // ABOVE 는 임계*CRITICAL_RATIO 이하 초과는 WARNING, 초과하면 CRITICAL.
     private static final double CRITICAL_RATIO = 1.1;
     // 재발화 지연(시간 쿨다운): 직전 발화 후 이 시간 안에는 다시 발화하지 않는다(산발 스파이크 억제).

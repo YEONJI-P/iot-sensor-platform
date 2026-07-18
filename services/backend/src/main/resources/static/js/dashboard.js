@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const ALLOWED = ['SYSTEM_ADMIN', 'MEMBER', 'VIEWER'];
+  const ALLOWED = ['SYSTEM_ADMIN', 'FACTORY_ADMIN', 'MEMBER', 'VIEWER'];
   const RAW_POINT_LIMIT = 500;
   const CHART_POINT_LIMIT = 300;
   const DEFAULT_WINDOW_MINUTES = 5;
@@ -417,7 +417,9 @@
 
   function renderChart() {
     const channel = selectedChannel();
-    const now = Date.now();
+    const wallClockNow = Date.now();
+    const latestObservedAt = rawReadings.length ? rawReadings[rawReadings.length - 1].x : wallClockNow;
+    const now = Math.max(wallClockNow, latestObservedAt);
     const visibleRaw = filterTimeWindow(rawReadings, windowMinutes, now);
     const displayed = downsampleEvenly(visibleRaw, CHART_POINT_LIMIT);
     const hasThreshold = channel && number(channel.thresholdValue) != null;
@@ -425,14 +427,17 @@
     pointAnomalies = displayed.map((reading) => hasThreshold && reading.anomaly === true);
     lineChart.data.datasets[0].data = displayed.map((reading) => ({ x: reading.x, y: reading.y }));
     lineChart.data.datasets[0].pointBackgroundColor = pointAnomalies.map(pointColor);
-    lineChart.data.datasets[1].data = hasThreshold
-      ? displayed.map((reading) => ({ x: reading.x, y: channel.thresholdValue })) : [];
+    lineChart.data.datasets[1].data = hasThreshold && displayed.length
+      ? [
+          { x: now - windowMinutes * 60 * 1000, y: channel.thresholdValue },
+          { x: now, y: channel.thresholdValue },
+        ] : [];
     lineChart.data.datasets[2].data = matchAlertMarkers(visibleRaw, channelAlerts, currentChannelId);
     lineChart.options.scales.x.min = now - windowMinutes * 60 * 1000;
     lineChart.options.scales.x.max = now;
     lineChart.update('none');
 
-    $('chartMeta').textContent = `표시 ${displayed.length}점 · 최근 ${windowMinutes}분`;
+    $('chartMeta').textContent = `표시 ${displayed.length}점 · 최근 ${windowMinutes}분 범위`;
     $('lineEmpty').textContent = currentChannelId
       ? `최근 ${windowMinutes}분 판독이 없습니다.` : '채널 카드에서 채널을 선택하세요.';
     showLineChart(displayed.length > 0);
@@ -455,7 +460,8 @@
     let readings;
     try { readings = await res.json(); } catch { return; }
     if (requestId !== readingsRequestId || requestedChannel !== String(currentChannelId) || !Array.isArray(readings)) return;
-    rawReadings = mergeReadings(normalizeReadings(readings), rawReadings);
+    // 같은 batch는 서버 재계산 결과가 SSE 시점의 로컬 anomaly 값을 갱신한다.
+    rawReadings = mergeReadings(rawReadings, normalizeReadings(readings));
     renderChart();
   }
 
