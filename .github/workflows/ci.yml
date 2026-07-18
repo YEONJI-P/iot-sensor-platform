@@ -24,3 +24,13 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
         working-directory: services/backend
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install simulator dependencies
+        run: pip install -r requirements.txt
+        working-directory: services/simulator
+      - name: Test simulator
+        run: python -m unittest -v test_simulator.py
+        working-directory: services/simulator
