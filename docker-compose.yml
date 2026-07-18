@@ -68,6 +68,7 @@ services:
     build: ./services/simulator
     image: sensor-monitor-simulator:local
     profiles: [replay]
+    env_file: ./services/simulator/.env
     depends_on:
       backend:
         condition: service_started
@@ -80,6 +81,7 @@ services:
     build: ./services/simulator
     image: sensor-monitor-simulator:local
     profiles: [live]
+    env_file: ./services/simulator/.env
     depends_on:
       backend:
         condition: service_started

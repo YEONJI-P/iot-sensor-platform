@@ -43,6 +43,9 @@ jwt:
   expiration: 3600000
   refresh-expiration: 604800000
 
+ingest:
+  api-key: ${INGEST_API_KEY}
+
 # explain(Python) 서비스 연동
 explain:
   base-url: ${EXPLAIN_BASE_URL:http://localhost:23200}

@@ -1,3 +1,4 @@
+import os
 import unittest
 from datetime import datetime
 from unittest.mock import patch
@@ -6,8 +7,11 @@ from zoneinfo import ZoneInfo
 from simulator import (
     SyntheticGenerator,
     is_active_at,
+    main,
     parse_active_days,
     parse_active_hours,
+    require_ingest_api_key,
+    send,
     synthetic_worker,
 )
 
@@ -69,6 +73,44 @@ class SyntheticGeneratorTest(unittest.TestCase):
         self.assertGreater(values[2], values[0])
 
 
+class IngestAuthenticationTest(unittest.TestCase):
+    def test_missing_or_blank_key_fails_validation(self):
+        for environ in ({}, {"INGEST_API_KEY": "   "}):
+            with self.subTest(environ=environ):
+                with self.assertRaisesRegex(ValueError, "INGEST_API_KEY"):
+                    require_ingest_api_key(environ)
+
+    @patch("simulator.requests.post")
+    def test_send_adds_ingest_header(self, post_mock):
+        post_mock.return_value.status_code = 200
+
+        self.assertTrue(send(
+            "http://example", "TEST-DEVICE", 7, {"temperature": 12.3}, "shared-key"
+        ))
+
+        post_mock.assert_called_once_with(
+            "http://example/sensor-data",
+            json={
+                "deviceCode": "TEST-DEVICE",
+                "sourceSeq": 7,
+                "measurements": {"temperature": 12.3},
+            },
+            headers={"X-Ingest-Key": "shared-key"},
+            timeout=5,
+        )
+
+    @patch("simulator.ThreadPoolExecutor")
+    def test_replay_and_synthetic_fail_fast_without_key(self, executor_mock):
+        for mode in ("replay", "synthetic"):
+            with self.subTest(mode=mode), \
+                    patch.dict(os.environ, {}, clear=True), \
+                    patch("sys.argv", ["simulator.py", "--mode", mode, "--all", "--limit", "1"]):
+                with self.assertRaises(SystemExit):
+                    main()
+
+        executor_mock.assert_not_called()
+
+
 class SyntheticWorkerTest(unittest.TestCase):
     PRESET = {
         "code": "TEST-DEVICE",
@@ -81,7 +123,7 @@ class SyntheticWorkerTest(unittest.TestCase):
         stop_event = RecordingStopEvent()
 
         synthetic_worker(
-            self.PRESET, 1.0, 4, "http://example", 1, 0.0,
+            self.PRESET, 1.0, 4, "http://example", "test-ingest-key", 1, 0.0,
             set(range(7)), None, "UTC", stop_event,
         )
 
@@ -93,7 +135,7 @@ class SyntheticWorkerTest(unittest.TestCase):
         stop_event = RecordingStopEvent()
 
         synthetic_worker(
-            self.PRESET, 1.0, 8, "http://example", 1, 0.0,
+            self.PRESET, 1.0, 8, "http://example", "test-ingest-key", 1, 0.0,
             set(range(7)), None, "UTC", stop_event,
         )
 
@@ -105,7 +147,7 @@ class SyntheticWorkerTest(unittest.TestCase):
         stop_event = RecordingStopEvent(stop_after_wait=True)
 
         synthetic_worker(
-            self.PRESET, 1.0, 0, "http://example", 1, 0.0,
+            self.PRESET, 1.0, 0, "http://example", "test-ingest-key", 1, 0.0,
             set(range(7)), None, "UTC", stop_event,
         )
 

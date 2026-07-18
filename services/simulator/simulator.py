@@ -50,6 +50,7 @@ signal.signal(signal.SIGTERM, handle_stop_signal)
 
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+INGEST_KEY_ENV = "INGEST_API_KEY"
 
 # C-MAPSS train_FD001: 공백 구분, 헤더 없음. 컬럼 인덱스 = unit0, cycle1, set2~4, s1=5 ... s21=25
 # s4 = index 8, s11 = index 15
@@ -252,14 +253,28 @@ class SyntheticGenerator:
 # 3. HTTP 전송
 # =============================================================================
 
-def send(base_url: str, device_code: str, source_seq: int, measurements: dict) -> bool:
+def require_ingest_api_key(environ: dict | None = None) -> str:
+    """수신 키가 없거나 공백이면 HTTP 작업을 시작하기 전에 종료한다."""
+    source = os.environ if environ is None else environ
+    ingest_api_key = source.get(INGEST_KEY_ENV)
+    if ingest_api_key is None or not ingest_api_key.strip():
+        raise ValueError(f"{INGEST_KEY_ENV} 환경변수가 필요합니다")
+    return ingest_api_key
+
+
+def send(base_url: str, device_code: str, source_seq: int, measurements: dict, ingest_api_key: str) -> bool:
     payload = {
         "deviceCode": device_code,
         "sourceSeq": source_seq,
         "measurements": measurements,
     }
     try:
-        response = requests.post(f"{base_url}/sensor-data", json=payload, timeout=5)
+        response = requests.post(
+            f"{base_url}/sensor-data",
+            json=payload,
+            headers={"X-Ingest-Key": ingest_api_key},
+            timeout=5,
+        )
     except requests.exceptions.ConnectionError:
         log(f"  [{device_code}] [오류] 서버 연결 실패: {base_url}")
         return False
@@ -279,7 +294,14 @@ def send(base_url: str, device_code: str, source_seq: int, measurements: dict) -
 # 4. 워커 (스레드에서 물리 device 별로 실행)
 # =============================================================================
 
-def replay_worker(preset: dict, interval: float, limit: int, base_url: str, stop_event: threading.Event):
+def replay_worker(
+        preset: dict,
+        interval: float,
+        limit: int,
+        base_url: str,
+        ingest_api_key: str,
+        stop_event: threading.Event,
+):
     device_code = preset["code"]
     label = preset.get("label", device_code)
 
@@ -302,7 +324,7 @@ def replay_worker(preset: dict, interval: float, limit: int, base_url: str, stop
         if stop_event.is_set():
             break
         attempted += 1
-        if send(base_url, device_code, source_seq, measurements):
+        if send(base_url, device_code, source_seq, measurements, ingest_api_key):
             success += 1
         if i % 20 == 0 or i == len(batches):
             log(f"  [{device_code}] {i}/{len(batches)} 전송 (마지막 sourceSeq={source_seq})")
@@ -317,6 +339,7 @@ def synthetic_worker(
         interval: float,
         limit: int,
         base_url: str,
+        ingest_api_key: str,
         seed: int | None,
         anomaly_rate: float,
         active_days: set[int],
@@ -351,7 +374,7 @@ def synthetic_worker(
 
             attempted += 1
             measurements = generator.next_measurements()
-            if send(base_url, device_code, source_seq, measurements):
+            if send(base_url, device_code, source_seq, measurements, ingest_api_key):
                 success += 1
                 failure_streak = 0
             else:
@@ -439,6 +462,11 @@ def main():
                 parser.error(f"알 수 없는 device code: {code} (사용 가능: {sorted(by_code)})")
             presets.append(by_code[code])
 
+    try:
+        ingest_api_key = require_ingest_api_key()
+    except ValueError as exc:
+        parser.error(str(exc))
+
     schedule = (f"{args.active_days} 하루 종일 {args.timezone}" if active_hours is None
                 else f"{args.active_days} {args.active_hours} {args.timezone}")
     log(f"시뮬레이터 시작 — mode {args.mode} / device {len(presets)}개 / {args.interval}초 간격 / 서버 {args.base_url}")
@@ -448,11 +476,11 @@ def main():
     stop_event = threading.Event()
 
     if args.mode == "replay":
-        targets = [(p, args.interval, args.limit, args.base_url, stop_event) for p in presets]
+        targets = [(p, args.interval, args.limit, args.base_url, ingest_api_key, stop_event) for p in presets]
         worker_function = replay_worker
     else:
         targets = [
-            (p, args.interval, args.limit, args.base_url,
+            (p, args.interval, args.limit, args.base_url, ingest_api_key,
              None if args.seed is None else args.seed + index,
              args.anomaly_rate, active_days, active_hours, args.timezone, stop_event)
             for index, p in enumerate(presets)

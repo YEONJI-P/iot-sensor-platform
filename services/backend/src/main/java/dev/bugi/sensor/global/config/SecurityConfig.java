@@ -3,7 +3,9 @@ package dev.bugi.sensor.global.config;
 import dev.bugi.sensor.auth.filter.JwtFilter;
 import dev.bugi.sensor.global.security.CustomAccessDeniedHandler;
 import dev.bugi.sensor.global.security.CustomAuthenticationEntryPoint;
+import dev.bugi.sensor.sensordata.security.IngestKeyFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -26,7 +28,7 @@ public class SecurityConfig {
     private final CustomAccessDeniedHandler accessDeniedHandler;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, IngestKeyFilter ingestKeyFilter) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session
@@ -44,8 +46,12 @@ public class SecurityConfig {
                         // health 감시용 — 상태만 노출(show-details: never)
                         .requestMatchers(HttpMethod.GET, "/actuator/health")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/sensor-data","/auth/refresh")
+                        .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/auth/refresh")
                         .permitAll()
+
+                        // 센서 수신 — JWT 역할과 분리한 공유 키 authority만 허용
+                        .requestMatchers(HttpMethod.POST, "/sensor-data")
+                        .hasAuthority("INGEST")
 
                         // 공장 관리 — SYSTEM_ADMIN만
                         .requestMatchers("/admin/factories/**")
@@ -98,7 +104,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)
                 )
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(ingestKeyFilter, JwtFilter.class);
 
         return http.build();
     }
@@ -106,5 +113,10 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public IngestKeyFilter ingestKeyFilter(@Value("${ingest.api-key}") String ingestApiKey) {
+        return new IngestKeyFilter(ingestApiKey);
     }
 }

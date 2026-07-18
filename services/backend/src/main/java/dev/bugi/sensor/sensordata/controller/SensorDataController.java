@@ -20,7 +20,7 @@ public class SensorDataController {
 
     private final SensorDataService sensorDataService;
 
-    // 외부 장치 입력(C1). permitAll — 부분 실패(200)·장치 없음(404)·전 채널 미지(422)를 결과로 매핑한다.
+    // 외부 장치 입력(C1). ingest 공유 키 인증 후 부분 실패(200)·장치 없음(404)·전 채널 미지(422)를 결과로 매핑한다.
     // (channel 별 조회는 GET /channels/{id}/readings 로 옮겼다.)
     @PostMapping
     public ResponseEntity<BatchIngestResponse> receive(@RequestBody @Valid BatchIngestRequest request) {
