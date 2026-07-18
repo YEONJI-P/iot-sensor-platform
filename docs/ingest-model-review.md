@@ -115,3 +115,31 @@ MeasurementBatch(device_id, recorded_at, source_sequence)
 3. `43eb513`의 V2 topology를 유지·수정·대체할지 결정한다. 아직 배포 전이므로 적용된 migration으로 가정하지 않는다.
 4. 수신 모델을 구현·PostgreSQL에서 검증한 뒤 freshness, bootstrap, ingest 인증과 배포 작업으로 복귀한다.
 
+## 결정 (2026-07-18)
+
+### 채택: B (물리 Device ─ SensorChannel ─ MeasurementBatch ─ SensorReading)
+
+A(채널=Device, scalar 1건=1행)로 실제 데이터를 태워 본 결과, 같은 시점에 관측된 여러 채널 값 사이의 동시성 관계를 스키마가 전혀 보존하지 못한다는 문제가 실측 확인됐다. C-MAPSS의 한 cycle, CNC의 한 행 모두 여러 센서 컬럼이 같은 관측 시점을 공유하는데, A는 이 묶음을 요청마다 독립된 scalar로 흩어 버려 사후에 "같은 순간 다른 채널은 어떤 값이었나"를 복원할 수 없다. 이 손실은 시뮬레이터 리플레이 방식만 바꿔서는 해결되지 않고 수신 모델 자체의 한계이므로, 범용 산업 수집 데모를 표방하는 이 프로젝트는 A를 유지하지 않고 B로 전환하기로 확정했다.
+
+### 확정 계약 요약
+
+- `device`: 물리 노드 설정만 가진다. 안정 식별자 `code`(UK)를 추가하고, 측정 종류·임계값(`type`, `threshold_value`)은 제거했다.
+- `sensor_channel`: 물리 device 아래 측정 채널. `code`(device 안에서 유일), `unit`, `quantity_kind`(자유 문자열), `threshold_value`, `threshold_direction`을 가진다. 임계값·임계 방향의 소유권을 device에서 채널로 옮겼다.
+- `measurement_batch`: 한 payload/원본 한 행의 관측 묶음. `observed_at`(원본 관측 시각, 없으면 서버 시각으로 대체), `received_at`(서비스가 주입 `Clock`으로 세팅, 감사 컬럼 아님), `source_seq`(cycle 번호·행 인덱스 등, 선택)를 가진다.
+- `sensor_reading`: batch × channel 교차의 단일 값. `UNIQUE(batch_id, channel_id)`로 같은 batch 안 채널 중복을 막는다. 감사 컬럼 없음 — 관측 시각은 batch에서 온다.
+- `channel_status`: 채널의 런타임 알람 상태(`in_alarm`, `last_alert_at`). `device_status`는 `last_seen_at`(노드 freshness)만 남기고 알람 상태는 채널 경계로 옮겼다.
+- `alert`: `device_id`·`channel_id`·`batch_id`를 모두 nullable로 갖는다. 임계 초과 alert는 셋 다 세팅하고, freshness(수신 끊김) alert는 채널·batch가 없어 `device_id`만 세팅한다.
+- 수신 API: `POST /sensor-data`가 `deviceCode` + `measurements`(채널 code→value map) 배치를 한 요청으로 받는다. 미지 채널·null 값은 예외로 롤백하지 않고 `rejected` 목록과 `failed_reading`으로 부분 실패를 남기며, known 채널이 하나도 없을 때만 batch 생성을 건너뛴다(422).
+- scalar 조회 API(`GET /sensor-data`, `GET /sensor-data/{deviceId}`)와 `sensor_data` 테이블은 제거했다. 조회는 `GET /channels/{id}/readings`로 이동했다.
+
+### V2 재작성 + V3 전략
+
+이 branch의 V2(`43eb513`)는 배포되지 않았고 이관 수혜자가 없어, 누적 DDL을 새로 쌓지 않고 V2 자체를 A→B DDL 전환으로 재작성했다(`V2__normalized_ingest_model.sql`). V1은 checksum 고정을 위해 그대로 둔다. 공개 데모 토폴로지(공장 2·구역 3·물리 device 3·채널 7) 데이터 투입은 V2에서 분리해 별도 V3(`V3__public_demo_topology.sql`)로 둔다 — DDL 전환과 데모 데이터 투입을 한 migration에 섞지 않기 위함이다.
+
+### 보류한 확장점
+
+- reading의 비숫자 값(`value_text` 등): CNC의 `Machining_Process`(문자열) 같은 사례가 실제로 필요해질 때만 추가한다.
+- batch의 원본 payload 보존(`context JSONB`): 감사·재처리 필요가 확인될 때만 추가한다.
+
+두 확장점 모두 현재 채택한 B 계약에는 포함하지 않았다.
+

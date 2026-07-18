@@ -1,0 +1,352 @@
+<title>센서 수신 모델 ERD — A→B</title>
+<style>
+  :root {
+    --paper: #FAFBFC;
+    --ink: #1C242D;
+    --muted: #5B6B7A;
+    --line: #D9DFE6;
+    --card: #FFFFFF;
+    --new: #0E7C6B;        /* 신설 요소 */
+    --new-soft: #E4F2EF;
+    --moved: #B4590A;      /* 이동·제거 요소 */
+    --moved-soft: #F8EDE0;
+    --code-bg: #F0F3F6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #14181D;
+      --ink: #E4E9EE;
+      --muted: #93A1AF;
+      --line: #2A323B;
+      --card: #1B2129;
+      --new: #3FB59E;
+      --new-soft: #16302B;
+      --moved: #D98B4A;
+      --moved-soft: #33261A;
+      --code-bg: #232A33;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14181D; --ink: #E4E9EE; --muted: #93A1AF; --line: #2A323B;
+    --card: #1B2129; --new: #3FB59E; --new-soft: #16302B;
+    --moved: #D98B4A; --moved-soft: #33261A; --code-bg: #232A33;
+  }
+  :root[data-theme="light"] {
+    --paper: #FAFBFC; --ink: #1C242D; --muted: #5B6B7A; --line: #D9DFE6;
+    --card: #FFFFFF; --new: #0E7C6B; --new-soft: #E4F2EF;
+    --moved: #B4590A; --moved-soft: #F8EDE0; --code-bg: #F0F3F6;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+
+  .eyebrow {
+    font-size: .75rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 .4rem;
+  }
+  h1 {
+    font-size: 1.6rem; font-weight: 700; margin: 0 0 .5rem;
+    text-wrap: balance;
+  }
+  .lede { color: var(--muted); margin: 0 0 2.2rem; max-width: 46rem; }
+
+  h2 {
+    font-size: 1.1rem; font-weight: 700;
+    margin: 2.8rem 0 .35rem;
+    display: flex; align-items: baseline; gap: .55rem;
+  }
+  h2 .tag {
+    font-size: .7rem; font-weight: 600; letter-spacing: .05em;
+    padding: .1rem .5rem; border-radius: 2px;
+  }
+  .tag-asis { background: var(--moved-soft); color: var(--moved); }
+  .tag-tobe { background: var(--new-soft); color: var(--new); }
+  .subnote { color: var(--muted); font-size: .875rem; margin: 0 0 1rem; }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+  }
+  pre.mermaid { margin: 0; min-width: 34rem; }
+
+  /* 범례 */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 1rem .9rem;
+    font-size: .8rem; color: var(--muted);
+    margin: .7rem 0 0;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: .4rem; }
+  .dot { width: .65rem; height: .65rem; border-radius: 2px; display: inline-block; }
+  .dot-new { background: var(--new); }
+  .dot-moved { background: var(--moved); }
+
+  /* 변경 매핑 표 */
+  table {
+    border-collapse: collapse; width: 100%; font-size: .875rem;
+  }
+  .table-wrap { overflow-x: auto; }
+  th, td {
+    text-align: left; padding: .5rem .75rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600;
+  }
+  code, .mono {
+    font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-size: .85em;
+    background: var(--code-bg);
+    padding: .08em .35em; border-radius: 3px;
+  }
+  .chip {
+    display: inline-block; font-size: .7rem; font-weight: 600;
+    padding: .05rem .45rem; border-radius: 2px; white-space: nowrap;
+  }
+  .chip-new { background: var(--new-soft); color: var(--new); }
+  .chip-moved { background: var(--moved-soft); color: var(--moved); }
+  .chip-del { background: var(--moved-soft); color: var(--moved); text-decoration: line-through; }
+
+  /* payload 비교 */
+  .duo {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+  }
+  @media (max-width: 44rem) { .duo { grid-template-columns: 1fr; } }
+  .duo .panel { padding: .9rem 1rem; }
+  .duo h3 {
+    font-size: .8rem; font-weight: 600; color: var(--muted);
+    margin: 0 0 .5rem; letter-spacing: .04em;
+  }
+  .duo pre {
+    margin: 0; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: .8rem; line-height: 1.55; overflow-x: auto;
+  }
+  .duo .k { color: var(--muted); }
+  .duo .hl { color: var(--new); font-weight: 600; }
+
+  footer {
+    margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line);
+    font-size: .8rem; color: var(--muted);
+  }
+</style>
+
+<main>
+  <p class="eyebrow">iot-sensor-platform · feat/public-demo-runtime</p>
+  <h1>센서 수신 모델 ERD — 방식 A에서 B로</h1>
+  <p class="lede">
+    device 쪽 연결만 표시했다(사용자·권한 테이블 생략). 핵심 전환은
+    <strong>「채널 = Device」를 「물리 Device ─ 채널 ─ 관측 batch」</strong>로 풀어내
+    같은 시점에 관측된 값 묶음을 스키마가 직접 보존하는 것이다.
+  </p>
+
+  <h2>현행 <span class="tag tag-asis">AS-IS · 방식 A</span></h2>
+  <p class="subnote">측정 채널 하나가 Device 한 건. 요청마다 scalar 하나가 <code>sensor_data</code> 한 행이 되고, 동시 관측 관계는 어디에도 남지 않는다.</p>
+  <div class="panel">
+<pre class="mermaid">
+erDiagram
+    factories ||--o{ zones : ""
+    zones ||--o{ device : ""
+    device ||--o{ sensor_data : ""
+    device ||--o| device_status : ""
+    device ||--o{ alert : ""
+
+    device {
+        bigint id PK
+        varchar name  "엔진1-온도(s4) = 채널 1개"
+        enum type  "TEMPERATURE 등 - 채널의 타입"
+        double threshold_value  "채널 임계값"
+        int expected_interval_seconds
+    }
+    sensor_data {
+        bigint id PK
+        bigint device_id FK
+        double value  "scalar 1개"
+        timestamptz recorded_at  "서버 수신 시각"
+    }
+    device_status {
+        bigint device_id PK
+        timestamptz last_seen_at
+        boolean in_alarm
+        timestamptz last_alert_at
+    }
+    alert {
+        bigint id PK
+        bigint device_id FK
+        double sensor_value
+        varchar severity
+    }
+</pre>
+  </div>
+
+  <h2>변경 <span class="tag tag-tobe">TO-BE · 방식 B</span></h2>
+  <p class="subnote">
+    Device는 물리 노드(<code>CMAPSS-U1</code>, <code>CNC-EXP01</code>)가 되고, 측정 정의는
+    <code>sensor_channel</code>로, 관측 한 번은 <code>measurement_batch</code>로 내려간다.
+    원본 한 행(cycle·100ms 샘플)이 batch 하나에 대응한다.
+  </p>
+  <div class="panel">
+<pre class="mermaid">
+erDiagram
+    factories ||--o{ zones : ""
+    zones ||--o{ device : ""
+    device ||--o{ sensor_channel : "채널 = 행 등록, DDL 불필요"
+    device ||--o{ measurement_batch : "관측 1회 = batch 1행"
+    measurement_batch ||--o{ sensor_reading : ""
+    sensor_channel ||--o{ sensor_reading : ""
+    device ||--o| device_status : "freshness"
+    sensor_channel ||--o| channel_status : "알람 상태"
+    sensor_channel ||--o{ alert : ""
+    measurement_batch ||--o{ alert : "발생 근거"
+    device ||--o{ alert : "freshness"
+
+    device {
+        bigint id PK
+        varchar code UK  "CMAPSS-U1, CNC-EXP01"
+        varchar name
+        varchar location
+        int expected_interval_seconds
+    }
+    sensor_channel {
+        bigint id PK
+        bigint device_id FK
+        varchar code  "s4, X1_ActualPosition"
+        varchar unit  "R, A, W"
+        varchar quantity_kind  "soft 태그 - enum 아님"
+        double threshold_value
+        varchar threshold_direction
+    }
+    measurement_batch {
+        bigint id PK
+        bigint device_id FK
+        timestamptz observed_at  "원본 관측 시각"
+        timestamptz received_at  "서버 Clock"
+        bigint source_seq  "cycle 번호, 행 인덱스"
+    }
+    sensor_reading {
+        bigint id PK
+        bigint batch_id FK
+        bigint channel_id FK
+        double value  "UNIQUE(batch_id, channel_id)"
+    }
+    device_status {
+        bigint device_id PK
+        timestamptz last_seen_at  "노드 단위 freshness"
+    }
+    channel_status {
+        bigint channel_id PK
+        boolean in_alarm
+        timestamptz last_alert_at
+    }
+    alert {
+        bigint id PK
+        bigint device_id FK "nullable - freshness alert 는 device 만"
+        bigint channel_id FK
+        bigint batch_id FK
+        double sensor_value
+        varchar severity
+    }
+</pre>
+  </div>
+  <div class="legend">
+    <span><span class="dot dot-new"></span>신설: sensor_channel · measurement_batch · sensor_reading · channel_status</span>
+    <span><span class="dot dot-moved"></span>이동·제거: device.type, device.threshold_value, in_alarm/last_alert_at</span>
+  </div>
+
+  <h2>필드가 어디로 가나</h2>
+  <div class="panel table-wrap">
+    <table>
+      <thead>
+        <tr><th>현행 (A)</th><th>변경 (B)</th><th>비고</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>device</code> = 채널 1개</td>
+          <td><code>device</code> = 물리 노드, <span class="chip chip-new">NEW</span> <code>sensor_channel</code> = 측정 정의</td>
+          <td>데모 장치 7개 → 물리 device 3개 + 채널 7개</td>
+        </tr>
+        <tr>
+          <td><code>device.type</code> <span class="chip chip-del">enum</span></td>
+          <td><code>sensor_channel.unit</code> + <code>quantity_kind</code></td>
+          <td>노드에 온도·압력·진동이 섞이므로 "노드의 타입"은 성립 안 함. enum 강제도 제거</td>
+        </tr>
+        <tr>
+          <td><code>device.threshold_value</code> <span class="chip chip-moved">이동</span></td>
+          <td><code>sensor_channel.threshold_value</code> (+ direction)</td>
+          <td>임계값은 채널 속성. 알람 판정 경계도 채널로</td>
+        </tr>
+        <tr>
+          <td><code>sensor_data</code> 1행 = scalar 1개</td>
+          <td><span class="chip chip-new">NEW</span> <code>measurement_batch</code> 1행 + <code>sensor_reading</code> N행</td>
+          <td>같은 batch의 값은 <code>observed_at</code>·<code>source_seq</code>를 공유 — 동시 관측 복원 가능</td>
+        </tr>
+        <tr>
+          <td><code>sensor_data.recorded_at</code> = 수신 시각뿐</td>
+          <td><code>observed_at</code>(원본) / <code>received_at</code>(서버) 분리</td>
+          <td>A 실측에서 같은 cycle 짝이 1µs 어긋나던 문제 해소</td>
+        </tr>
+        <tr>
+          <td><code>device_status.in_alarm</code>, <code>last_alert_at</code> <span class="chip chip-moved">이동</span></td>
+          <td><span class="chip chip-new">NEW</span> <code>channel_status</code></td>
+          <td><code>device_status</code>는 노드 freshness(<code>last_seen_at</code>)만 유지</td>
+        </tr>
+        <tr>
+          <td><code>alert.device_id</code></td>
+          <td><code>alert.device_id</code>(유지, nullable) + <span class="chip chip-new">NEW</span> <code>channel_id</code> + <code>batch_id</code></td>
+          <td>임계 alert는 device·channel·batch 모두 세팅. freshness(수신 끊김) alert는 채널·batch가 없어 device_id만 세팅</td>
+        </tr>
+        <tr>
+          <td><code>failed_reading</code> (요청 단위)</td>
+          <td>유지 + 채널 단위 부분 실패 기록</td>
+          <td>모르는 채널 코드는 부분 실패로 남기고 나머지는 저장</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>수신 payload 비교</h2>
+  <div class="duo">
+    <div class="panel">
+      <h3>A — 채널마다 독립 요청 ×N</h3>
+      <pre><span class="k">POST /sensor-data</span>
+{
+  "deviceId": 1,
+  "value": 1400.6
+}
+<span class="k">POST /sensor-data</span>
+{
+  "deviceId": 2,
+  "value": 47.47
+}</pre>
+    </div>
+    <div class="panel">
+      <h3>B — 관측 1회 = 요청 1건</h3>
+      <pre><span class="k">POST /sensor-data</span>
+{
+  "deviceCode": <span class="hl">"CMAPSS-U1"</span>,
+  "observedAt": "2026-07-17T15:00:00Z",
+  "sourceSeq": <span class="hl">12</span>,
+  "measurements": {
+    <span class="hl">"s4"</span>: 1400.6,
+    <span class="hl">"s11"</span>: 47.47
+  }
+}</pre>
+    </div>
+  </div>
+
+  <footer>
+    보류한 확장점 — reading의 비숫자 값(<code>value_text</code>), batch의 원본 보존(<code>context JSONB</code>):
+    CNC의 <code>Machining_Process</code>(문자열) 같은 사례가 실제로 필요해질 때만 추가.
+    사용자·권한 테이블(users, zone_users, refresh_tokens)은 이 변경의 영향 밖이라 생략.
+  </footer>
+</main>
