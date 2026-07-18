@@ -16,6 +16,7 @@
     .dash-titlebar { margin-bottom: 1.1rem; }
     .dash-titlebar h1, .detail-titlebar h1 { font-size: 1.7rem; margin-top: .25rem; }
     .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 1.35rem; }
+    .detail-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .summary-card { display: flex; align-items: center; gap: .9rem; padding: 1.15rem 1.25rem; }
     .summary-card .lamp { flex: 0 0 auto; }
     .summary-card .val { font-size: 1.45rem; }
@@ -56,8 +57,11 @@
     .detail-grid { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); align-items: start; margin-bottom: 1.1rem; }
     .chart-box { position: relative; height: 290px; padding: .7rem .4rem .3rem; }
     .chart-box canvas { max-width: 100%; }
-    .chart-control { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; }
-    .chart-control select { min-width: 220px; }
+    .chart-heading { display: flex; align-items: baseline; gap: .65rem; flex-wrap: wrap; }
+    .chart-meta { color: var(--text-faint); font-family: var(--font-mono); font-size: .7rem; }
+    .chart-actions { display: flex; align-items: center; justify-content: flex-end; gap: .7rem; flex-wrap: wrap; }
+    .window-selector { display: inline-flex; gap: .25rem; }
+    .window-selector .active { color: var(--signal); border-color: var(--signal); background: color-mix(in srgb, var(--signal) 8%, transparent); }
     .thr-badge { font-family: var(--font-mono); font-size: .7rem; color: var(--brand); }
     .alarm-panel { min-height: 360px; }
     .alarm-list { list-style: none; }
@@ -72,7 +76,7 @@
       .detail-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 640px) {
-      .summary-grid, .device-grid, .channel-grid { grid-template-columns: 1fr; }
+      .summary-grid, .detail-summary-grid, .device-grid, .channel-grid { grid-template-columns: 1fr; }
       .topbar .clock, .identity { display: none; }
       .dash-titlebar, .detail-titlebar { flex-direction: column; }
     }
@@ -115,7 +119,7 @@
     <div class="grid summary-grid">
       <div class="panel summary-card"><span class="lamp idle" id="summaryFreshnessLamp"></span><div class="readout"><span class="val" id="summaryFreshness">—</span><span class="lbl">온라인 / 전체 장치</span></div></div>
       <div class="panel summary-card"><span class="lamp idle" id="summaryLastSeenLamp"></span><div class="readout"><span class="val" id="summaryLastSeen">—</span><span class="lbl">마지막 수신</span></div></div>
-      <div class="panel summary-card"><span class="lamp idle" id="summaryAlarmLamp"></span><div class="readout"><span class="val" id="summaryAlarm">—</span><span class="lbl">현재 알람 채널</span></div></div>
+      <div class="panel summary-card"><span class="lamp idle" id="summaryAlarmLamp"></span><div class="readout"><span class="val" id="summaryAlarm">—</span><span class="lbl">알람 유지 중 채널</span></div></div>
     </div>
     <div id="overviewEmpty" class="panel empty">장치 현황을 불러오는 중입니다.</div>
     <div id="factoryGroups"></div>
@@ -131,10 +135,9 @@
       </div>
       <span id="detailFreshness" class="tag"></span>
     </div>
-    <div class="grid summary-grid">
+    <div class="grid summary-grid detail-summary-grid">
       <div class="panel summary-card"><span class="lamp idle" id="detailFreshnessLamp"></span><div class="readout"><span class="val" id="detailFreshnessValue">—</span><span class="lbl">freshness</span></div></div>
       <div class="panel summary-card"><span class="lamp idle" id="detailLastSeenLamp"></span><div class="readout"><span class="val" id="detailLastSeen">—</span><span class="lbl">마지막 수신</span></div></div>
-      <div class="panel summary-card"><span class="lamp idle" id="detailAlarmLamp"></span><div class="readout"><span class="val" id="detailAlarmCount">—</span><span class="lbl">현재 알람 채널</span></div></div>
     </div>
 
     <div class="section-title"><h2>채널 현황</h2><span class="tag" id="channelCount">0 채널</span></div>
@@ -143,11 +146,18 @@
     <div class="grid detail-grid">
       <div class="panel">
         <div class="panel-head">
-          <div class="chart-control">
-            <h3>채널 추이</h3>
-            <select class="input" id="channelSelect" aria-label="차트 채널 선택"></select>
+          <div class="chart-heading">
+            <h3 id="chartChannelName">채널 추이</h3>
+            <span class="chart-meta" id="chartMeta">표시 0점 · 최근 5분</span>
           </div>
-          <span class="thr-badge" id="thrBadge">임계값 —</span>
+          <div class="chart-actions">
+            <div class="window-selector" id="windowSelector" aria-label="차트 시간 범위">
+              <button class="btn btn-sm btn-ghost" type="button" data-window-minutes="1" aria-pressed="false">1분</button>
+              <button class="btn btn-sm btn-ghost active" type="button" data-window-minutes="5" aria-pressed="true">5분</button>
+              <button class="btn btn-sm btn-ghost" type="button" data-window-minutes="15" aria-pressed="false">15분</button>
+            </div>
+            <span class="thr-badge" id="thrBadge">임계값 —</span>
+          </div>
         </div>
         <div class="chart-box">
           <div class="empty" id="lineEmpty">채널을 선택하면 최근 판독이 표시됩니다.</div>
