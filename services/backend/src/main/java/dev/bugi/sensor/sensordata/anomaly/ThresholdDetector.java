@@ -27,10 +27,11 @@ public class ThresholdDetector implements AnomalyDetector {
         if (threshold == null) {
             return true;
         }
+        double margin = Math.abs(threshold) * (1 - ratio);
         return switch (directionOf(channel)) {
-            case BELOW -> value > threshold * (2 - ratio);
-            case ABS_ABOVE -> Math.abs(value) < threshold * ratio;
-            case ABOVE -> value < threshold * ratio;
+            case BELOW -> value > threshold + margin;
+            case ABS_ABOVE -> Math.abs(value) < threshold - margin;
+            case ABOVE -> value < threshold - margin;
         };
     }
 
@@ -40,10 +41,11 @@ public class ThresholdDetector implements AnomalyDetector {
         if (threshold == null) {
             return true;
         }
+        double margin = Math.abs(threshold) * (ratio - 1);
         return switch (directionOf(channel)) {
-            case BELOW -> value < threshold * (2 - ratio);
-            case ABS_ABOVE -> Math.abs(value) > threshold * ratio;
-            case ABOVE -> value > threshold * ratio;
+            case BELOW -> value < threshold - margin;
+            case ABS_ABOVE -> Math.abs(value) > threshold + margin;
+            case ABOVE -> value > threshold + margin;
         };
     }
 

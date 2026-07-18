@@ -93,6 +93,22 @@ class ThresholdDetectorTest {
     }
 
     @Test
+    @DisplayName("음수 임계값도 절댓값 기반 여유 폭으로 해제·CRITICAL 경계를 유지한다")
+    void negativeThreshold_usesAdditiveAbsoluteMargin() {
+        SensorChannel above = channel(-10.0, ThresholdDirection.ABOVE);
+        SensorChannel below = channel(-10.0, ThresholdDirection.BELOW);
+
+        assertThat(detector.isReleased(above, -11.0, 0.9)).isFalse();
+        assertThat(detector.isReleased(above, -11.01, 0.9)).isTrue();
+        assertThat(detector.isCritical(above, -9.0, 1.1)).isFalse();
+        assertThat(detector.isCritical(above, -8.99, 1.1)).isTrue();
+        assertThat(detector.isReleased(below, -9.0, 0.9)).isFalse();
+        assertThat(detector.isReleased(below, -8.99, 0.9)).isTrue();
+        assertThat(detector.isCritical(below, -11.0, 1.1)).isFalse();
+        assertThat(detector.isCritical(below, -11.01, 1.1)).isTrue();
+    }
+
+    @Test
     @DisplayName("ABS_ABOVE CRITICAL은 양·음 값 모두 절댓값 1.1배 초과에서만 성립한다")
     void absoluteAbove_criticalUsesAbsoluteValue() {
         SensorChannel channel = channel(100.0, ThresholdDirection.ABS_ABOVE);

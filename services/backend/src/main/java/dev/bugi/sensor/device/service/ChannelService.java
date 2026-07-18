@@ -49,6 +49,7 @@ public class ChannelService {
         accessControlService.assertCanMutateDevice(user);
         Device device = getDevice(deviceId);
         accessControlService.assertCanAccessDevice(user, device);
+        validateThreshold(request.getThresholdValue(), request.getThresholdDirection());
 
         SensorChannel channel = SensorChannel.builder()
                 .device(device)
@@ -68,6 +69,7 @@ public class ChannelService {
         accessControlService.assertCanMutateDevice(user);
         SensorChannel channel = accessControlService.getChannel(channelId);
         accessControlService.assertCanAccessChannel(user, channel);
+        validateThreshold(request.getThresholdValue(), request.getThresholdDirection());
 
         channel.update(request.getUnit(), request.getQuantityKind(),
                 request.getThresholdValue(), request.getThresholdDirection());
@@ -78,5 +80,12 @@ public class ChannelService {
     private Device getDevice(Long deviceId) {
         return deviceRepository.findById(deviceId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 장치예요 - deviceId: " + deviceId));
+    }
+
+    private void validateThreshold(Double thresholdValue, SensorChannel.ThresholdDirection direction) {
+        if (direction == SensorChannel.ThresholdDirection.ABS_ABOVE
+                && thresholdValue != null && thresholdValue <= 0) {
+            throw new IllegalArgumentException("ABS_ABOVE 임계값은 0보다 커야 해요");
+        }
     }
 }

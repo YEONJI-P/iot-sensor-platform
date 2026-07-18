@@ -180,4 +180,35 @@ class ChannelServiceTest {
         verify(sensorChannelRepository).save(channel);
         assertThat(channel.getThresholdValue()).isEqualTo(1500.0);
     }
+
+    @Test
+    void createChannel_rejects_non_positive_absolute_threshold() {
+        User user = mockUser();
+        Device device = device();
+        ChannelCreateRequest request = new ChannelCreateRequest(
+                "X1_CurrentFeedback", "A", "current", 0.0, ThresholdDirection.ABS_ABOVE);
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> channelService.createChannel(1L, request, "EMP001"));
+
+        assertThat(error.getMessage()).contains("0보다 커야");
+        verify(sensorChannelRepository, never()).save(any());
+    }
+
+    @Test
+    void updateChannel_rejects_negative_absolute_threshold() {
+        User user = mockUser();
+        SensorChannel channel = channel(device());
+        ChannelUpdateRequest request = new ChannelUpdateRequest(
+                "A", "current", -1.0, ThresholdDirection.ABS_ABOVE);
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(accessControlService.getChannel(5L)).thenReturn(channel);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> channelService.updateChannel(5L, request, "EMP001"));
+
+        verify(sensorChannelRepository, never()).save(any());
+    }
 }

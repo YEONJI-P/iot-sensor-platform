@@ -6,6 +6,7 @@
   const RAW_POINT_LIMIT = 500;
   const CHART_POINT_LIMIT = 300;
   const DEFAULT_WINDOW_MINUTES = 5;
+  const MAX_FUTURE_SKEW_MS = 60 * 1000;
   const FRESHNESS = {
     NOT_MONITORED: { label: '미감시', lamp: 'idle' },
     NEVER_SEEN: { label: '수신 없음', lamp: 'warn' },
@@ -60,7 +61,7 @@
     return readings.map((reading) => {
       const observed = date(reading && reading.observedAt);
       const value = number(reading && reading.value);
-      if (!observed || value == null) return null;
+      if (!observed || observed.getTime() > Date.now() + MAX_FUTURE_SKEW_MS || value == null) return null;
       return {
         batchId: reading.batchId,
         x: observed.getTime(),
@@ -201,6 +202,7 @@
           pointHoverRadius: 5, pointBackgroundColor: [], tension: .25, fill: true,
         },
         { label: '임계값', data: [], borderColor: C.brand, borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0 },
+        { label: '절댓값 하한', data: [], borderColor: C.brand, borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0 },
         {
           label: '저장 알림', data: [], borderColor: C.alarm, backgroundColor: C.alarm,
           showLine: false, pointStyle: 'triangle', pointRadius: 7, pointHoverRadius: 9,
@@ -238,8 +240,9 @@
     lineChart.data.datasets[0].backgroundColor = hexA(C.signal, .08);
     lineChart.data.datasets[0].pointBackgroundColor = pointAnomalies.map(pointColor);
     lineChart.data.datasets[1].borderColor = C.brand;
-    lineChart.data.datasets[2].borderColor = C.alarm;
-    lineChart.data.datasets[2].backgroundColor = C.alarm;
+    lineChart.data.datasets[2].borderColor = C.brand;
+    lineChart.data.datasets[3].borderColor = C.alarm;
+    lineChart.data.datasets[3].backgroundColor = C.alarm;
     ['x', 'y'].forEach((axis) => {
       lineChart.options.scales[axis].ticks.color = C.tick;
       lineChart.options.scales[axis].grid.color = C.grid;
@@ -325,7 +328,9 @@
 
   function thresholdText(channel) {
     if (number(channel.thresholdValue) == null) return '임계값 없음';
-    return `${channel.thresholdDirection === 'BELOW' ? '미만' : '초과'} ${fmtNum(channel.thresholdValue)}${channel.unit ? ` ${channel.unit}` : ''}`;
+    const condition = channel.thresholdDirection === 'BELOW' ? '미만'
+      : channel.thresholdDirection === 'ABS_ABOVE' ? '|값| 초과' : '초과';
+    return `${condition} ${fmtNum(channel.thresholdValue)}${channel.unit ? ` ${channel.unit}` : ''}`;
   }
 
   function channelCardHtml(channel) {
@@ -427,12 +432,20 @@
     pointAnomalies = displayed.map((reading) => hasThreshold && reading.anomaly === true);
     lineChart.data.datasets[0].data = displayed.map((reading) => ({ x: reading.x, y: reading.y }));
     lineChart.data.datasets[0].pointBackgroundColor = pointAnomalies.map(pointColor);
+    lineChart.data.datasets[1].label = channel && channel.thresholdDirection === 'ABS_ABOVE'
+      ? '절댓값 상한' : '임계값';
     lineChart.data.datasets[1].data = hasThreshold && displayed.length
       ? [
           { x: now - windowMinutes * 60 * 1000, y: channel.thresholdValue },
           { x: now, y: channel.thresholdValue },
         ] : [];
-    lineChart.data.datasets[2].data = matchAlertMarkers(visibleRaw, channelAlerts, currentChannelId);
+    lineChart.data.datasets[2].data = hasThreshold && displayed.length
+      && channel.thresholdDirection === 'ABS_ABOVE'
+      ? [
+          { x: now - windowMinutes * 60 * 1000, y: -channel.thresholdValue },
+          { x: now, y: -channel.thresholdValue },
+        ] : [];
+    lineChart.data.datasets[3].data = matchAlertMarkers(visibleRaw, channelAlerts, currentChannelId);
     lineChart.options.scales.x.min = now - windowMinutes * 60 * 1000;
     lineChart.options.scales.x.max = now;
     lineChart.update('none');
@@ -506,7 +519,7 @@
   function appendLivePoint(batchId, value, anomaly, observedAt) {
     const observed = date(observedAt);
     const sensorValue = number(value);
-    if (!observed || sensorValue == null) return;
+    if (!observed || observed.getTime() > Date.now() + MAX_FUTURE_SKEW_MS || sensorValue == null) return;
     if (batchId != null) rawReadings = rawReadings.filter((reading) => String(reading.batchId) !== String(batchId));
     rawReadings.push({ batchId, x: observed.getTime(), y: sensorValue, anomaly: anomaly === true });
     rawReadings.sort((a, b) => a.x - b.x);

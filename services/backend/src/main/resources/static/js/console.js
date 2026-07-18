@@ -501,7 +501,7 @@
   /* ==========================================================
      탭 4) 장치 master-detail + child 채널
      ========================================================== */
-  const THRESHOLD_DIRECTIONS = ['ABOVE', 'BELOW'];
+  const THRESHOLD_DIRECTIONS = ['ABOVE', 'BELOW', 'ABS_ABOVE'];
 
   function renderDevices(root) {
     root.innerHTML = `
