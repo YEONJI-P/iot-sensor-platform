@@ -14,6 +14,7 @@ import dev.bugi.sensor.device.repository.DeviceStatusRepository;
 import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.sensordata.anomaly.AnomalyDetector;
+import dev.bugi.sensor.sensordata.anomaly.ThresholdDetector;
 import dev.bugi.sensor.sensordata.dto.BatchIngestRequest;
 import dev.bugi.sensor.sensordata.dto.BatchIngestResult;
 import dev.bugi.sensor.sensordata.entity.MeasurementBatch;
@@ -30,6 +31,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Clock;
@@ -43,7 +45,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,7 +58,7 @@ class SensorDataServiceTest {
     @Mock SensorReadingRepository sensorReadingRepository;
     @Mock AlertRepository alertRepository;
     @Mock FailedReadingRepository failedReadingRepository;
-    @Mock AnomalyDetector anomalyDetector;
+    @Spy AnomalyDetector anomalyDetector = new ThresholdDetector();
     @Mock org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock AccessControlService accessControlService;
     @Mock Clock clock;
@@ -102,15 +103,6 @@ class SensorDataServiceTest {
         lenient().when(deviceStatusRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
-    /** 실제 ThresholdDetector(ABOVE)와 동일하게 value > threshold 를 흉내낸다(엣지 전이 재현용). */
-    private void stubBreachAbove() {
-        lenient().when(anomalyDetector.isAnomaly(any(), anyDouble())).thenAnswer(inv -> {
-            SensorChannel c = inv.getArgument(0);
-            double v = inv.getArgument(1);
-            return c.getThresholdValue() != null && v > c.getThresholdValue();
-        });
-    }
-
     private BatchIngestRequest req(double value) {
         Map<String, Double> m = new LinkedHashMap<>();
         m.put("s4", value);
@@ -138,7 +130,7 @@ class SensorDataServiceTest {
 
     @Test
     void 정상값은_alert를_만들지_않는다() {
-        arrange(1416.0); // isAnomaly 기본 false
+        arrange(1416.0);
 
         sensorDataService.receive(req(1000.0));
 
@@ -279,7 +271,6 @@ class SensorDataServiceTest {
     @Test
     void 발화하면_sensordata와_alert_이벤트를_모두_발행한다() {
         arrange(100.0);
-        stubBreachAbove();
 
         sensorDataService.receive(req(200.0));
 
@@ -294,7 +285,6 @@ class SensorDataServiceTest {
     @Test
     void 첫_초과는_발화하고_알람상태로_전환된다() {
         arrange(100.0);
-        stubBreachAbove();
 
         sensorDataService.receive(req(200.0));
 
@@ -306,7 +296,6 @@ class SensorDataServiceTest {
     @Test
     void 연속_초과는_한번만_발화하고_이후_억제된다() {
         arrange(100.0);
-        stubBreachAbove();
 
         sensorDataService.receive(req(200.0)); // 발화
         sensorDataService.receive(req(205.0)); // 억제
@@ -318,7 +307,6 @@ class SensorDataServiceTest {
     @Test
     void 여유구간에서는_해제도_재발화도_없다() {
         arrange(100.0); // 해제 경계 = 97
-        stubBreachAbove();
 
         sensorDataService.receive(req(200.0)); // 발화 → inAlarm
         sensorDataService.receive(req(99.0));  // 여유구간(97~100): 초과 아님이나 해제도 안 함
@@ -332,7 +320,6 @@ class SensorDataServiceTest {
     @Test
     void 여유구간_아래로_복귀하고_쿨다운_지나면_재발화한다() {
         arrange(100.0);
-        stubBreachAbove();
 
         sensorDataService.receive(req(200.0)); // 발화(FIXED)
         sensorDataService.receive(req(90.0));  // 97 미만 → 해제
@@ -347,7 +334,6 @@ class SensorDataServiceTest {
     @Test
     void 쿨다운_이내_산발스파이크는_재발화하지_않는다() {
         arrange(100.0);
-        stubBreachAbove();
 
         sensorDataService.receive(req(200.0)); // 발화(FIXED)
         sensorDataService.receive(req(90.0));  // 해제
@@ -363,7 +349,6 @@ class SensorDataServiceTest {
     @Test
     void 임계_1점1배_이하_초과는_WARNING() {
         arrange(100.0); // 110 이하면 WARNING
-        stubBreachAbove();
 
         sensorDataService.receive(req(105.0));
 
@@ -374,7 +359,6 @@ class SensorDataServiceTest {
     @Test
     void 임계_1점1배_초과는_CRITICAL() {
         arrange(100.0);
-        stubBreachAbove();
 
         sensorDataService.receive(req(200.0));
 
@@ -385,7 +369,6 @@ class SensorDataServiceTest {
     @Test
     void severity_경계_정확히_임계1점1배는_WARNING() {
         arrange(100.0); // 100 * 1.1 = 110, value <= 110 이면 WARNING
-        stubBreachAbove();
 
         sensorDataService.receive(req(110.0));
 
@@ -396,7 +379,6 @@ class SensorDataServiceTest {
     @Test
     void severity_경계_임계1점1배_초과는_CRITICAL() {
         arrange(100.0);
-        stubBreachAbove();
 
         sensorDataService.receive(req(110.01));
 
@@ -409,7 +391,6 @@ class SensorDataServiceTest {
     @Test
     void 해제경계_정확히_임계0점97배면_알람유지() {
         arrange(100.0); // 100 * 0.97 = 97, 해제 조건은 value < 97 이므로 97 은 유지
-        stubBreachAbove();
 
         sensorDataService.receive(req(200.0)); // 발화 → inAlarm
         sensorDataService.receive(req(97.0));  // 경계값 → 해제 안 됨
@@ -420,7 +401,6 @@ class SensorDataServiceTest {
     @Test
     void 해제경계_임계0점97배_미만이면_알람해제() {
         arrange(100.0);
-        stubBreachAbove();
 
         sensorDataService.receive(req(200.0)); // 발화 → inAlarm
         sensorDataService.receive(req(96.99)); // 경계 아래 → 해제

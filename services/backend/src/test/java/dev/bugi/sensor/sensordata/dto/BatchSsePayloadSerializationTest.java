@@ -30,7 +30,7 @@ class BatchSsePayloadSerializationTest {
                 10L, 3L,
                 Instant.parse("2026-07-18T00:00:00Z"),
                 Instant.parse("2026-07-18T00:00:01Z"),
-                List.of(new BatchSsePayload.Reading(5L, "s4", 1500.0)));
+                List.of(new BatchSsePayload.Reading(5L, "s4", 1500.0, true)));
 
         JsonNode node = mapper.readTree(mapper.writeValueAsString(payload));
 
@@ -46,9 +46,10 @@ class BatchSsePayloadSerializationTest {
         // 각 reading 필드명 고정.
         JsonNode reading = node.get("readings").get(0);
         assertThat(reading.fieldNames()).toIterable()
-                .containsExactly("channelId", "channelCode", "value");
+                .containsExactly("channelId", "channelCode", "value", "anomaly");
         assertThat(reading.get("channelId").asLong()).isEqualTo(5L);
         assertThat(reading.get("channelCode").asText()).isEqualTo("s4");
         assertThat(reading.get("value").asDouble()).isEqualTo(1500.0);
+        assertThat(reading.get("anomaly").asBoolean()).isTrue();
     }
 }

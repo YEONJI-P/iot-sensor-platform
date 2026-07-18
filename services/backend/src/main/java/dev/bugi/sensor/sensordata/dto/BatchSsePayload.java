@@ -14,6 +14,6 @@ public record BatchSsePayload(
         Instant receivedAt,
         List<Reading> readings
 ) {
-    public record Reading(Long channelId, String channelCode, Double value) {
+    public record Reading(Long channelId, String channelCode, Double value, boolean anomaly) {
     }
 }

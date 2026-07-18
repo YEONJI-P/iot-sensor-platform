@@ -10,13 +10,15 @@ import java.time.Instant;
 public record ReadingResponse(
         Long batchId,
         Double value,
+        boolean anomaly,
         Instant observedAt,
         Instant receivedAt
 ) {
-    public static ReadingResponse from(SensorReading reading) {
+    public static ReadingResponse from(SensorReading reading, boolean anomaly) {
         return new ReadingResponse(
                 reading.getBatch().getId(),
                 reading.getValue(),
+                anomaly,
                 reading.getBatch().getObservedAt(),
                 reading.getBatch().getReceivedAt());
     }

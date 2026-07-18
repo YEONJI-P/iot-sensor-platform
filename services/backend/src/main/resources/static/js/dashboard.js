@@ -38,6 +38,7 @@
   let currentDeviceId = null;
   let currentThreshold = null;
   let currentThresholdDirection = 'ABOVE';
+  let pointAnomalies = [];
   let pollTimer = null;
   let clockTimer = null;
   let sse = null;
@@ -203,7 +204,7 @@
     const l0 = lineChart.data.datasets[0], l1 = lineChart.data.datasets[1];
     l0.borderColor = C.signal;
     l0.backgroundColor = hexA(C.signal, .08);
-    l0.pointBackgroundColor = l0.data.map(pointColor);
+    l0.pointBackgroundColor = pointAnomalies.map(pointColor);
     l1.borderColor = C.brand;
     barChart.data.datasets[0].borderColor = C.alarm;
     barChart.data.datasets[0].backgroundColor = hexA(C.alarm, .6);
@@ -216,14 +217,9 @@
   }
   window.addEventListener('sm-theme-change', applyPalette);
 
-  // 표시용 순간값 비교다. 서버 알람은 쿨다운·해제 밴드를 적용하므로 이 결과와 다를 수 있다.
-  function exceedsThreshold(value, threshold, direction) {
-    const v = num(value), t = num(threshold);
-    if (v == null || t == null) return false;
-    return direction === 'BELOW' ? v < t : v > t;
-  }
-  function pointColor(v) {
-    return exceedsThreshold(v, currentThreshold, currentThresholdDirection) ? C.alarm : C.signal;
+  // 순간 임계 판정은 서버 ThresholdDetector 결과를 사용한다. 쿨다운·해제 상태와는 별개다.
+  function pointColor(anomaly) {
+    return anomaly === true ? C.alarm : C.signal;
   }
 
   /* ── 차트/캔버스 표시 토글 ── */
@@ -277,6 +273,7 @@
     currentDeviceId = null;
     currentThreshold = null;
     currentThresholdDirection = 'ABOVE';
+    pointAnomalies = [];
     $('thrBadge').textContent = '임계값 —';
     $('refreshTag').textContent = '갱신 대기';
     ['roAlertCount', 'roWeekCount', 'roDataCount'].forEach((id) => { $(id).textContent = '—'; });
@@ -336,10 +333,11 @@
     const recent = data.slice(0, MAX_POINTS).reverse();
     const labels = recent.map((d) => fmtTime(d.observedAt));
     const values = recent.map((d) => d.value);
+    pointAnomalies = recent.map((d) => d.anomaly === true);
 
     lineChart.data.labels = labels;
     lineChart.data.datasets[0].data = values;
-    lineChart.data.datasets[0].pointBackgroundColor = values.map(pointColor);
+    lineChart.data.datasets[0].pointBackgroundColor = pointAnomalies.map(pointColor);
     lineChart.data.datasets[1].data =
       currentThreshold == null ? [] : values.map(() => currentThreshold);
     lineChart.update();
@@ -387,12 +385,9 @@
     tbody.innerHTML = alerts.map(alertRowHtml).join('');
   }
 
-  function isExceed(a) {
-    return exceedsThreshold(a.sensorValue, a.thresholdValue, currentThresholdDirection);
-  }
-
   function alertRowHtml(a) {
-    const exceed = isExceed(a);
+    // nullable 참조 관례상 sensorValue·thresholdValue가 있으면 임계 alert다.
+    const exceed = num(a.sensorValue) != null && num(a.thresholdValue) != null;
     // 램프/행 강조는 severity 우선(freshness 알림은 sensorValue가 없어 임계 비교로는 약하게 보임).
     const critical = a.severity === 'CRITICAL';
     const lampCls = critical ? 'lamp alarm' : (a.severity === 'WARNING' ? 'lamp warn' : 'lamp ok');
@@ -420,12 +415,14 @@
     const ds = lineChart.data.datasets[0];
     lineChart.data.labels.push(fmtTime(reading.observedAt));
     ds.data.push(reading.value);
+    pointAnomalies.push(reading.anomaly === true);
     if (!Array.isArray(ds.pointBackgroundColor)) ds.pointBackgroundColor = [];
-    ds.pointBackgroundColor.push(pointColor(reading.value));
+    ds.pointBackgroundColor.push(pointColor(reading.anomaly));
 
     while (ds.data.length > MAX_POINTS) {
       lineChart.data.labels.shift();
       ds.data.shift();
+      pointAnomalies.shift();
       ds.pointBackgroundColor.shift();
     }
     lineChart.data.datasets[1].data =
@@ -462,7 +459,7 @@
       if (!currentChannelId || !Array.isArray(d.readings)) return;
       const reading = d.readings.find((r) => String(r.channelId) === String(currentChannelId));
       if (!reading) return;
-      appendLivePoint({ value: reading.value, observedAt: d.observedAt });
+      appendLivePoint({ value: reading.value, anomaly: reading.anomaly, observedAt: d.observedAt });
     });
 
     sse.addEventListener('alert', (e) => {

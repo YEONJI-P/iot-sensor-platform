@@ -8,7 +8,6 @@ import dev.bugi.sensor.device.entity.ChannelStatus;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.DeviceStatus;
 import dev.bugi.sensor.device.entity.SensorChannel;
-import dev.bugi.sensor.device.entity.SensorChannel.ThresholdDirection;
 import dev.bugi.sensor.device.repository.ChannelStatusRepository;
 import dev.bugi.sensor.device.repository.DeviceRepository;
 import dev.bugi.sensor.device.repository.DeviceStatusRepository;
@@ -136,12 +135,15 @@ public class SensorDataService {
                 .sourceSeq(request.getSourceSeq()).build());
 
         List<BatchSsePayload.Reading> sseReadings = new ArrayList<>(known.size());
+        Map<SensorChannel, Boolean> anomalyByChannel = new HashMap<>();
         for (Map.Entry<SensorChannel, Double> entry : known.entrySet()) {
             SensorChannel channel = entry.getKey();
             Double value = entry.getValue();
+            boolean anomaly = anomalyDetector.isAnomaly(channel, value);
             sensorReadingRepository.save(SensorReading.builder()
                     .batch(batch).channel(channel).value(value).build());
-            sseReadings.add(new BatchSsePayload.Reading(channel.getId(), channel.getCode(), value));
+            anomalyByChannel.put(channel, anomaly);
+            sseReadings.add(new BatchSsePayload.Reading(channel.getId(), channel.getCode(), value, anomaly));
         }
 
         markSeen(device, receivedAt);
@@ -159,7 +161,8 @@ public class SensorDataService {
 
         // 저장한 reading 마다 채널별 알람 판정.
         for (Map.Entry<SensorChannel, Double> entry : known.entrySet()) {
-            evaluateAlarm(device, batch, entry.getKey(), entry.getValue(), receivedAt, statusByChannelId);
+            evaluateAlarm(device, batch, entry.getKey(), entry.getValue(), anomalyByChannel.get(entry.getKey()),
+                    receivedAt, statusByChannelId);
         }
 
         log.info("batch 수신 저장 - deviceCode: {}, saved: {}, rejected: {}",
@@ -174,8 +177,7 @@ public class SensorDataService {
      * 상태 Map 은 receive 가 일괄 로드해 넘긴다(없으면 최초 판독이라 여기서 생성).
      */
     private void evaluateAlarm(Device device, MeasurementBatch batch, SensorChannel channel, double value,
-                               Instant now, Map<Long, ChannelStatus> statusByChannelId) {
-        boolean breach = anomalyDetector.isAnomaly(channel, value);
+                               boolean breach, Instant now, Map<Long, ChannelStatus> statusByChannelId) {
         ChannelStatus status = statusByChannelId.get(channel.getId());
         if (status == null) {
             status = channelStatusRepository.save(new ChannelStatus(channel));
@@ -190,7 +192,9 @@ public class SensorDataService {
                 log.debug("Alert 재발화 억제(쿨다운) - channel: {}, value: {}", channel.getCode(), value);
                 return;
             }
-            AlertSeverity severity = severityFor(channel, value);
+            AlertSeverity severity = anomalyDetector.isCritical(channel, value, CRITICAL_RATIO)
+                    ? AlertSeverity.CRITICAL
+                    : AlertSeverity.WARNING;
             Alert alert = Alert.builder()
                     .device(device).channel(channel).batch(batch)
                     .sensorValue(value).thresholdValue(threshold)
@@ -203,39 +207,13 @@ public class SensorDataService {
             log.warn("Alert 발화 - channel: {}, value: {}, severity: {}", channel.getCode(), value, severity);
             eventPublisher.publishEvent(
                     new SseBroadcastEvent("alert", device.getId(), AlertResponse.from(alert)));
-        } else if (!breach && status.isInAlarm() && isReleased(channel, value)) {
+        } else if (!breach && status.isInAlarm()
+                && anomalyDetector.isReleased(channel, value, RELEASE_RATIO)) {
             // 재발화 방지 여유 아래로 복귀 → 알람 해제(알림 없음).
             status.clearAlarm();
             log.info("Alert 해제 - channel: {}, value: {}", channel.getCode(), value);
         }
         // breach && inAlarm → 억제 / 여유 구간 → 알람 유지
-    }
-
-    // 히스테리시스 해제 밴드(데드밴드). 방향별 수식:
-    //   ABOVE: 초과가 이상 → 임계*0.97 아래로 내려와야 해제.
-    //   BELOW: 미달이 이상 → 임계*1.03 위로 올라와야 해제. (최소 구현, 데모 미사용)
-    private boolean isReleased(SensorChannel channel, double value) {
-        Double threshold = channel.getThresholdValue();
-        if (threshold == null) {
-            return true;
-        }
-        return channel.getThresholdDirection() == ThresholdDirection.BELOW
-                ? value > threshold * (2 - RELEASE_RATIO)
-                : value < threshold * RELEASE_RATIO;
-    }
-
-    // 발화 시점 심각도. 방향별:
-    //   ABOVE: 임계*1.1 이하 WARNING, 초과 CRITICAL.
-    //   BELOW: 임계*0.9 이상 WARNING, 미만 CRITICAL. (최소 구현, 데모 미사용)
-    private AlertSeverity severityFor(SensorChannel channel, double value) {
-        Double threshold = channel.getThresholdValue();
-        if (threshold == null) {
-            return AlertSeverity.CRITICAL;
-        }
-        boolean warning = channel.getThresholdDirection() == ThresholdDirection.BELOW
-                ? value >= threshold * (2 - CRITICAL_RATIO)
-                : value <= threshold * CRITICAL_RATIO;
-        return warning ? AlertSeverity.WARNING : AlertSeverity.CRITICAL;
     }
 
     // 수신 하트비트는 Device(설정)가 아니라 DeviceStatus(텔레메트리)에 찍는다 — 설정 감사 오염 방지.
@@ -253,6 +231,9 @@ public class SensorDataService {
         int capped = Math.min(Math.max(limit, 1), MAX_RECENT);
         return sensorReadingRepository
                 .findByChannelIdOrderByObservedAtDesc(channelId, PageRequest.of(0, capped))
-                .stream().map(ReadingResponse::from).toList();
+                .stream()
+                .map(reading -> ReadingResponse.from(
+                        reading, anomalyDetector.isAnomaly(channel, reading.getValue())))
+                .toList();
     }
 }
