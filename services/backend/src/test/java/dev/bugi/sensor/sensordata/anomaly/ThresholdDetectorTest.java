@@ -39,6 +39,17 @@ class ThresholdDetectorTest {
     }
 
     @Test
+    @DisplayName("ABS_ABOVE: 양·음 값의 절댓값이 임계값을 초과하면 이상으로 판정한다")
+    void absoluteAbove_detectsPositiveAndNegativeAnomalies() {
+        SensorChannel channel = channel(100.0, ThresholdDirection.ABS_ABOVE);
+
+        assertThat(detector.isAnomaly(channel, 100.01)).isTrue();
+        assertThat(detector.isAnomaly(channel, -100.01)).isTrue();
+        assertThat(detector.isAnomaly(channel, 100.0)).isFalse();
+        assertThat(detector.isAnomaly(channel, -100.0)).isFalse();
+    }
+
+    @Test
     @DisplayName("임계값이 null이면 방향과 무관하게 정상으로 판정한다")
     void whenThresholdIsNull_returnsFalse() {
         assertThat(detector.isAnomaly(channel(null, ThresholdDirection.ABOVE), 90.0)).isFalse();
@@ -55,6 +66,17 @@ class ThresholdDetectorTest {
     }
 
     @Test
+    @DisplayName("ABS_ABOVE 해제는 양·음 값 모두 절댓값 0.97배 미만에서만 성립한다")
+    void absoluteAbove_releaseUsesAbsoluteValue() {
+        SensorChannel channel = channel(100.0, ThresholdDirection.ABS_ABOVE);
+
+        assertThat(detector.isReleased(channel, 97.0, 0.97)).isFalse();
+        assertThat(detector.isReleased(channel, -97.0, 0.97)).isFalse();
+        assertThat(detector.isReleased(channel, 96.99, 0.97)).isTrue();
+        assertThat(detector.isReleased(channel, -96.99, 0.97)).isTrue();
+    }
+
+    @Test
     @DisplayName("CRITICAL 경계는 ABOVE 1.1 초과, BELOW 0.9 미만이다")
     void criticalBoundary_usesDirectionFormula() {
         assertThat(detector.isCritical(channel(100.0, ThresholdDirection.ABOVE), 110.0, 1.1)).isFalse();
@@ -64,10 +86,25 @@ class ThresholdDetectorTest {
     }
 
     @Test
+    @DisplayName("ABS_ABOVE CRITICAL은 양·음 값 모두 절댓값 1.1배 초과에서만 성립한다")
+    void absoluteAbove_criticalUsesAbsoluteValue() {
+        SensorChannel channel = channel(100.0, ThresholdDirection.ABS_ABOVE);
+
+        assertThat(detector.isCritical(channel, 110.0, 1.1)).isFalse();
+        assertThat(detector.isCritical(channel, -110.0, 1.1)).isFalse();
+        assertThat(detector.isCritical(channel, 110.01, 1.1)).isTrue();
+        assertThat(detector.isCritical(channel, -110.01, 1.1)).isTrue();
+    }
+
+    @Test
     @DisplayName("임계값이 null이면 해제 가능하고 CRITICAL 기본값을 사용한다")
     void nullThreshold_usesSafeTransitionDefaults() {
-        SensorChannel channel = channel(null, ThresholdDirection.ABOVE);
-        assertThat(detector.isReleased(channel, 100.0, 0.97)).isTrue();
-        assertThat(detector.isCritical(channel, 100.0, 1.1)).isTrue();
+        for (ThresholdDirection direction : ThresholdDirection.values()) {
+            SensorChannel channel = channel(null, direction);
+            assertThat(detector.isAnomaly(channel, -1_000_000.0)).isFalse();
+            assertThat(detector.isAnomaly(channel, 1_000_000.0)).isFalse();
+            assertThat(detector.isReleased(channel, 100.0, 0.97)).isTrue();
+            assertThat(detector.isCritical(channel, 100.0, 1.1)).isTrue();
+        }
     }
 }

@@ -138,6 +138,17 @@ class SensorDataServiceTest {
     }
 
     @Test
+    void 표시전용_null임계채널은_어떤_값에도_alert를_만들지_않는다() {
+        arrange(null);
+
+        sensorDataService.receive(req(-1_000_000.0));
+        sensorDataService.receive(req(1_000_000.0));
+
+        verify(alertRepository, never()).save(any());
+        assertThat(channelStatus.isInAlarm()).isFalse();
+    }
+
+    @Test
     void 장치코드_미존재는_실패적재_1행과_404를_반환하고_batch를_만들지_않는다() {
         when(deviceRepository.findByCode("NOPE")).thenReturn(Optional.empty());
         Map<String, Double> m = new LinkedHashMap<>();

@@ -74,9 +74,10 @@ public class SensorChannel {
         this.thresholdDirection = thresholdDirection;
     }
 
-    // 임계 초과 방향. 데모는 전부 ABOVE(값이 임계값을 위로 넘으면 이상).
+    // 임계 초과 방향. ABS_ABOVE 는 0을 중심으로 양·음 편위를 모두 감지한다.
     public enum ThresholdDirection {
         ABOVE,
-        BELOW
+        BELOW,
+        ABS_ABOVE
     }
 }

@@ -7,16 +7,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class ThresholdDetector implements AnomalyDetector {
 
-    /** 임계 방향별 이상·해제·심각도 경계 수식의 단일 구현. 데모 채널은 전부 ABOVE. */
+    /** 임계 방향별 이상·해제·심각도 경계 수식의 단일 구현. */
     @Override
     public boolean isAnomaly(SensorChannel channel, double value) {
         Double threshold = channel.getThresholdValue();
         if (threshold == null) {
             return false;
         }
-        return channel.getThresholdDirection() == ThresholdDirection.BELOW
-                ? value < threshold
-                : value > threshold;
+        return switch (directionOf(channel)) {
+            case BELOW -> value < threshold;
+            case ABS_ABOVE -> Math.abs(value) > threshold;
+            case ABOVE -> value > threshold;
+        };
     }
 
     @Override
@@ -25,9 +27,11 @@ public class ThresholdDetector implements AnomalyDetector {
         if (threshold == null) {
             return true;
         }
-        return channel.getThresholdDirection() == ThresholdDirection.BELOW
-                ? value > threshold * (2 - ratio)
-                : value < threshold * ratio;
+        return switch (directionOf(channel)) {
+            case BELOW -> value > threshold * (2 - ratio);
+            case ABS_ABOVE -> Math.abs(value) < threshold * ratio;
+            case ABOVE -> value < threshold * ratio;
+        };
     }
 
     @Override
@@ -36,8 +40,17 @@ public class ThresholdDetector implements AnomalyDetector {
         if (threshold == null) {
             return true;
         }
-        return channel.getThresholdDirection() == ThresholdDirection.BELOW
-                ? value < threshold * (2 - ratio)
-                : value > threshold * ratio;
+        return switch (directionOf(channel)) {
+            case BELOW -> value < threshold * (2 - ratio);
+            case ABS_ABOVE -> Math.abs(value) > threshold * ratio;
+            case ABOVE -> value > threshold * ratio;
+        };
+    }
+
+    /** 기존 nullable direction 계약은 ABOVE 로 해석한다. */
+    private ThresholdDirection directionOf(SensorChannel channel) {
+        return channel.getThresholdDirection() == null
+                ? ThresholdDirection.ABOVE
+                : channel.getThresholdDirection();
     }
 }

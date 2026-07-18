@@ -53,17 +53,21 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 INGEST_KEY_ENV = "INGEST_API_KEY"
 
 # C-MAPSS train_FD001: 공백 구분, 헤더 없음. 컬럼 인덱스 = unit0, cycle1, set2~4, s1=5 ... s21=25
-# s4 = index 8, s11 = index 15
+# 대표 채널: s2/s4/s7/s11/s15/s21 = index 6/8/11/15/19/25
 # CNC 실험 CSV: 헤더 있음(DictReader), 채널 code = 원본 컬럼명 그대로 사용.
 DEVICE_PRESETS = [
     {
         "code": "CMAPSS-U1",
         "kind": "cmapss",
         "unit": 1,
-        "channels": {"s4": 8, "s11": 15},
+        "channels": {"s2": 6, "s4": 8, "s7": 11, "s11": 15, "s15": 19, "s21": 25},
         "synthetic": {
+            "s2": {"normal": 642.4, "noise": 0.06, "anomaly": 644.1},
             "s4": {"normal": 1404.0, "noise": 0.8, "anomaly": 1424.0},
+            "s7": {"normal": 554.0, "noise": 0.08, "anomaly": 551.8},
             "s11": {"normal": 47.2, "noise": 0.04, "anomaly": 48.3},
+            "s15": {"normal": 8.42, "noise": 0.006, "anomaly": 8.54},
+            "s21": {"normal": 23.36, "noise": 0.02, "anomaly": 23.0},
         },
         "label": "엔진 유닛1",
     },
@@ -71,10 +75,14 @@ DEVICE_PRESETS = [
         "code": "CMAPSS-U2",
         "kind": "cmapss",
         "unit": 2,
-        "channels": {"s4": 8, "s11": 15},
+        "channels": {"s2": 6, "s4": 8, "s7": 11, "s11": 15, "s15": 19, "s21": 25},
         "synthetic": {
+            "s2": {"normal": 642.5, "noise": 0.06, "anomaly": 644.0},
             "s4": {"normal": 1406.0, "noise": 0.9, "anomaly": 1422.0},
+            "s7": {"normal": 553.9, "noise": 0.08, "anomaly": 551.9},
             "s11": {"normal": 47.1, "noise": 0.05, "anomaly": 48.2},
+            "s15": {"normal": 8.42, "noise": 0.006, "anomaly": 8.53},
+            "s21": {"normal": 23.35, "noise": 0.02, "anomaly": 23.0},
         },
         "label": "엔진 유닛2",
     },
@@ -86,11 +94,22 @@ DEVICE_PRESETS = [
             "S1_OutputPower": "S1_OutputPower",
             "S1_CurrentFeedback": "S1_CurrentFeedback",
             "X1_ActualAcceleration": "X1_ActualAcceleration",
+            "Y1_ActualAcceleration": "Y1_ActualAcceleration",
+            "Z1_ActualAcceleration": "Z1_ActualAcceleration",
+            "X1_CurrentFeedback": "X1_CurrentFeedback",
+            "S1_ActualVelocity": "S1_ActualVelocity",
+            "M1_CURRENT_FEEDRATE": "M1_CURRENT_FEEDRATE",
         },
         "synthetic": {
             "S1_OutputPower": {"normal": 0.12, "noise": 0.01, "anomaly": 0.36},
             "S1_CurrentFeedback": {"normal": 14.0, "noise": 0.8, "anomaly": 38.0},
-            "X1_ActualAcceleration": {"normal": 320.0, "noise": 35.0, "anomaly": 1120.0},
+            "X1_ActualAcceleration": {"normal": 180.0, "noise": 35.0, "anomaly": -1050.0},
+            "Y1_ActualAcceleration": {"normal": 120.0, "noise": 24.0, "anomaly": 700.0},
+            "Z1_ActualAcceleration": {"normal": 160.0, "noise": 42.0, "anomaly": -1300.0},
+            "X1_CurrentFeedback": {"normal": 4.5, "noise": 0.7, "anomaly": -19.0},
+            # 표시 전용 채널은 이상 구간에도 정상 운전 중심값을 유지한다.
+            "S1_ActualVelocity": {"normal": 53.3, "noise": 0.08, "anomaly": 53.3},
+            "M1_CURRENT_FEEDRATE": {"normal": 50.0, "noise": 0.05, "anomaly": 50.0},
         },
         "label": "CNC 1호기",
     },

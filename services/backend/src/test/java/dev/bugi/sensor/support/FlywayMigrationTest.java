@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 빈 PostgreSQL에 운영(prod) 설정을 그대로 적용한다.
  *
- * 컨텍스트가 뜨려면 Flyway V1/V2/V3 적용 후 Hibernate ddl-auto=validate가 성공해야 한다.
+ * 컨텍스트가 뜨려면 Flyway V1~V4 적용 후 Hibernate ddl-auto=validate가 성공해야 한다.
  * 별도 SQL로 history, 핵심 스키마와 공개 데모 토폴로지를 확인해 테스트 설정이 우연히
  * create/update로 우회하지 않았는지도 막는다.
  */
@@ -51,7 +51,7 @@ class FlywayMigrationTest {
     Environment environment;
 
     @Test
-    void prod는_flyway_V1_V2_V3를_적용하고_공개_데모_토폴로지를_준비한다() {
+    void prod는_flyway_V1부터_V4를_적용하고_공개_데모_토폴로지를_준비한다() {
         assertThat(environment.getProperty("spring.flyway.enabled")).isEqualTo("true");
         assertThat(environment.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
 
@@ -60,7 +60,7 @@ class FlywayMigrationTest {
                 WHERE version IS NOT NULL AND success = true
                 ORDER BY installed_rank
                 """, String.class);
-        assertThat(appliedVersions).containsExactly("1", "2", "3");
+        assertThat(appliedVersions).containsExactly("1", "2", "3", "4");
 
         // 정규화 batch 스키마: 관측 시각(observed_at)은 batch 가 timestamptz 로 가진다.
         String observedAtType = jdbcTemplate.queryForObject("""
@@ -106,7 +106,7 @@ class FlywayMigrationTest {
         assertThat(rowCount("factories")).isEqualTo(2);
         assertThat(rowCount("zones")).isEqualTo(3);
         assertThat(rowCount("device")).isEqualTo(3);
-        assertThat(rowCount("sensor_channel")).isEqualTo(7);
+        assertThat(rowCount("sensor_channel")).isEqualTo(20);
         assertThat(rowCount("users")).isZero();
         assertThat(rowCount("zone_users")).isZero();
 
@@ -126,25 +126,52 @@ class FlywayMigrationTest {
                 .isEqualTo(3);
 
         // 채널 배치: device code → 채널 code 집합.
-        assertThat(channelCodes("CMAPSS-U1")).containsExactlyInAnyOrder("s4", "s11");
-        assertThat(channelCodes("CMAPSS-U2")).containsExactlyInAnyOrder("s4", "s11");
+        assertThat(channelCodes("CMAPSS-U1"))
+                .containsExactlyInAnyOrder("s2", "s4", "s7", "s11", "s15", "s21");
+        assertThat(channelCodes("CMAPSS-U2"))
+                .containsExactlyInAnyOrder("s2", "s4", "s7", "s11", "s15", "s21");
         assertThat(channelCodes("CNC-EXP01"))
-                .containsExactlyInAnyOrder("S1_OutputPower", "S1_CurrentFeedback", "X1_ActualAcceleration");
+                .containsExactlyInAnyOrder(
+                        "S1_OutputPower", "S1_CurrentFeedback",
+                        "X1_ActualAcceleration", "Y1_ActualAcceleration", "Z1_ActualAcceleration",
+                        "X1_CurrentFeedback", "S1_ActualVelocity", "M1_CURRENT_FEEDRATE");
 
         // 채널 임계값(device.channel 조합 → threshold).
-        assertThat(channelThresholds()).containsExactlyInAnyOrderEntriesOf(Map.of(
-                "CMAPSS-U1|s4", 1416.0,
-                "CMAPSS-U1|s11", 47.8,
-                "CMAPSS-U2|s4", 1416.0,
-                "CMAPSS-U2|s11", 47.8,
-                "CNC-EXP01|S1_OutputPower", 0.25,
-                "CNC-EXP01|S1_CurrentFeedback", 30.0,
-                "CNC-EXP01|X1_ActualAcceleration", 900.0
+        assertThat(channelThresholds()).containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
+                Map.entry("CMAPSS-U1|s2", 643.4),
+                Map.entry("CMAPSS-U1|s4", 1416.0),
+                Map.entry("CMAPSS-U1|s7", 552.4),
+                Map.entry("CMAPSS-U1|s11", 47.8),
+                Map.entry("CMAPSS-U1|s15", 8.485),
+                Map.entry("CMAPSS-U1|s21", 23.165),
+                Map.entry("CMAPSS-U2|s2", 643.4),
+                Map.entry("CMAPSS-U2|s4", 1416.0),
+                Map.entry("CMAPSS-U2|s7", 552.4),
+                Map.entry("CMAPSS-U2|s11", 47.8),
+                Map.entry("CMAPSS-U2|s15", 8.485),
+                Map.entry("CMAPSS-U2|s21", 23.165),
+                Map.entry("CNC-EXP01|S1_OutputPower", 0.25),
+                Map.entry("CNC-EXP01|S1_CurrentFeedback", 30.0),
+                Map.entry("CNC-EXP01|X1_ActualAcceleration", 800.0),
+                Map.entry("CNC-EXP01|Y1_ActualAcceleration", 500.0),
+                Map.entry("CNC-EXP01|Z1_ActualAcceleration", 1000.0),
+                Map.entry("CNC-EXP01|X1_CurrentFeedback", 14.0)
         ));
-        // 데모 임계 방향은 전부 ABOVE.
+
+        assertThat(directionCounts()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "ABOVE", 10,
+                "BELOW", 4,
+                "ABS_ABOVE", 4
+        ));
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM sensor_channel WHERE threshold_direction = 'ABOVE'", Integer.class))
-                .isEqualTo(7);
+                "SELECT count(*) FROM sensor_channel WHERE threshold_value IS NULL AND threshold_direction IS NULL",
+                Integer.class)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT code FROM sensor_channel
+                WHERE threshold_value IS NULL AND threshold_direction IS NULL AND unit IS NULL
+                ORDER BY code
+                """, String.class))
+                .containsExactly("M1_CURRENT_FEEDRATE", "S1_ActualVelocity");
     }
 
     private int rowCount(String tableName) {
@@ -184,6 +211,7 @@ class FlywayMigrationTest {
         return jdbcTemplate.query("""
                 SELECT d.code AS device_code, c.code AS channel_code, c.threshold_value
                 FROM sensor_channel c JOIN device d ON d.id = c.device_id
+                WHERE c.threshold_value IS NOT NULL
                 """, resultSet -> {
             Map<String, Double> thresholds = new HashMap<>();
             while (resultSet.next()) {
@@ -192,6 +220,21 @@ class FlywayMigrationTest {
                         resultSet.getDouble("threshold_value"));
             }
             return thresholds;
+        });
+    }
+
+    private Map<String, Integer> directionCounts() {
+        return jdbcTemplate.query("""
+                SELECT threshold_direction, count(*) AS channel_count
+                FROM sensor_channel
+                WHERE threshold_direction IS NOT NULL
+                GROUP BY threshold_direction
+                """, resultSet -> {
+            Map<String, Integer> counts = new HashMap<>();
+            while (resultSet.next()) {
+                counts.put(resultSet.getString("threshold_direction"), resultSet.getInt("channel_count"));
+            }
+            return counts;
         });
     }
 }

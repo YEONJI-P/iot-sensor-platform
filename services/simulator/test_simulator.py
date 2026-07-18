@@ -1,12 +1,17 @@
 import os
+import tempfile
 import unittest
 from datetime import datetime
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+import simulator
 from simulator import (
+    DEVICE_PRESETS,
     SyntheticGenerator,
     is_active_at,
+    load_cmapss_batches,
+    load_cnc_batches,
     main,
     parse_active_days,
     parse_active_hours,
@@ -71,6 +76,72 @@ class SyntheticGeneratorTest(unittest.TestCase):
 
         self.assertGreater(values[0], 10.0)
         self.assertGreater(values[2], values[0])
+
+    def test_display_only_channels_keep_normal_target_during_anomaly(self):
+        specs = {
+            "display": {"normal": 50.0, "noise": 0.0, "anomaly": 50.0},
+            "alerted": {"normal": 10.0, "noise": 0.0, "anomaly": 20.0},
+        }
+        generator = SyntheticGenerator(specs, seed=1, anomaly_rate=1.0)
+
+        measurements = generator.next_measurements()
+
+        self.assertEqual(measurements["display"], 50.0)
+        self.assertGreater(measurements["alerted"], 10.0)
+
+
+class ReplayPresetTest(unittest.TestCase):
+    def test_public_presets_have_three_devices_and_twenty_channels(self):
+        self.assertEqual([preset["code"] for preset in DEVICE_PRESETS], [
+            "CMAPSS-U1", "CMAPSS-U2", "CNC-EXP01",
+        ])
+        self.assertEqual([len(preset["channels"]) for preset in DEVICE_PRESETS], [6, 6, 8])
+        self.assertEqual([len(preset["synthetic"]) for preset in DEVICE_PRESETS], [6, 6, 8])
+        for preset in DEVICE_PRESETS:
+            self.assertEqual(set(preset["channels"]), set(preset["synthetic"]))
+
+    def test_cmapss_loader_builds_six_channel_batch_and_skips_partial_row(self):
+        values = [1, 7, 0, 0, 0] + list(range(1, 22))
+        short_values = values[:-1]
+        other_unit_values = [2, 8, *values[2:]]
+        with tempfile.TemporaryDirectory() as data_dir, \
+                patch.object(simulator, "DATA_DIR", data_dir):
+            path = os.path.join(data_dir, "cmapss_train_FD001.txt")
+            with open(path, "w") as data_file:
+                data_file.write(" ".join(map(str, values)) + "\n")
+                data_file.write(" ".join(map(str, short_values)) + "\n")
+                data_file.write(" ".join(map(str, other_unit_values)) + "\n")
+
+            batches = load_cmapss_batches(1, DEVICE_PRESETS[0]["channels"])
+
+        self.assertEqual(batches, [(7, {
+            "s2": 2.0,
+            "s4": 4.0,
+            "s7": 7.0,
+            "s11": 11.0,
+            "s15": 15.0,
+            "s21": 21.0,
+        })])
+
+    def test_cnc_loader_builds_eight_channel_batch_and_keeps_valid_partial_values(self):
+        channels = DEVICE_PRESETS[2]["channels"]
+        rows = [
+            {channel: str(index + 1) for index, channel in enumerate(channels)},
+            {channel: "bad" for channel in channels},
+        ]
+        rows[1]["S1_OutputPower"] = "0.2"
+        with tempfile.TemporaryDirectory() as data_dir, \
+                patch.object(simulator, "DATA_DIR", data_dir):
+            path = os.path.join(data_dir, "experiment.csv")
+            with open(path, "w", newline="") as data_file:
+                writer = simulator.csv.DictWriter(data_file, fieldnames=list(channels.values()))
+                writer.writeheader()
+                writer.writerows(rows)
+
+            batches = load_cnc_batches("experiment.csv", channels)
+
+        self.assertEqual(len(batches[0][1]), 8)
+        self.assertEqual(batches[1], (1, {"S1_OutputPower": 0.2}))
 
 
 class IngestAuthenticationTest(unittest.TestCase):

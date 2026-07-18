@@ -4,9 +4,9 @@
 -- 대상: factories, zones, users, zone_users, device, sensor_channel
 -- 물리 Device ─ SensorChannel 모델: 물리 노드(device.code)와 그 아래 측정 채널
 --   (sensor_channel.code) 로 나눈다. device/sensor_channel 내용은
---   services/backend/.../db/migration/V3__public_demo_topology.sql 의 데모
+--   services/backend/.../db/migration/V3/V4 의 데모
 --   토폴로지와 정확히 일치해야 하며, services/simulator/simulator.py 의
---   REPLAY_PRESET(deviceCode/채널code) 매핑도 이 값과 일치해야 한다.
+--   DEVICE_PRESETS(deviceCode/채널code) 매핑도 이 값과 일치해야 한다.
 -- 비밀번호: pgcrypto의 BCrypt(strength=10) — Spring BCryptPasswordEncoder 호환
 --
 -- 실행 전: 테이블이 생성된 상태(Spring Boot 기동 후)여야 하며, 중복 실행은
@@ -79,20 +79,38 @@ INSERT INTO device (
 
 -- =============================================================================
 -- 6. Sensor Channels  (물리 device 아래 측정 채널. 임계값·임계 방향은 채널이 가진다)
---    threshold_value 는 실데이터 건강구간 분포에서 산출(대략치, 튜닝 가능).
+--    C-MAPSS 신규 threshold는 FD001 각 unit의 초기 20%를 합친 건강 분포에서
+--    열화 방향 단측 99.5 percentile(하락은 0.5 percentile)을 반올림했다:
+--    s2 643.4 ABOVE, s7 552.4 BELOW, s15 8.485 ABOVE, s21 23.165 BELOW.
+--    기존 s4 1416 ABOVE, s11 47.8 ABOVE 계약은 보존한다.
+--    CNC ABS_ABOVE threshold는 experiment01 abs(value) 99.5 percentile 반올림값:
+--    X/Y/Z acceleration 800/500/1000, X current 14.
 --    code 는 simulator.py DEVICE_PRESETS 의 채널 code 와 일치해야 한다.
 -- =============================================================================
 INSERT INTO sensor_channel (
     device_id, code, unit, quantity_kind, threshold_value, threshold_direction, created_at, updated_at
 ) VALUES
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's4',                   '°R',    'temperature',  1416.0, 'ABOVE', NOW(), NOW()),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's11',                  'psia',  'pressure',       47.8, 'ABOVE', NOW(), NOW()),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's4',                   '°R',    'temperature',  1416.0, 'ABOVE', NOW(), NOW()),
-    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's11',                  'psia',  'pressure',       47.8, 'ABOVE', NOW(), NOW()),
-    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'S1_OutputPower',       'kW',    'power',          0.25, 'ABOVE', NOW(), NOW()),
-    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'S1_CurrentFeedback',   'A',     'current',        30.0, 'ABOVE', NOW(), NOW()),
-    -- 단측 비교라 양의 극단 스파이크만 감지(음의 편위 미감지) — 데모용 단순화
-    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'X1_ActualAcceleration','mm/s²', 'acceleration',  900.0, 'ABOVE', NOW(), NOW());
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's2',                   '°R',    'temperature',    643.4, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's4',                   '°R',    'temperature',   1416.0, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's7',                   'psia',  'pressure',       552.4, 'BELOW', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's11',                  'psia',  'pressure',        47.8, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's15',                  NULL,    'ratio',            8.485, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U1'), 's21',                  'lbm/s', 'coolant_flow',   23.165, 'BELOW', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's2',                   '°R',    'temperature',    643.4, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's4',                   '°R',    'temperature',   1416.0, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's7',                   'psia',  'pressure',       552.4, 'BELOW', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's11',                  'psia',  'pressure',        47.8, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's15',                  NULL,    'ratio',            8.485, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CMAPSS-U2'), 's21',                  'lbm/s', 'coolant_flow',   23.165, 'BELOW', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'S1_OutputPower',       'kW',    'power',            0.25, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'S1_CurrentFeedback',   'A',     'current',         30.0, 'ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'X1_ActualAcceleration','mm/s²', 'acceleration',   800.0, 'ABS_ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'Y1_ActualAcceleration','mm/s²', 'acceleration',   500.0, 'ABS_ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'Z1_ActualAcceleration','mm/s²', 'acceleration',  1000.0, 'ABS_ABOVE', NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'X1_CurrentFeedback',   'A',     'current',         14.0, 'ABS_ABOVE', NOW(), NOW()),
+    -- 표시 전용: 데이터셋 메타데이터로 확정하지 못한 unit과 threshold를 만들지 않는다.
+    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'S1_ActualVelocity',    NULL,    'velocity',        NULL, NULL, NOW(), NOW()),
+    ((SELECT id FROM device WHERE code = 'CNC-EXP01'), 'M1_CURRENT_FEEDRATE',  NULL,    'feedrate',        NULL, NULL, NOW(), NOW());
 
 
 -- =============================================================================
