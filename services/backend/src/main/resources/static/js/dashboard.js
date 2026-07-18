@@ -140,7 +140,7 @@
         labels: [],
         datasets: [
           {
-            label: '센서값',
+            label: '센서값 · 붉은 점=임계 초과(순간값)',
             data: [],
             borderColor: C.signal,
             backgroundColor: hexA(C.signal, .08),
@@ -216,6 +216,7 @@
   }
   window.addEventListener('sm-theme-change', applyPalette);
 
+  // 표시용 순간값 비교다. 서버 알람은 쿨다운·해제 밴드를 적용하므로 이 결과와 다를 수 있다.
   function exceedsThreshold(value, threshold, direction) {
     const v = num(value), t = num(threshold);
     if (v == null || t == null) return false;

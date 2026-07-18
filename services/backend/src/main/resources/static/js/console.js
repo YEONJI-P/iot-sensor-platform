@@ -661,7 +661,7 @@
       } catch (e) { toast(e.message, true); }
     }
 
-    /* ── 채널 관리(선택된 장치의 채널만 클라이언트에서 필터) ── */
+    /* ── 채널 관리(선택된 장치의 채널을 서버에서 필터) ── */
     async function loadChannelsForDevice(deviceId) {
       if (!deviceId) {
         chListNode.innerHTML = '<div class="empty">장치를 선택하면 채널 목록이 표시됩니다.</div>';
@@ -671,8 +671,7 @@
       chCreateBtn.disabled = false;
       setLoading(chListNode);
       try {
-        const channels = await apiGet('/channels');
-        const mine = (channels || []).filter(c => String(c.deviceId) === String(deviceId));
+        const mine = (await apiGet(`/channels?deviceId=${encodeURIComponent(deviceId)}`)) || [];
         if (mine.length === 0) { setEmpty(chListNode, '등록된 채널이 없습니다.'); return; }
         chListNode.innerHTML = `<table class="table">
           <thead><tr><th>코드</th><th>단위</th><th>측정 종류</th><th>임계값</th><th>방향</th><th>액션</th></tr></thead>

@@ -90,9 +90,13 @@ def load_cnc_batches(filename: str, channels: dict) -> list[tuple[int, dict]]:
     with open(path) as f:
         reader = csv.DictReader(f)
         for idx, row in enumerate(reader):
-            try:
-                measurements = {name: float(row[col]) for name, col in channels.items()}
-            except (KeyError, ValueError):
+            measurements = {}
+            for name, col in channels.items():
+                try:
+                    measurements[name] = float(row[col])
+                except (KeyError, ValueError):
+                    continue
+            if not measurements:
                 continue
             batches.append((idx, measurements))
     return batches
