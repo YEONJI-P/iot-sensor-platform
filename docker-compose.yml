@@ -1,11 +1,10 @@
 name: sensor-monitor
 
 services:
-  # 데모용 DB. `docker-compose up` 시 함께 뜬다.
-  # 일상 개발에선 공용 Postgres 를 쓰므로, 전체 up 대신 `up explain` 처럼 선택 기동하면 이 서비스는 안 뜬다.
+  # 독립 풀 데모 전용 DB. 홈서버 구성은 docker-compose.home.yml 에서 기존 PostgreSQL의
+  # 별도 sensor_monitor database를 사용하므로 이 컨테이너를 만들지 않는다.
   postgres:
     image: postgres:15
-    container_name: sensor-postgres
     environment:
       POSTGRES_DB: sensor_monitor
       POSTGRES_USER: sensor_monitor
@@ -27,14 +26,13 @@ services:
     # `:local` 로 못박아 로컬 빌드 산출물과 배포 이미지를 눈으로 구분한다.
     # 배포용 이미지는 ghcr.io/yeonji-p/sensor-monitor-backend:<git-sha> (README §배포 이미지 계약).
     image: sensor-monitor-backend:local
-    container_name: sensor-backend
     depends_on:
       postgres:
         condition: service_healthy
-    # 서비스 소속 설정(JWT_SECRET, EXPLAIN_ENABLED 등)은 여기서 읽는다. cp services/backend/.env.example services/backend/.env
-    env_file:
-      - path: ./services/backend/.env
-        required: false
+      explain:
+        condition: service_started
+    # 필수 서비스 설정은 소비 서비스가 소유한다. 기동 전 README에 따라 example을 복사한다.
+    env_file: ./services/backend/.env
     environment:
       # 오케스트레이션 토폴로지 값만 둔다(내부 호스트명·데모 DB 크레덴셜). env_file 보다 우선 적용됨.
       # SERVER_PORT 는 이미지 기본값(8080)과 같은 값을 명시해 둔다 — 데모 호스트 매핑과 한눈에 맞춰 보라고.
@@ -44,6 +42,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/sensor_monitor
       DB_USERNAME: sensor_monitor
       DB_PASSWORD: sensor_monitor
+      EXPLAIN_ENABLED: "true"
       EXPLAIN_BASE_URL: http://explain:8000
     ports:
       - "8080:8080"
@@ -53,30 +52,51 @@ services:
     # backend 와 같은 이유로 로컬 태그를 명시한다(암묵적 :latest 금지).
     # 배포용 이미지는 ghcr.io/yeonji-p/sensor-monitor-explain:<git-sha> (README §배포 이미지 계약).
     image: sensor-monitor-explain:local
-    container_name: sensor-explain
     # 서비스 소속 설정(EXPLAIN_PROVIDER, GEMINI_API_KEY, MODEL_NAME 등)은 여기서 읽는다. cp services/explain/.env.example services/explain/.env
-    env_file:
-      - path: ./services/explain/.env
-        required: false
+    env_file: ./services/explain/.env
     environment:
       # PORT 는 이미지 기본값(8000)과 같은 값을 명시해 둔다. env_file 보다 우선 적용됨.
       PORT: 8000
     ports:
       - "8000:8000"
 
-  # 실측 CSV 리플레이 배치. 상시 서비스가 아니라 seed 프로파일에서만 뜬다.
-  #   docker-compose --profile seed run --rm simulator --all
-  # 선행: seed.sql 로 계정/장치/임계값이 먼저 적재돼 있어야 한다.
-  simulator:
+  # 실측 CSV 리플레이 배치. DB seed와 구분하기 위해 replay 프로파일로만 실행한다.
+  # 선행: seed.sql 로 계정/장치/임계값을 먼저 적재하고 공개 데이터 파일을 내려받는다.
+  simulator-replay:
     build: ./services/simulator
-    container_name: sensor-simulator
-    profiles: [seed]
+    image: sensor-monitor-simulator:local
+    profiles: [replay]
     depends_on:
       backend:
         condition: service_started
     volumes:
       - ./services/simulator/data:/app/data
-    command: ["--all", "--base-url", "http://backend:8080"]
+    command: ["--mode", "replay", "--all", "--base-url", "http://backend:8080"]
+
+  # 합성 데이터 상시 스트림. 명시적으로 live 프로파일을 켰을 때만 평일 운영시간에 전송한다.
+  simulator-live:
+    build: ./services/simulator
+    image: sensor-monitor-simulator:local
+    profiles: [live]
+    depends_on:
+      backend:
+        condition: service_started
+    command:
+      - --mode
+      - synthetic
+      - --all
+      - --interval
+      - "10"
+      - --active-days
+      - mon-fri
+      - --active-hours
+      - 08:00-18:00
+      - --timezone
+      - Asia/Seoul
+      - --base-url
+      - http://backend:8080
+    restart: unless-stopped
+    stop_grace_period: 10s
 
 volumes:
   postgres_data:

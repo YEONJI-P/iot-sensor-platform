@@ -2,7 +2,7 @@
 
 센서 이상에 근거와 권고를 붙이고, 데이터 수신 끊김의 원인을 진단하는 Python/FastAPI 서비스. 탐지 자체는 Spring이 규칙으로 수행하고, 이 서비스는 설명과 권고만 LLM으로 생성한다. Spring과는 HTTP 요청-응답으로 연동한다(메시지 버스 없음).
 
-현재 상태는 골격(스켈레톤)이다. 기본 provider는 키 없이 동작하는 echo 스텁이며, Gemini 연동은 provider 교체로 붙인다.
+Spring backend와 HTTP로 연동된 상태이며, 기본 provider는 키 없이 동작하는 echo 스텁입니다. Gemini provider 구현은 있으나 실제 키·모델을 사용한 호출 검증은 남아 있습니다.
 
 ## 구조
 
@@ -69,5 +69,3 @@ MODEL_NAME=gemini-2.0-flash # 실제 사용 가능 모델은 AI Studio에서 확
 ## 남은 작업
 
 - Gemini provider 실호출 검증 (모델명·SDK 버전 확정, `uv add`로 설치)
-- Spring 측 explain 클라이언트(HTTP) 연동, Alert의 evidence/recommendation 채우기
-- docker-compose에 explain 서비스 추가

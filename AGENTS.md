@@ -7,14 +7,15 @@
 - Gradle 명령은 `services/backend/`에서 실행한다.
 - Spring 실행: `./gradlew bootRun`
 - Spring 검증: `./gradlew test` 또는 변경 범위에 맞는 `--tests` 선택
-- 전체 컨테이너 데모: 저장소 루트에서 `docker compose up --build`
-- simulator는 상시 서비스가 아니라 seed 프로파일로 실행한다. 정확한 인자는 `README.md`를 확인한다.
+- 독립 풀 데모: 저장소 루트에서 `docker compose up --build`
+- 홈서버 추가 설치 골격: `docker-compose.home.yml`을 단독 사용하며 기존 PostgreSQL의 별도 database에 연결한다. 공개 전 blocker는 `README.md`를 확인한다.
+- simulator는 replay 일회성 프로파일과 synthetic live 프로파일을 구분한다. 정확한 인자는 `README.md`를 확인한다.
 - H2 context smoke test는 Spring 설정과 bean 부팅만 확인한다. repository 쿼리, 제약, PostgreSQL 타입은 Docker가 필요한 Testcontainers 테스트로 검증한다.
 
 ## 설정과 비밀값
 
 - `.env` 원문은 읽지 않는다. 서비스별 `.env.example`, `application.yml`, `docker-compose.yml`에서 키와 계약만 확인한다.
-- 서비스 설정 키는 소비하는 서비스의 `.env.example`에만 둔다. 컨테이너 간 주소와 데모 토폴로지는 compose 설정에 둔다.
+- 서비스 설정 키는 소비하는 서비스의 `.env.example`에만 둔다. 루트 `.env.example`은 홈 Compose의 이미지 tag·외부 network 보간만 소유하고, 컨테이너 간 주소와 데모 토폴로지는 compose 설정에 둔다.
 - 포트와 호스트명을 문서 기억으로 정하지 말고 실행 모드의 실제 설정을 확인한다. 로컬 단독 실행과 컨테이너 데모의 포트를 섞지 않는다.
 - `JWT_SECRET`과 provider API key는 환경변수로만 주입한다.
 

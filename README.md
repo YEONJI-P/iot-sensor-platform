@@ -358,7 +358,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
   | `VIEWER` | 소속 구역 읽기 전용 (장치 변경 불가) |
 
 - 공장(Factory), 구역(Zone) 계층과 구역 소속 관계로 접근 범위를 계산하는 `AccessControlService`
-- prod의 공개 데모 토폴로지는 Flyway V2가 자동 투입하고, local의 계정 포함 데모 데이터는 `services/simulator/seed.sql`로 별도 투입
+- prod의 공개 데모 토폴로지는 Flyway V3가 자동 투입하고, local의 계정 포함 데모 데이터는 `services/simulator/seed.sql`로 별도 투입
 
 ### 센서 데이터 수신과 알림
 
@@ -391,8 +391,9 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 ### 센서 시뮬레이터 (`services/simulator/simulator.py`)
 
 - 실제 센서처럼 서버 외부에서 `POST /sensor-data`를 직접 호출
-- 공개 실측 시계열(C-MAPSS 엔진, CNC 밀링)을 시간 순으로 리플레이 — 원본 한 행이 물리 device 하나의 관측 batch 하나(`measurements` 채널 code→value map)로 요청 1건이 됩니다
-- 대상 device(`deviceCode`), 전송 간격(초), 행 수를 CLI 인자로 지정
+- `replay`: 공개 실측 시계열(C-MAPSS 엔진, CNC 밀링)을 시간 순으로 재생 — 원본 한 행이 물리 device 하나의 관측 batch 하나(`measurements` 채널 code→value map)로 요청 1건이 됩니다
+- `synthetic`: 정상 랜덤워크에 간헐적 임계 초과·회복 구간을 섞어 무제한 생성. 운영 요일·시간대 밖에는 프로세스를 종료하지 않고 전송만 대기합니다
+- 대상 device(`deviceCode`), 전송 간격, 전송 수, 난수 seed와 운영시간을 CLI 인자로 지정
 
 ### 실시간 대시보드
 
@@ -415,6 +416,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 - SSE 기반 실시간 대시보드 (접근 범위 스코핑)
 - LLM 기반 이상 근거, 원인 진단 (Python 분석 서비스 HTTP 연동)
 - 실측 공개 센서 시계열(C-MAPSS 엔진, CNC 밀링) 리플레이로 시뮬레이터 데이터 교체
+- 운영시간을 반영한 무제한 합성 데이터 스트림과 Compose live 프로파일
 - Refresh Token 저장·회전 (PostgreSQL)
 
 ### 향후
@@ -430,9 +432,16 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 ### 사전 요구사항
 
 - Java 17
-- 아래 두 모드 중 하나
-  - **로컬 실행**: 공용 PostgreSQL 인스턴스(이 저장소 밖에서 실행, DB·계정 `sensor_monitor`)
-  - **컨테이너 데모**: Docker, Docker Compose (자체 Postgres 포함, compose 하나로 전체 기동)
+- 컨테이너 실행 시 Docker와 Docker Compose
+
+Compose는 두 경로만 유지합니다. 직접 개발 실행은 별도 Compose가 아닙니다.
+
+| 경로 | 파일 | PostgreSQL | 용도 |
+|---|---|---|---|
+| 독립 풀 데모 | `docker-compose.yml` | 전용 컨테이너·volume 포함 | 로컬 통합 실행, 평가자 데모 |
+| 홈서버 추가 설치 | `docker-compose.home.yml` | 기존 인스턴스의 별도 `sensor_monitor` database | 운영 blocker 해결 후 독립 앱 stack으로 설치 |
+
+두 Compose 파일은 각각 단독 실행합니다. 홈서버 파일을 독립 데모 파일 위에 override로 겹쳐 쓰지 않습니다.
 
 ### 로컬 실행 (공용 Postgres + bootRun)
 
@@ -452,33 +461,79 @@ export JWT_SECRET=$(head -c 48 /dev/urandom | base64)
 cd services/backend
 ./gradlew bootRun
 
-# (선택) explain 분석 서비스만 컨테이너로: 루트에서 docker compose up -d explain
+# (선택) explain은 services/explain/README.md에 따라 별도 실행
 ```
 
 > 공용 Postgres 가 기본 접속정보와 다르면 `DB_URL`·`DB_USERNAME`·`DB_PASSWORD` 를 셸 env 로 재정의합니다. Spring 은 `.env` 를 자동 로드하지 않으므로 위 값은 셸/IDE 에 직접 주입합니다.
 
-### 컨테이너 데모 (`docker compose up`)
+### 독립 풀 데모 (`docker-compose.yml`)
 
-평가자·데모용. postgres + backend + explain 을 한 번에 기동한다. 공용 DB 불필요.
+평가자·로컬 통합 확인용입니다. postgres + backend + explain을 함께 기동하며 외부 DB가 필요 없습니다. backend는 local 프로파일로 스키마를 만든 뒤 `seed.sql`이 계정과 데모 토폴로지를 넣습니다.
 
 ```bash
-cp .env.example .env          # JWT_SECRET 등 채우기 (compose 가 자동 로드)
-docker compose up --build     # postgres + backend + explain
+# 서비스별 설정 준비. backend JWT_SECRET은 실행 전에 반드시 교체
+cp services/backend/.env.example services/backend/.env
+cp services/explain/.env.example services/explain/.env
+
+docker compose up --build -d  # postgres + backend + explain
 
 # 초기 데이터(계정/장치/임계값) 적재
 docker compose exec -T postgres psql -U sensor_monitor -d sensor_monitor < services/simulator/seed.sql
 
-# (선택) 실측 CSV 리플레이 배치 — seed 프로파일
-docker compose --profile seed run --rm simulator --all
+# (선택) 공개 실측 데이터 리플레이. command를 덧붙이지 않아 내부 backend 주소를 유지
+bash services/simulator/data/download.sh
+docker compose --profile replay run --rm simulator-replay
+
+# (선택) 평일 08:00~18:00, 10초 간격 합성 데이터 상시 스트림
+docker compose --profile live up -d simulator-live
 ```
 
-> 컨테이너 postgres 는 호스트 `5433` 에 노출됩니다(공용 `5432` 와 충돌 방지). backend 는 내부 네트워크(`postgres:5432`)로 접속하므로 `DB_*` 재정의는 필요 없습니다. 리플레이 데이터(`services/simulator/data/`)는 저장소에 포함되지 않으니 먼저 내려받아야 합니다.
+> 컨테이너 postgres는 호스트 `5433`, backend는 `8080`, explain은 `8000`에 노출됩니다. backend는 내부 네트워크의 `postgres:5432`를 사용하므로 서비스 env의 `DB_*` 값보다 Compose 토폴로지 값이 우선합니다. `docker compose down`은 volume을 유지하고, `down -v`는 데모 DB를 삭제하므로 데이터 삭제 의도가 있을 때만 사용합니다.
+
+### 홈서버 추가 설치 골격 (`docker-compose.home.yml`)
+
+홈서버 기본 stack에는 sensor-monitor를 넣지 않습니다. 필요할 때 이 저장소의 독립 Compose를 추가하며, PostgreSQL 컨테이너나 DB volume은 만들지 않습니다. 다만 현재 파일은 아래 운영 blocker를 숨기지 않는 설치 골격이며, 조건을 해결하기 전에는 public 배포하지 않습니다.
+
+선행 조건:
+
+- 홈서버 기존 PostgreSQL 인스턴스에 별도 `sensor_monitor` database와 전용 role 생성
+- PostgreSQL 컨테이너와 backend가 함께 참가할 외부 Docker network 준비
+- reverse proxy와 backend가 함께 참가할 외부 Docker network 준비
+- backend·explain·simulator 이미지를 같은 commit SHA로 GHCR에 수동 발행
+- public reverse proxy에서 무인증 수신 경로 `POST /sensor-data` 차단. live simulator는 내부 `app` network로 backend를 직접 호출
+- 첫 로그인·승인을 위한 운영 관리자 bootstrap 절차 확정
+- PostgreSQL host 디스크 사용량 경보와 임계 도달 시 `simulator-live` 중단 자동화
+
+```bash
+# Compose 보간값: 이미지 SHA와 외부 network 이름
+cp .env.example .env
+
+# 서비스가 직접 소비하는 설정
+cp services/backend/.env.example services/backend/.env
+cp services/explain/.env.example services/explain/.env
+
+# services/backend/.env에서 JWT_SECRET과 홈서버 DB_URL/계정/비밀번호를 설정
+# DB_URL의 host는 localhost가 아니라 외부 DB network의 PostgreSQL 서비스 이름
+
+# backend + explain. 빈 database에는 prod/Flyway V1~V3가 자동 적용
+docker compose -f docker-compose.home.yml up -d
+
+# synthetic 상시 스트림까지 활성화
+docker compose -f docker-compose.home.yml --profile live up -d
+```
+
+`docker-compose.home.yml`의 simulator는 DB에 직접 연결하지 않고 backend HTTP API만 호출합니다. Compose를 내려도 외부 PostgreSQL database는 삭제되지 않습니다. V3는 공장·구역·device·채널만 만들며 로그인 사용자는 만들지 않습니다. 또한 현재 `/sensor-data`는 simulator 수신을 위해 Spring에서 무인증이므로 public proxy에서 그대로 노출하면 임의 데이터 적재와 디스크 고갈 위험이 있습니다. 관리자 bootstrap, ingest 경로 제한, DB host guard는 홈서버 공개 전 필수 이월 작업입니다.
 
 ### 테스트 실행
 
 ```bash
+# backend
 cd services/backend
 ./gradlew test
+
+# simulator
+cd ../simulator
+python -m unittest -v test_simulator.py
 ```
 
 > 테스트는 세 갈래입니다.
@@ -492,7 +547,7 @@ cd services/backend
 http://localhost:23100/swagger-ui/index.html
 ```
 
-> bootRun 기본 포트는 `23100`. 컨테이너 데모(`docker compose up`)는 호스트 `8080`을 유지합니다.
+> bootRun 기본 포트는 `23100`. 독립 풀 데모는 호스트 `8080`, 홈서버는 reverse proxy가 정한 공개 주소를 사용합니다.
 
 ### 로컬 데모 초기 데이터 투입 (`services/simulator/seed.sql`)
 
@@ -521,25 +576,34 @@ psql -U sensor_monitor -d sensor_monitor -f services/simulator/seed.sql
 
 ### 센서 시뮬레이터 실행 (`services/simulator/simulator.py`)
 
-실측 공개 데이터(C-MAPSS, CNC)를 시간 순으로 리플레이해 `POST /sensor-data`로 전송합니다. 원본 한 행 = 물리 device 하나의 관측 batch 하나입니다.
+하나의 CLI가 `replay`와 `synthetic` 모드를 제공합니다. 둘 다 `POST /sensor-data`만 사용하며 DB에는 직접 접속하지 않습니다.
 
 ```bash
-# 1. 데이터 내려받기 (최초 1회)
+# replay: 데이터 내려받기(최초 1회) 후 원본 전체 재생
 bash services/simulator/data/download.sh
-
-# 2. 의존성 설치
 pip install requests
+python services/simulator/simulator.py --mode replay --all
 
-# 3. 전체 물리 device 3개 리플레이 (1초 간격)
-python services/simulator/simulator.py --all
+# replay 일부만 재생
+python services/simulator/simulator.py --mode replay \
+  --devices CMAPSS-U1 CNC-EXP01 --interval 0.5 --limit 100
 
-# 특정 device만 / 간격, 행수 조절
-python services/simulator/simulator.py --devices CMAPSS-U1 CNC-EXP01 --interval 0.5 --limit 100
+# synthetic: 평일 공장 운영시간에 10초 간격으로 무제한 생성
+python services/simulator/simulator.py --mode synthetic --all \
+  --interval 10 --active-days mon-fri --active-hours 08:00-18:00 \
+  --timezone Asia/Seoul
+
+# 테스트용 재현 가능 패턴 100건
+python services/simulator/simulator.py --mode synthetic --all --limit 100 --seed 42
 ```
 
-> device는 `deviceCode`(`CMAPSS-U1`/`CMAPSS-U2`/`CNC-EXP01`)로 식별합니다. 이 code와 그 아래 채널 code는 시뮬레이터가 요청을 보낼 DB의 device/sensor_channel 데이터(로컬은 `seed.sql`, prod는 Flyway V3)와 일치해야 하며, 다르면 404(장치 없음) 또는 채널별 부분 실패로 남습니다.
+`synthetic`은 `--limit 0`이 무제한이고 `Ctrl+C` 또는 컨테이너의 `SIGTERM`으로 정리 경로를 거쳐 종료합니다. 고정 `--seed`는 simulator 재시작을 요구하는 옵션이 아니라 같은 난수 순서를 재현하는 테스트 옵션이며, 생략하면 실행마다 다른 패턴을 만듭니다. 운영시간 밖에는 컨테이너를 종료하지 않고 전송만 대기합니다. 연결 실패 시 최대 60초까지 backoff하고 성공하면 원래 간격으로 돌아갑니다.
+
+device는 `deviceCode`(`CMAPSS-U1`/`CMAPSS-U2`/`CNC-EXP01`)로 식별합니다. 이 code와 채널 code는 요청 대상 DB의 device/sensor_channel 데이터(독립 데모는 `seed.sql`, 홈서버 prod는 Flyway V3)와 일치해야 합니다. 현재 batch에는 replay/synthetic 출처 구분 필드가 없으므로 두 모드의 값을 같은 DB에 넣으면 데이터만 보고 출처를 구분할 수 없습니다.
 
 ### 환경변수
+
+루트 `.env.example`은 홈서버 Compose의 이미지 tag와 외부 Docker network 이름만 소유합니다. JWT·DB·provider 설정을 루트에 중복하지 않습니다. 독립 풀 데모는 루트 `.env`를 사용하지 않습니다.
 
 backend (`services/backend/.env.example`, 소비처 `src/main/resources/application.yml`)
 
@@ -566,16 +630,19 @@ explain (`services/explain/.env.example`, 소비처 `app/dependencies.py`)
 
 > **포트 기본값이 실행 모드마다 다른 이유** — 앱 기본값(23100/23200)은 `bootRun`·`uv run` 로컬 개발용이고, 컨테이너 이미지 기본값(8080/8000)은 배포 계약입니다. 이미지의 `EXPOSE`·`ENV` 는 항상 후자와 같은 값을 유지하므로, 배포 측이 포트 env 를 아예 안 줘도 계약대로 뜹니다. 호스트 포트 매핑은 이미지가 아니라 compose·배포 측이 정합니다.
 
+simulator는 환경변수를 소비하지 않고 CLI 인자만 사용합니다. 비밀값이 아닌 전송 모드·간격·운영시간은 각 Compose의 `command`가 실행 정책으로 명시합니다.
+
 ### 운영 DB 스키마와 Flyway
 
 - backend의 `prod` 프로파일은 Flyway migration을 먼저 실행하고 Hibernate는 `ddl-auto=validate`로 결과만 검증합니다. 첫 스키마는 `services/backend/src/main/resources/db/migration/V1__initial_schema.sql`입니다.
-- 저장소의 `docker-compose.yml`은 로컬 데모이므로 `SPRING_PROFILES_ACTIVE=local`을 명시하고 기존 `ddl-auto=update` 동작을 유지합니다.
+- 독립 풀 데모 `docker-compose.yml`은 `SPRING_PROFILES_ACTIVE=local`을 명시하고 `ddl-auto=update` + `seed.sql` 경로를 유지합니다.
+- 홈서버 `docker-compose.home.yml`은 `prod` 프로파일로 기존 PostgreSQL 인스턴스의 별도 database에 Flyway migration을 적용합니다.
 - 빈 운영 DB와 접속 role은 배포 인프라가 먼저 만들어야 합니다. Flyway는 DB/role 생성이나 백업 도구가 아니며, 이미 만들어진 DB 안에서 schema와 명시적으로 버전 관리하는 기준 데이터만 적용합니다.
 - V1은 schema만 만들고 checksum 고정을 위해 이후 수정하지 않습니다.
 - V2(`V2__normalized_ingest_model.sql`)는 수신 모델을 "채널=Device"에서 물리 Device ─ SensorChannel ─ MeasurementBatch ─ SensorReading 정규화 모델로 전환하는 DDL입니다. `device.type`·`device.threshold_value` 제거와 `device.code`(UK) 추가, `sensor_channel`·`measurement_batch`·`sensor_reading`·`channel_status` 신설, `alert`에 `channel_id`·`batch_id` 추가, scalar 텔레메트리 테이블 `sensor_data` 제거를 포함합니다.
 - V3(`V3__public_demo_topology.sql`)는 V2가 만든 새 스키마 위에, 공개 홈서버와 새 prod DB에 공통인 공장 2개·구역 3개·물리 device 3개·측정 채널 7개를 한 번만 넣습니다.
 - V2·V3 모두 사용자, 구역 소속, 비밀번호를 만들지 않습니다. 따라서 공개 홈서버의 첫 계정과 최소 권한 bootstrap 절차는 배포 전에 별도로 확정해야 합니다.
-- local compose는 Flyway를 실행하지 않으므로 V2·V3가 적용되지 않습니다. local의 device/채널 데이터와 여러 역할 계정이 필요할 때만 기존 `services/simulator/seed.sql`을 수동 실행합니다.
+- 독립 풀 데모는 Flyway를 실행하지 않으므로 V2·V3가 적용되지 않습니다. device/채널과 여러 역할 계정은 `services/simulator/seed.sql`을 수동 실행해 넣습니다.
 - **seed.sql과 Flyway V3는 같은 토폴로지(공장 2·구역 3·device 3·채널 7)를 서로 다른 경로로 넣습니다.** 같은 DB에 둘 다 적용하지 않습니다 — 중복 적용하면 `device.code` UNIQUE 충돌과 `factories`/`zones` 중복이 납니다. 로컬은 seed.sql만, prod는 Flyway(V1+V2+V3)만 적용합니다.
 - 운영 DB에 한 번 적용된 migration은 내용을 수정하지 않고 다음 변경을 새 `Vn__...sql` 파일로 추가합니다. V1·V2·V3 모두 적용 후 checksum 불변 대상입니다.
 
@@ -604,11 +671,12 @@ Flyway history가 없는데 테이블이 들어 있는 DB는 prod 첫 기동이 
 ```
 ghcr.io/yeonji-p/sensor-monitor-backend:<git-sha>
 ghcr.io/yeonji-p/sensor-monitor-explain:<git-sha>
+ghcr.io/yeonji-p/sensor-monitor-simulator:<git-sha>
 ```
 
 - **`latest` 는 발행하지 않습니다.** 같은 태그가 다른 코드를 가리키면 무엇이 돌고 있는지 확인할 수도, 되돌릴 좌표를 잡을 수도 없습니다.
 - 발행은 `.github/workflows/publish-images.yml` 의 **수동 실행(workflow_dispatch)** 뿐입니다. main push 는 CI(`ci.yml`, 빌드·테스트)만 돌고 이미지를 덮어쓰지 않습니다.
-- 로컬 `docker compose` 가 만드는 이미지는 `sensor-monitor-backend:local`·`sensor-monitor-explain:local` 로, 배포 이미지와 태그가 겹치지 않습니다.
+- 독립 풀 데모가 만드는 이미지는 `sensor-monitor-backend:local`·`sensor-monitor-explain:local`·`sensor-monitor-simulator:local`로, 배포 이미지와 태그가 겹치지 않습니다.
 - 최초 발행된 GHCR 패키지는 **private**입니다. workflow의 OCI source 라벨은 이미지 출처와 저장소 연결을 명시할 뿐 visibility를 public으로 바꾸지 않습니다.
 - private 유지 시 홈서버가 GHCR 로그인 자격증명을 가져야 합니다. 공개 전환은 발행 후 패키지 설정에서 별도로 결정하며, workflow가 자동으로 바꾸지 않습니다.
 
