@@ -80,6 +80,9 @@ class IngestAuthenticationTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "INGEST_API_KEY"):
                     require_ingest_api_key(environ)
 
+    def test_key_is_trimmed_before_use(self):
+        self.assertEqual(require_ingest_api_key({"INGEST_API_KEY": "  shared-key  "}), "shared-key")
+
     @patch("simulator.requests.post")
     def test_send_adds_ingest_header(self, post_mock):
         post_mock.return_value.status_code = 200

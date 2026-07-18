@@ -6,6 +6,7 @@ import dev.bugi.sensor.global.security.CustomAuthenticationEntryPoint;
 import dev.bugi.sensor.sensordata.security.IngestKeyFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -69,6 +70,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/dashboard/stream")
                         .permitAll()
 
+                        // 장치 중심 overview — 운영 데이터 조회 역할만 허용
+                        .requestMatchers(HttpMethod.GET, "/dashboard/overview")
+                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
+
                         // 센서 데이터 조회 — FACTORY_ADMIN 제외 (운영 데이터 불필요)
                         .requestMatchers(HttpMethod.GET, "/sensor-data", "/sensor-data/**")
                         .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
@@ -118,5 +123,12 @@ public class SecurityConfig {
     @Bean
     public IngestKeyFilter ingestKeyFilter(@Value("${ingest.api-key}") String ingestApiKey) {
         return new IngestKeyFilter(ingestApiKey);
+    }
+
+    @Bean
+    public FilterRegistrationBean<IngestKeyFilter> ingestKeyFilterRegistration(IngestKeyFilter filter) {
+        FilterRegistrationBean<IngestKeyFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 }

@@ -187,6 +187,27 @@ public class SecurityConfigTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    @WithMockUser(roles = "MEMBER")
+    void get_dashboard_overview_member_ok() throws Exception {
+        mockMvc.perform(get("/dashboard/overview"))
+                .andExpect(status().is(not(403)));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void get_dashboard_overview_viewer_ok() throws Exception {
+        mockMvc.perform(get("/dashboard/overview"))
+                .andExpect(status().is(not(403)));
+    }
+
+    @Test
+    @WithMockUser(roles = "FACTORY_ADMIN")
+    void get_dashboard_overview_factory_admin_forbidden() throws Exception {
+        mockMvc.perform(get("/dashboard/overview"))
+                .andExpect(status().isForbidden());
+    }
+
     // -- 역할 제한
 
     @Test

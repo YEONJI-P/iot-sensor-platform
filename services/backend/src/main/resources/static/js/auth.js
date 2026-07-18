@@ -102,6 +102,7 @@
 
   window.Auth = {
     ROLE_LABEL, decodeJwt, getToken, getPayload, getRole, getEmployeeId,
-    isLoggedIn, login, logout, apiFetch, requireLogin, hasRole, toLogin,
+    isLoggedIn, login, logout, apiFetch, refreshAccessToken: tryRefresh,
+    requireLogin, hasRole, toLogin,
   };
 })();

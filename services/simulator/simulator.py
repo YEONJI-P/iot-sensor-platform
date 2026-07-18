@@ -259,7 +259,7 @@ def require_ingest_api_key(environ: dict | None = None) -> str:
     ingest_api_key = source.get(INGEST_KEY_ENV)
     if ingest_api_key is None or not ingest_api_key.strip():
         raise ValueError(f"{INGEST_KEY_ENV} 환경변수가 필요합니다")
-    return ingest_api_key
+    return ingest_api_key.strip()
 
 
 def send(base_url: str, device_code: str, source_seq: int, measurements: dict, ingest_api_key: str) -> bool:

@@ -81,7 +81,7 @@ class DashboardOverviewServiceTest {
         when(device.getExpectedIntervalSeconds()).thenReturn(30);
 
         when(deviceStatus.getDeviceId()).thenReturn(7L);
-        when(deviceStatus.getLastSeenAt()).thenReturn(NOW.minusSeconds(31));
+        when(deviceStatus.getLastSeenAt()).thenReturn(NOW.minusSeconds(61));
         when(deviceStatusRepository.findAllById(List.of(7L))).thenReturn(List.of(deviceStatus));
 
         when(channel.getId()).thenReturn(11L);
@@ -115,7 +115,7 @@ class DashboardOverviewServiceTest {
                 assertThat(zoneResult.devices()).singleElement().satisfies(deviceResult -> {
                     assertThat(deviceResult.id()).isEqualTo(7L);
                     assertThat(deviceResult.freshness()).isEqualTo(Freshness.STALE);
-                    assertThat(deviceResult.lastSeenAt()).isEqualTo(NOW.minusSeconds(31));
+                    assertThat(deviceResult.lastSeenAt()).isEqualTo(NOW.minusSeconds(61));
                     assertThat(deviceResult.currentAlarmCount()).isEqualTo(1);
                     assertThat(deviceResult.channels()).singleElement().satisfies(channelResult -> {
                         assertThat(channelResult.latestValue()).isEqualTo(81.5);
@@ -175,7 +175,8 @@ class DashboardOverviewServiceTest {
         assertThat(DashboardOverviewService.freshness(null, null, NOW)).isEqualTo(Freshness.NOT_MONITORED);
         assertThat(DashboardOverviewService.freshness(0, null, NOW)).isEqualTo(Freshness.NOT_MONITORED);
         assertThat(DashboardOverviewService.freshness(30, null, NOW)).isEqualTo(Freshness.NEVER_SEEN);
-        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(30), NOW)).isEqualTo(Freshness.ONLINE);
-        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(31), NOW)).isEqualTo(Freshness.STALE);
+        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(60), NOW)).isEqualTo(Freshness.ONLINE);
+        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(61), NOW)).isEqualTo(Freshness.STALE);
+        assertThat(DashboardOverviewService.freshness(30, NOW.plusSeconds(1), NOW)).isEqualTo(Freshness.ONLINE);
     }
 }

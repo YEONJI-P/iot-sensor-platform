@@ -21,6 +21,8 @@
   let pollTimer = null;
   let clockTimer = null;
   let sse = null;
+  let sseReconnectTimer = null;
+  let sseRecovering = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -418,7 +420,10 @@
     const token = Auth.getToken();
     if (!token || sse) return;
     sse = new EventSource('/dashboard/stream?token=' + encodeURIComponent(token));
-    sse.addEventListener('connected', () => setSseLamp('ok'));
+    sse.addEventListener('connected', () => {
+      sseRecovering = false;
+      setSseLamp('ok');
+    });
     sse.addEventListener('sensor-data', (event) => {
       try { applySensorBatch(JSON.parse(event.data)); } catch {}
     });
@@ -429,7 +434,29 @@
       await loadOverview();
       if (String(currentDeviceId) === String(alert.deviceId)) await loadDeviceAlerts();
     });
-    sse.onerror = () => { setSseLamp('alarm'); console.warn('[SSE] 연결 오류 — 자동 재연결 대기'); };
+    sse.onerror = async () => {
+      setSseLamp('alarm');
+      if (!sse || sse.readyState !== EventSource.CLOSED || sseRecovering) {
+        console.warn('[SSE] 연결 오류 — 브라우저 자동 재연결 대기');
+        return;
+      }
+
+      const closed = sse;
+      sse = null;
+      closed.close();
+      sseRecovering = true;
+      console.warn('[SSE] 연결 종료 — 토큰 갱신 후 재구독');
+
+      if (!await Auth.refreshAccessToken()) {
+        Auth.toLogin();
+        return;
+      }
+      clearTimeout(sseReconnectTimer);
+      sseReconnectTimer = setTimeout(() => {
+        sseRecovering = false;
+        initSse();
+      }, 1000);
+    };
   }
 
   async function resync() {

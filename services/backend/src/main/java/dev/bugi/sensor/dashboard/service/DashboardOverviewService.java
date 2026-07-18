@@ -44,6 +44,7 @@ public class DashboardOverviewService {
 
     private static final String UNASSIGNED_FACTORY = "미지정 공장";
     private static final String UNASSIGNED_ZONE = "미지정 구역";
+    private static final long FRESHNESS_GRACE_MULTIPLIER = 2L;
     private static final EnumSet<Role> ALLOWED_ROLES =
             EnumSet.of(Role.SYSTEM_ADMIN, Role.MEMBER, Role.VIEWER);
 
@@ -145,8 +146,9 @@ public class DashboardOverviewService {
         if (lastSeenAt == null) {
             return Freshness.NEVER_SEEN;
         }
-        long elapsedSeconds = Duration.between(lastSeenAt, now).getSeconds();
-        return elapsedSeconds > expectedIntervalSeconds ? Freshness.STALE : Freshness.ONLINE;
+        long elapsedSeconds = Math.max(0L, Duration.between(lastSeenAt, now).getSeconds());
+        long staleAfterSeconds = Math.multiplyExact(expectedIntervalSeconds.longValue(), FRESHNESS_GRACE_MULTIPLIER);
+        return elapsedSeconds > staleAfterSeconds ? Freshness.STALE : Freshness.ONLINE;
     }
 
     private record GroupKey(Long id, String name) {
