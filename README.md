@@ -415,13 +415,13 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 - 장치 freshness 감지 (구역 코호트 판정으로 오탐 억제, 침묵 원인 explain 진단)
 - SSE 기반 실시간 대시보드 (접근 범위 스코핑)
 - LLM 기반 이상 근거, 원인 진단 (Python 분석 서비스 HTTP 연동)
+- Gemini provider 실호출 (`gemini-3.1-flash-lite`, `google-genai`)
 - 실측 공개 센서 시계열(C-MAPSS 엔진, CNC 밀링) 리플레이로 시뮬레이터 데이터 교체
 - 운영시간을 반영한 무제한 합성 데이터 스트림과 Compose live 프로파일
 - Refresh Token 저장·회전 (PostgreSQL)
 
 ### 향후
 
-- explain provider Gemini 실호출 (현재 기본 `echo`, 키 주입 시 전환)
 - MQTT 수신 경로 도입 (엣지 게이트웨이와의 표준 연동)
 - 대용량 시계열 저장소(TimescaleDB) 검토
 

@@ -6,6 +6,15 @@
 from fastapi.testclient import TestClient
 
 
+def test_settings_use_supported_gemini_model_by_default(monkeypatch):
+    """Gemini 전환 시 종료되지 않은 실검증 모델을 기본값으로 사용한다."""
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+
+    from app.dependencies import Settings
+
+    assert Settings(_env_file=None).model_name == "gemini-3.1-flash-lite"
+
+
 def test_health_returns_up():
     """헬스 엔드포인트가 200/UP을 반환한다 (감시 규약: status == "UP")."""
     from app.main import app
