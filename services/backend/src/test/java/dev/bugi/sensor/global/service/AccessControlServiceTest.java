@@ -8,6 +8,7 @@ import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.factory.entity.ZoneUser;
 import dev.bugi.sensor.factory.repository.ZoneUserRepository;
+import dev.bugi.sensor.factory.repository.ZoneRepository;
 import dev.bugi.sensor.user.entity.Role;
 import dev.bugi.sensor.user.entity.User;
 import dev.bugi.sensor.user.repository.UserRepository;
@@ -30,6 +31,7 @@ import static org.mockito.Mockito.*;
 class AccessControlServiceTest {
 
     @Mock DeviceRepository deviceRepository;
+    @Mock ZoneRepository zoneRepository;
     @Mock ZoneUserRepository zoneUserRepository;
     @Mock UserRepository userRepository;
     @Mock SensorChannelRepository sensorChannelRepository;
@@ -144,6 +146,74 @@ class AccessControlServiceTest {
 
         assertThat(accessControlService.getAccessibleDeviceIds(viewer)).isEmpty();
         verify(deviceRepository, never()).findIdsByZoneIdIn(any());
+    }
+
+    // ── getAccessibleZones : 역할별 zone selector 범위 ───────────────
+
+    @Test
+    void accessibleZones_system_admin_returns_all() {
+        User admin = user(Role.SYSTEM_ADMIN, 1L, null);
+        Zone first = zoneOfFactory(100L, 10L);
+        Zone second = zoneOfFactory(200L, 20L);
+        when(zoneRepository.findAll()).thenReturn(List.of(first, second));
+
+        assertThat(accessControlService.getAccessibleZones(admin)).containsExactly(first, second);
+    }
+
+    @Test
+    void accessibleZones_factory_admin_scoped_to_factory() {
+        User admin = user(Role.FACTORY_ADMIN, 1L, 10L);
+        Zone own = zoneOfFactory(100L, 10L);
+        when(zoneRepository.findAllByFactoryId(10L)).thenReturn(List.of(own));
+
+        assertThat(accessControlService.getAccessibleZones(admin)).containsExactly(own);
+    }
+
+    @Test
+    void accessibleZones_factory_admin_without_factory_is_empty() {
+        User admin = user(Role.FACTORY_ADMIN, 1L, null);
+
+        assertThat(accessControlService.getAccessibleZones(admin)).isEmpty();
+        verifyNoInteractions(zoneRepository, zoneUserRepository);
+    }
+
+    @Test
+    void accessibleZones_member_returns_assigned_zones() {
+        User member = user(Role.MEMBER, 2L, null);
+        ZoneUser first = membershipOfZone(100L);
+        ZoneUser second = membershipOfZone(200L);
+        when(zoneUserRepository.findAllByUserId(2L)).thenReturn(List.of(first, second));
+
+        assertThat(accessControlService.getAccessibleZones(member))
+                .extracting(Zone::getId).containsExactly(100L, 200L);
+    }
+
+    @Test
+    void accessibleZones_member_without_assignment_is_empty() {
+        User member = user(Role.MEMBER, 2L, null);
+        when(zoneUserRepository.findAllByUserId(2L)).thenReturn(List.of());
+
+        assertThat(accessControlService.getAccessibleZones(member)).isEmpty();
+        verifyNoInteractions(zoneRepository);
+    }
+
+    @Test
+    void accessibleZones_viewer_returns_assigned_zones() {
+        User viewer = user(Role.VIEWER, 3L, null);
+        ZoneUser membership = membershipOfZone(300L);
+        when(zoneUserRepository.findAllByUserId(3L)).thenReturn(List.of(membership));
+
+        assertThat(accessControlService.getAccessibleZones(viewer))
+                .extracting(Zone::getId).containsExactly(300L);
+    }
+
+    @Test
+    void accessibleZones_viewer_without_assignment_is_empty() {
+        User viewer = user(Role.VIEWER, 3L, null);
+        when(zoneUserRepository.findAllByUserId(3L)).thenReturn(List.of());
+
+        assertThat(accessControlService.getAccessibleZones(viewer)).isEmpty();
+        verifyNoInteractions(zoneRepository);
     }
 
     // ── assertCanAccessDevice : zone null · 타 공장 차단 ───────────────

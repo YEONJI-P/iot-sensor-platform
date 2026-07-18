@@ -17,6 +17,24 @@
     .hint { font-family: var(--font-mono); font-size: .68rem; color: var(--text-faint); letter-spacing: .04em; }
     .actions-cell { display: flex; gap: .4rem; flex-wrap: wrap; }
     .panel + .panel { margin-top: 1.4rem; }
+    .device-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .device-toolbar .field { min-width: min(280px, 100%); margin: 0; }
+    .device-master-detail { display: grid; grid-template-columns: minmax(300px, .85fr) minmax(0, 1.4fr); gap: 1.2rem; margin-top: 1.2rem; align-items: start; }
+    .device-master-detail > .panel + .panel { margin-top: 0; }
+    .device-row { cursor: pointer; }
+    .device-row:hover td { background: color-mix(in srgb, var(--brand) 7%, transparent); }
+    .device-row.selected td { background: color-mix(in srgb, var(--brand) 13%, transparent); }
+    .device-row.selected td:first-child { box-shadow: inset 3px 0 var(--brand); }
+    .detail-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 1.2rem; }
+    .detail-item dt { color: var(--text-faint); font-family: var(--font-mono); font-size: .68rem; letter-spacing: .05em; margin-bottom: .25rem; }
+    .detail-item dd { margin: 0; overflow-wrap: anywhere; }
+    .detail-section { border-top: 1px solid var(--line); margin-top: 1.2rem; padding-top: 1.2rem; }
+    .detail-head { display: flex; align-items: center; justify-content: space-between; gap: .8rem; margin-bottom: .8rem; }
+    .modal-box .form-grid { margin-top: 1rem; }
+    @media (max-width: 860px) {
+      .device-master-detail { grid-template-columns: 1fr; }
+      .detail-summary { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>

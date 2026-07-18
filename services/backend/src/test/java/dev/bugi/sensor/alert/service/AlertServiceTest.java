@@ -154,6 +154,31 @@ class AlertServiceTest {
         verifyNoInteractions(alertRepository);
     }
 
+    @Test
+    void factory_admin_getAllAlerts_same_factory_allowed() {
+        User admin = User.builder().employeeId("ADMIN").name("공장 관리자").password("pw")
+                .role(Role.FACTORY_ADMIN).status(UserStatus.ACTIVE).build();
+        Pageable pageable = PageRequest.of(0, 50);
+        when(accessControlService.getUser("ADMIN")).thenReturn(admin);
+        when(accessControlService.getAccessibleDeviceIds(admin)).thenReturn(List.of(1L));
+        when(alertRepository.findByDeviceIdIn(List.of(1L), pageable))
+                .thenReturn(new PageImpl<>(List.of(mockAlert(mockChannel()))));
+
+        assertThat(alertService.getAllAlerts("ADMIN", 1L, pageable)).hasSize(1);
+    }
+
+    @Test
+    void factory_admin_getAllAlerts_other_factory_forbidden() {
+        User admin = User.builder().employeeId("ADMIN").name("공장 관리자").password("pw")
+                .role(Role.FACTORY_ADMIN).status(UserStatus.ACTIVE).build();
+        when(accessControlService.getUser("ADMIN")).thenReturn(admin);
+        when(accessControlService.getAccessibleDeviceIds(admin)).thenReturn(List.of(1L));
+
+        assertThrows(AccessDeniedException.class,
+                () -> alertService.getAllAlerts("ADMIN", 2L, PageRequest.of(0, 50)));
+        verifyNoInteractions(alertRepository);
+    }
+
     // ── 채널 스코프 조회 ────────────────────────────────────────────────
 
     @Test

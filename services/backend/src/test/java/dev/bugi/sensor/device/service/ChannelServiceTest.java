@@ -40,8 +40,12 @@ class ChannelServiceTest {
     ChannelService channelService;
 
     private User mockUser() {
+        return mockUser(Role.MEMBER);
+    }
+
+    private User mockUser(Role role) {
         return User.builder().employeeId("EMP001").name("담당자").password("pw")
-                .role(Role.MEMBER).status(UserStatus.ACTIVE).build();
+                .role(role).status(UserStatus.ACTIVE).build();
     }
 
     private SensorChannel channel(Device device) {
@@ -108,6 +112,32 @@ class ChannelServiceTest {
                 .when(accessControlService).assertCanAccessDevice(user, device);
 
         assertThrows(AccessDeniedException.class, () -> channelService.getMyChannels("EMP001", 1L));
+    }
+
+    @Test
+    void factory_admin_getMyChannels_same_factory_allowed() {
+        User user = mockUser(Role.FACTORY_ADMIN);
+        Device device = device();
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(sensorChannelRepository.findByDeviceIdInWithDeviceAndZone(List.of(1L)))
+                .thenReturn(List.of(channel(device)));
+
+        assertThat(channelService.getMyChannels("EMP001", 1L)).hasSize(1);
+        verify(accessControlService).assertCanAccessDevice(user, device);
+    }
+
+    @Test
+    void factory_admin_getMyChannels_other_factory_forbidden() {
+        User user = mockUser(Role.FACTORY_ADMIN);
+        Device device = device();
+        when(accessControlService.getUser("EMP001")).thenReturn(user);
+        when(deviceRepository.findById(2L)).thenReturn(Optional.of(device));
+        doThrow(new AccessDeniedException("접근 권한이 없는 장치예요"))
+                .when(accessControlService).assertCanAccessDevice(user, device);
+
+        assertThrows(AccessDeniedException.class, () -> channelService.getMyChannels("EMP001", 2L));
+        verifyNoInteractions(sensorChannelRepository);
     }
 
     @Test

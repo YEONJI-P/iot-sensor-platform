@@ -44,11 +44,13 @@ public class ZoneService {
 
     @Transactional(readOnly = true)
     public List<ZoneResponse> getAll(String employeeId) {
+        return getAccessible(employeeId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ZoneResponse> getAccessible(String employeeId) {
         User user = getUser(employeeId);
-        if (user.getFactory() == null) {
-            return zoneRepository.findAll().stream().map(ZoneResponse::new).toList();
-        }
-        return zoneRepository.findAllByFactoryId(user.getFactory().getId())
+        return accessControlService.getAccessibleZones(user)
                 .stream().map(ZoneResponse::new).toList();
     }
 

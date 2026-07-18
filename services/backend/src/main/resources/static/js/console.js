@@ -499,247 +499,307 @@
   }
 
   /* ==========================================================
-     탭 4) 장치 + 채널 (SYSTEM_ADMIN, MEMBER)
+     탭 4) 장치 master-detail + child 채널
      ========================================================== */
   const THRESHOLD_DIRECTIONS = ['ABOVE', 'BELOW'];
 
   function renderDevices(root) {
     root.innerHTML = `
-      <div class="panel panel-pad">
-        <div class="eyebrow" style="margin-bottom:.9rem;">CREATE · 장치 등록</div>
-        <div class="form-grid">
-          <div class="field"><label for="dCode">코드</label><input id="dCode" class="input" type="text" placeholder="예: DEV-01"/></div>
-          <div class="field"><label for="dName">이름</label><input id="dName" class="input" type="text" placeholder="예: 라인A 온도계"/></div>
-          <div class="field"><label for="dLoc">위치</label><input id="dLoc" class="input" type="text" placeholder="예: A라인 3번"/></div>
-          <div class="field"><label for="dInterval">주기(초)</label><input id="dInterval" class="input" type="number" placeholder="예: 60"/></div>
-          <div class="field"><label for="dZone">구역</label>
-            <select id="dZone" class="input"><option value="">— 직접 입력 —</option></select>
-          </div>
-          <div class="field"><label for="dZoneId">구역 ID (직접)</label><input id="dZoneId" class="input" type="number" placeholder="zoneId"/></div>
-          <div class="field"><button id="dCreate" class="btn btn-primary">등록</button></div>
+      <div class="panel panel-pad device-toolbar">
+        <div class="field">
+          <label for="deviceZoneFilter">구역 필터</label>
+          <select id="deviceZoneFilter" class="input"><option value="">전체 구역</option></select>
         </div>
-        <div class="hint">구역 목록은 기존 장치들에서 유도됩니다. 없으면 구역 ID를 직접 입력하세요.</div>
+        <button id="deviceCreate" class="btn btn-primary">장치 등록</button>
       </div>
-      <div class="panel">
-        <div class="panel-head"><div class="flex items-center gap-sm"><span class="lamp ok"></span><h3>장치 목록</h3></div></div>
-        <div class="table-wrap" id="devList"><div class="empty">불러오는 중…</div></div>
-      </div>
-      <div class="panel panel-pad">
-        <div class="eyebrow" style="margin-bottom:.9rem;">CHANNELS · 채널 관리</div>
-        <div class="form-grid">
-          <div class="field"><label for="chDevice">장치</label>
-            <select id="chDevice" class="input"><option value="">장치를 선택하세요</option></select>
-          </div>
-        </div>
-        <div class="table-wrap" id="chList"><div class="empty">장치를 선택하면 채널 목록이 표시됩니다.</div></div>
-        <div class="eyebrow" style="margin:1.1rem 0 .9rem;">CREATE · 채널 등록</div>
-        <div class="form-grid">
-          <div class="field"><label for="chCode">코드</label><input id="chCode" class="input" type="text" placeholder="예: s1"/></div>
-          <div class="field"><label for="chUnit">단위</label><input id="chUnit" class="input" type="text" placeholder="예: °C"/></div>
-          <div class="field"><label for="chKind">측정 종류</label><input id="chKind" class="input" type="text" placeholder="예: temperature"/></div>
-          <div class="field"><label for="chThr">임계값</label><input id="chThr" class="input" type="number" step="any" placeholder="예: 80"/></div>
-          <div class="field"><label for="chDir">방향</label>
-            <select id="chDir" class="input">
-              <option value="ABOVE">초과(ABOVE)</option>
-              <option value="BELOW">미만(BELOW)</option>
-            </select>
-          </div>
-          <div class="field"><button id="chCreate" class="btn btn-primary" disabled>채널 등록</button></div>
-        </div>
-        <div class="hint">장치를 먼저 선택해야 채널을 등록할 수 있습니다.</div>
+      <div class="device-master-detail">
+        <section class="panel">
+          <div class="panel-head"><div class="flex items-center gap-sm"><span class="lamp ok"></span><h3>장치 목록</h3></div></div>
+          <div class="table-wrap" id="devList"><div class="empty">불러오는 중…</div></div>
+        </section>
+        <section class="panel panel-pad" id="deviceDetail">
+          <div class="empty">장치를 선택하면 상세 정보가 표시됩니다.</div>
+        </section>
       </div>`;
     const listNode = $('#devList', root);
-    const zoneSelect = $('#dZone', root);
-    const chDeviceSelect = $('#chDevice', root);
-    const chListNode = $('#chList', root);
-    const chCreateBtn = $('#chCreate', root);
+    const detailNode = $('#deviceDetail', root);
+    const zoneFilter = $('#deviceZoneFilter', root);
+    let devices = [];
+    let zones = [];
+    let selectedDeviceId = null;
+    let channelLoadToken = 0;
 
-    function fillZoneOptions(devices) {
-      const seen = new Map();
-      (devices || []).forEach(d => { if (d.zoneId != null && !seen.has(d.zoneId)) seen.set(d.zoneId, d.zoneName); });
-      const opts = ['<option value="">— 직접 입력 —</option>']
-        .concat(Array.from(seen, ([id, name]) => `<option value="${id}">${escapeHtml(name || '구역 #' + id)}</option>`));
-      zoneSelect.innerHTML = opts.join('');
+    function zoneLabel(zone) {
+      const factory = zone.factoryName ? `${zone.factoryName} · ` : '';
+      return factory + (zone.name || `구역 #${zone.id}`);
     }
 
-    function fillChannelDeviceOptions(devices) {
-      const prev = chDeviceSelect.value;
-      const opts = ['<option value="">장치를 선택하세요</option>']
-        .concat((devices || []).map(d => `<option value="${d.id}">${escapeHtml(d.name)} · ${escapeHtml(d.code)}</option>`));
-      chDeviceSelect.innerHTML = opts.join('');
-      if (prev && (devices || []).some(d => String(d.id) === String(prev))) chDeviceSelect.value = prev;
-    }
-
-    async function load() {
-      setLoading(listNode);
-      try {
-        const devices = await apiGet('/devices');
-        fillZoneOptions(devices);
-        fillChannelDeviceOptions(devices);
-        if (!devices || devices.length === 0) { setEmpty(listNode, '등록된 장치가 없습니다.'); return; }
-        listNode.innerHTML = `<table class="table">
-          <thead><tr><th>코드</th><th>이름</th><th>위치</th><th>주기(초)</th><th>구역</th><th>액션</th></tr></thead>
-          <tbody>${devices.map(d => `<tr>
-            <td class="mono">${escapeHtml(d.code)}</td>
-            <td>${escapeHtml(d.name)}</td>
-            <td class="dim">${escapeHtml(d.location) || '—'}</td>
-            <td class="num dim">${d.expectedIntervalSeconds != null ? d.expectedIntervalSeconds : '—'}</td>
-            <td class="dim">${escapeHtml(d.zoneName) || '#' + d.zoneId}</td>
-            <td><div class="actions-cell">
-              <button class="btn btn-sm" data-act="edit" data-id="${d.id}"
-                data-name="${escapeHtml(d.name)}" data-loc="${escapeHtml(d.location || '')}"
-                data-interval="${d.expectedIntervalSeconds != null ? d.expectedIntervalSeconds : ''}">수정</button>
-              <button class="btn btn-sm btn-danger" data-act="del" data-id="${d.id}" data-name="${escapeHtml(d.name)}">삭제</button>
-            </div></td>
-          </tr>`).join('')}</tbody></table>`;
-        bind();
-      } catch (e) { setError(listNode, e.message); }
-    }
-
-    function bind() {
-      listNode.querySelectorAll('button[data-act="edit"]').forEach(b => b.addEventListener('click', () => {
-        const name = prompt('장치 이름', b.dataset.name);
-        if (name == null) return;
-        if (!name.trim()) { toast('이름은 필수입니다.', true); return; }
-        const loc = prompt('위치', b.dataset.loc);
-        if (loc == null) return;
-        const intervalStr = prompt('주기(초)', b.dataset.interval);
-        if (intervalStr == null) return;
-        let expectedIntervalSeconds = null;
-        if (intervalStr.trim() !== '') {
-          if (isNaN(Number(intervalStr))) { toast('주기는 숫자여야 합니다.', true); return; }
-          expectedIntervalSeconds = Number(intervalStr);
+    function openFormModal(title, fieldsHtml, submitLabel, onSubmit) {
+      const overlay = el('div', 'modal-overlay');
+      const box = el('div', 'modal-box');
+      box.innerHTML = `<form>
+        <h3>${escapeHtml(title)}</h3>
+        <div class="form-grid">${fieldsHtml}</div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost btn-sm" data-modal-cancel>취소</button>
+          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(submitLabel)}</button>
+        </div>
+      </form>`;
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+      const close = () => overlay.remove();
+      overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+      $('[data-modal-cancel]', box).addEventListener('click', close);
+      $('form', box).addEventListener('submit', async e => {
+        e.preventDefault();
+        const submit = $('button[type="submit"]', box);
+        submit.disabled = true;
+        try {
+          await onSubmit(box);
+          close();
+        } catch (err) {
+          toast(err.message, true);
+          submit.disabled = false;
         }
-        update(b.dataset.id, { name: name.trim(), location: loc.trim(), expectedIntervalSeconds });
-      }));
-      listNode.querySelectorAll('button[data-act="del"]').forEach(b => b.addEventListener('click', () => {
-        if (!confirm(`장치 "${b.dataset.name}"을(를) 삭제할까요?`)) return;
-        remove(b.dataset.id);
-      }));
+      });
+      const first = $('input:not([disabled]), select:not([disabled])', box);
+      if (first) first.focus();
     }
 
-    function currentZoneId() {
-      const sel = zoneSelect.value;
-      if (sel) return Number(sel);
-      const raw = $('#dZoneId', root).value.trim();
-      return raw && !isNaN(Number(raw)) ? Number(raw) : null;
+    function parseOptionalNumber(input, label) {
+      const raw = input.value.trim();
+      if (raw === '') return null;
+      const value = Number(raw);
+      if (!Number.isFinite(value)) throw new Error(`${label}은(는) 숫자여야 합니다.`);
+      return value;
     }
 
-    async function create() {
-      const code = $('#dCode', root).value.trim();
-      const name = $('#dName', root).value.trim();
-      const location = $('#dLoc', root).value.trim();
-      const intervalStr = $('#dInterval', root).value.trim();
-      const zoneId = currentZoneId();
-      if (!code) { toast('코드는 필수입니다.', true); return; }
-      if (!name) { toast('이름은 필수입니다.', true); return; }
-      if (zoneId == null) { toast('구역을 선택하거나 구역 ID를 입력하세요.', true); return; }
-      let expectedIntervalSeconds = null;
-      if (intervalStr !== '') {
-        if (isNaN(Number(intervalStr))) { toast('주기는 숫자여야 합니다.', true); return; }
-        expectedIntervalSeconds = Number(intervalStr);
-      }
-      try {
-        const msg = await apiMutate('/devices', 'POST',
-          { code, name, location, expectedIntervalSeconds, zoneId }, '장치가 등록되었습니다.');
+    function openDeviceModal(device) {
+      const creating = !device;
+      const zoneOptions = zones.map(z =>
+        `<option value="${z.id}" ${device && String(device.zoneId) === String(z.id) ? 'selected' : ''}>${escapeHtml(zoneLabel(z))}</option>`
+      ).join('');
+      const fields = `
+        <div class="field"><label for="modalDeviceCode">코드</label>
+          <input id="modalDeviceCode" class="input" type="text" value="${escapeHtml(device ? device.code : '')}" ${creating ? '' : 'disabled'} required/></div>
+        <div class="field"><label for="modalDeviceName">이름</label>
+          <input id="modalDeviceName" class="input" type="text" value="${escapeHtml(device ? device.name : '')}" required/></div>
+        <div class="field"><label for="modalDeviceLocation">위치</label>
+          <input id="modalDeviceLocation" class="input" type="text" value="${escapeHtml(device ? device.location || '' : '')}"/></div>
+        <div class="field"><label for="modalDeviceInterval">기대 주기(초)</label>
+          <input id="modalDeviceInterval" class="input" type="number" min="0" value="${device && device.expectedIntervalSeconds != null ? device.expectedIntervalSeconds : ''}"/></div>
+        <div class="field"><label for="modalDeviceZone">구역</label>
+          <select id="modalDeviceZone" class="input" ${creating ? '' : 'disabled'} required>
+            <option value="">구역을 선택하세요</option>${zoneOptions}
+          </select></div>`;
+      openFormModal(creating ? '장치 등록' : '장치 수정', fields, creating ? '등록' : '저장', async box => {
+        const name = $('#modalDeviceName', box).value.trim();
+        if (!name) throw new Error('이름은 필수입니다.');
+        const body = {
+          name,
+          location: $('#modalDeviceLocation', box).value.trim(),
+          expectedIntervalSeconds: parseOptionalNumber($('#modalDeviceInterval', box), '기대 주기'),
+        };
+        let msg;
+        if (creating) {
+          const code = $('#modalDeviceCode', box).value.trim();
+          const zoneId = Number($('#modalDeviceZone', box).value);
+          if (!code) throw new Error('코드는 필수입니다.');
+          if (!zoneId) throw new Error('구역을 선택하세요.');
+          msg = await apiMutate('/devices', 'POST', { code, zoneId, ...body }, '장치가 등록되었습니다.');
+        } else {
+          msg = await apiMutate(`/devices/${device.id}`, 'PUT', body, '장치가 수정되었습니다.');
+        }
         toast(msg);
-        $('#dCode', root).value = ''; $('#dName', root).value = ''; $('#dLoc', root).value = '';
-        $('#dInterval', root).value = ''; $('#dZoneId', root).value = '';
-        load();
-      } catch (e) { toast(e.message, true); }
-    }
-    async function update(id, body) {
-      try {
-        const msg = await apiMutate(`/devices/${id}`, 'PUT', body, '수정되었습니다.');
-        toast(msg); load();
-      } catch (e) { toast(e.message, true); }
-    }
-    async function remove(id) {
-      try {
-        const msg = await apiMutate(`/devices/${id}`, 'DELETE', undefined, '삭제되었습니다.');
-        toast(msg); load();
-      } catch (e) { toast(e.message, true); }
+        await load();
+      });
     }
 
-    /* ── 채널 관리(선택된 장치의 채널을 서버에서 필터) ── */
-    async function loadChannelsForDevice(deviceId) {
-      if (!deviceId) {
-        chListNode.innerHTML = '<div class="empty">장치를 선택하면 채널 목록이 표시됩니다.</div>';
-        chCreateBtn.disabled = true;
+    function openChannelModal(channel) {
+      const device = devices.find(d => String(d.id) === String(selectedDeviceId));
+      if (!device) return;
+      const creating = !channel;
+      const directionOptions = THRESHOLD_DIRECTIONS.map(direction =>
+        `<option value="${direction}" ${channel && channel.thresholdDirection === direction ? 'selected' : ''}>${direction}</option>`
+      ).join('');
+      const fields = `
+        <div class="field"><label for="modalChannelCode">코드</label>
+          <input id="modalChannelCode" class="input" type="text" value="${escapeHtml(channel ? channel.code : '')}" ${creating ? '' : 'disabled'} required/></div>
+        <div class="field"><label for="modalChannelUnit">단위</label>
+          <input id="modalChannelUnit" class="input" type="text" value="${escapeHtml(channel ? channel.unit || '' : '')}"/></div>
+        <div class="field"><label for="modalChannelKind">측정 종류</label>
+          <input id="modalChannelKind" class="input" type="text" value="${escapeHtml(channel ? channel.quantityKind || '' : '')}"/></div>
+        <div class="field"><label for="modalChannelThreshold">임계값</label>
+          <input id="modalChannelThreshold" class="input" type="number" step="any" value="${channel && channel.thresholdValue != null ? escapeHtml(String(channel.thresholdValue)) : ''}"/></div>
+        <div class="field"><label for="modalChannelDirection">방향</label>
+          <select id="modalChannelDirection" class="input">${directionOptions}</select></div>`;
+      openFormModal(creating ? `${device.name} · 채널 등록` : `${device.name} · 채널 수정`, fields,
+        creating ? '등록' : '저장', async box => {
+          const body = {
+            unit: $('#modalChannelUnit', box).value.trim(),
+            quantityKind: $('#modalChannelKind', box).value.trim(),
+            thresholdValue: parseOptionalNumber($('#modalChannelThreshold', box), '임계값'),
+            thresholdDirection: $('#modalChannelDirection', box).value,
+          };
+          let msg;
+          if (creating) {
+            const code = $('#modalChannelCode', box).value.trim();
+            if (!code) throw new Error('코드는 필수입니다.');
+            msg = await apiMutate(`/devices/${device.id}/channels`, 'POST', { code, ...body }, '채널이 등록되었습니다.');
+          } else {
+            msg = await apiMutate(`/channels/${channel.id}`, 'PUT', body, '채널이 수정되었습니다.');
+          }
+          toast(msg);
+          await loadChannels(device.id);
+        });
+    }
+
+    function filteredDevices() {
+      const zoneId = zoneFilter.value;
+      return zoneId ? devices.filter(d => String(d.zoneId) === zoneId) : devices;
+    }
+
+    function renderDeviceList() {
+      const visible = filteredDevices();
+      if (visible.length === 0) {
+        setEmpty(listNode, devices.length ? '선택한 구역에 장치가 없습니다.' : '등록된 장치가 없습니다.');
         return;
       }
-      chCreateBtn.disabled = false;
-      setLoading(chListNode);
+      listNode.innerHTML = `<table class="table">
+        <thead><tr><th>코드</th><th>이름</th><th>구역</th></tr></thead>
+        <tbody>${visible.map(d => `<tr class="device-row ${String(d.id) === String(selectedDeviceId) ? 'selected' : ''}"
+          data-device-id="${d.id}" tabindex="0" role="button" aria-selected="${String(d.id) === String(selectedDeviceId)}">
+          <td class="mono">${escapeHtml(d.code)}</td>
+          <td>${escapeHtml(d.name)}</td>
+          <td class="dim">${escapeHtml(d.zoneName) || `#${d.zoneId}`}</td>
+        </tr>`).join('')}</tbody></table>`;
+      listNode.querySelectorAll('[data-device-id]').forEach(row => {
+        const select = () => selectDevice(row.dataset.deviceId);
+        row.addEventListener('click', select);
+        row.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); }
+        });
+      });
+    }
+
+    function renderDeviceDetail(device) {
+      if (!device) {
+        detailNode.innerHTML = '<div class="empty">장치를 선택하면 상세 정보가 표시됩니다.</div>';
+        return;
+      }
+      detailNode.innerHTML = `
+        <div class="detail-head">
+          <div><div class="eyebrow">DEVICE · ${escapeHtml(device.code)}</div><h3 style="margin-top:.3rem;">${escapeHtml(device.name)}</h3></div>
+          <div class="actions-cell">
+            <button class="btn btn-sm" data-device-edit>수정</button>
+            <button class="btn btn-sm btn-danger" data-device-delete>삭제</button>
+          </div>
+        </div>
+        <dl class="detail-summary">
+          <div class="detail-item"><dt>구역</dt><dd>${escapeHtml(device.zoneName) || `#${device.zoneId}`}</dd></div>
+          <div class="detail-item"><dt>위치</dt><dd>${escapeHtml(device.location) || '—'}</dd></div>
+          <div class="detail-item"><dt>기대 주기</dt><dd>${device.expectedIntervalSeconds != null ? `${device.expectedIntervalSeconds}초` : '—'}</dd></div>
+          <div class="detail-item"><dt>장치 ID</dt><dd class="mono">${device.id}</dd></div>
+        </dl>
+        <div class="detail-section">
+          <div class="detail-head">
+            <div><div class="eyebrow">CHILD · CHANNELS</div><h3 style="margin-top:.3rem;">채널</h3></div>
+            <button class="btn btn-sm btn-primary" data-channel-create>채널 등록</button>
+          </div>
+          <div class="table-wrap" data-channel-list><div class="empty">불러오는 중…</div></div>
+        </div>`;
+      $('[data-device-edit]', detailNode).addEventListener('click', () => openDeviceModal(device));
+      $('[data-device-delete]', detailNode).addEventListener('click', () => removeDevice(device));
+      $('[data-channel-create]', detailNode).addEventListener('click', () => openChannelModal(null));
+    }
+
+    async function selectDevice(id) {
+      selectedDeviceId = id == null ? null : String(id);
+      renderDeviceList();
+      const device = devices.find(d => String(d.id) === selectedDeviceId);
+      renderDeviceDetail(device);
+      if (device) await loadChannels(device.id);
+    }
+
+    async function loadChannels(deviceId) {
+      const token = ++channelLoadToken;
+      const channelList = $('[data-channel-list]', detailNode);
+      if (!channelList) return;
+      setLoading(channelList);
       try {
-        const mine = (await apiGet(`/channels?deviceId=${encodeURIComponent(deviceId)}`)) || [];
-        if (mine.length === 0) { setEmpty(chListNode, '등록된 채널이 없습니다.'); return; }
-        chListNode.innerHTML = `<table class="table">
+        const channels = (await apiGet(`/channels?deviceId=${encodeURIComponent(deviceId)}`)) || [];
+        if (token !== channelLoadToken || String(deviceId) !== String(selectedDeviceId)) return;
+        if (channels.length === 0) { setEmpty(channelList, '등록된 채널이 없습니다.'); return; }
+        channelList.innerHTML = `<table class="table">
           <thead><tr><th>코드</th><th>단위</th><th>측정 종류</th><th>임계값</th><th>방향</th><th>액션</th></tr></thead>
-          <tbody>${mine.map(c => `<tr>
+          <tbody>${channels.map(c => `<tr>
             <td class="mono">${escapeHtml(c.code)}</td>
             <td class="dim">${escapeHtml(c.unit) || '—'}</td>
             <td class="dim">${escapeHtml(c.quantityKind) || '—'}</td>
             <td class="num">${c.thresholdValue != null ? escapeHtml(String(c.thresholdValue)) : '—'}</td>
             <td class="dim">${escapeHtml(c.thresholdDirection) || '—'}</td>
-            <td><div class="actions-cell">
-              <button class="btn btn-sm" data-act="chedit" data-id="${c.id}"
-                data-unit="${escapeHtml(c.unit || '')}" data-kind="${escapeHtml(c.quantityKind || '')}"
-                data-thr="${c.thresholdValue != null ? escapeHtml(String(c.thresholdValue)) : ''}"
-                data-dir="${escapeHtml(c.thresholdDirection || 'ABOVE')}">임계값 수정</button>
-            </div></td>
+            <td><div class="actions-cell"><button class="btn btn-sm" data-channel-id="${c.id}">수정</button></div></td>
           </tr>`).join('')}</tbody></table>`;
-        chListNode.querySelectorAll('button[data-act="chedit"]').forEach(b => b.addEventListener('click', () => {
-          const unit = prompt('단위', b.dataset.unit);
-          if (unit == null) return;
-          const kind = prompt('측정 종류', b.dataset.kind);
-          if (kind == null) return;
-          const thrStr = prompt('임계값 (숫자)', b.dataset.thr);
-          if (thrStr == null) return;
-          if (thrStr.trim() === '' || isNaN(Number(thrStr))) { toast('임계값은 숫자여야 합니다.', true); return; }
-          const dir = prompt(`방향 (${THRESHOLD_DIRECTIONS.join('/')})`, b.dataset.dir);
-          if (dir == null) return;
-          const dirNorm = dir.trim().toUpperCase();
-          if (!THRESHOLD_DIRECTIONS.includes(dirNorm)) { toast('방향은 ABOVE 또는 BELOW여야 합니다.', true); return; }
-          updateChannel(b.dataset.id, {
-            unit: unit.trim(), quantityKind: kind.trim(),
-            thresholdValue: Number(thrStr), thresholdDirection: dirNorm,
-          });
-        }));
-      } catch (e) { setError(chListNode, e.message); }
+        channelList.querySelectorAll('[data-channel-id]').forEach(button => {
+          const channel = channels.find(c => String(c.id) === button.dataset.channelId);
+          button.addEventListener('click', () => openChannelModal(channel));
+        });
+      } catch (e) {
+        if (token === channelLoadToken) setError(channelList, e.message);
+      }
     }
 
-    async function updateChannel(id, body) {
+    async function removeDevice(device) {
+      if (!confirm(`장치 "${device.name}"을(를) 삭제할까요?`)) return;
       try {
-        const msg = await apiMutate(`/channels/${id}`, 'PUT', body, '채널이 수정되었습니다.');
+        const msg = await apiMutate(`/devices/${device.id}`, 'DELETE', undefined, '장치가 삭제되었습니다.');
         toast(msg);
-        loadChannelsForDevice(chDeviceSelect.value);
+        selectedDeviceId = null;
+        await load();
       } catch (e) { toast(e.message, true); }
     }
 
-    async function createChannel() {
-      const deviceId = chDeviceSelect.value;
-      if (!deviceId) { toast('장치를 먼저 선택하세요.', true); return; }
-      const code = $('#chCode', root).value.trim();
-      const unit = $('#chUnit', root).value.trim();
-      const quantityKind = $('#chKind', root).value.trim();
-      const thrStr = $('#chThr', root).value.trim();
-      const thresholdDirection = $('#chDir', root).value;
-      if (!code) { toast('코드는 필수입니다.', true); return; }
-      if (thrStr !== '' && isNaN(Number(thrStr))) { toast('임계값은 숫자여야 합니다.', true); return; }
-      const thresholdValue = thrStr === '' ? null : Number(thrStr);
-      try {
-        const msg = await apiMutate(`/devices/${deviceId}/channels`, 'POST',
-          { code, unit, quantityKind, thresholdValue, thresholdDirection }, '채널이 등록되었습니다.');
-        toast(msg);
-        $('#chCode', root).value = ''; $('#chUnit', root).value = '';
-        $('#chKind', root).value = ''; $('#chThr', root).value = '';
-        loadChannelsForDevice(deviceId);
-      } catch (e) { toast(e.message, true); }
+    function fillZoneFilter() {
+      const current = zoneFilter.value;
+      zoneFilter.innerHTML = '<option value="">전체 구역</option>' + zones.map(z =>
+        `<option value="${z.id}">${escapeHtml(zoneLabel(z))}</option>`
+      ).join('');
+      if (zones.some(z => String(z.id) === current)) zoneFilter.value = current;
     }
 
-    chDeviceSelect.addEventListener('change', () => loadChannelsForDevice(chDeviceSelect.value));
-    $('#chCreate', root).addEventListener('click', createChannel);
-    $('#dCreate', root).addEventListener('click', create);
+    async function load() {
+      setLoading(listNode);
+      try {
+        [zones, devices] = await Promise.all([apiGet('/zones'), apiGet('/devices')]);
+        zones = zones || [];
+        devices = devices || [];
+        fillZoneFilter();
+        const visible = filteredDevices();
+        if (!visible.some(d => String(d.id) === String(selectedDeviceId))) {
+          selectedDeviceId = visible.length ? String(visible[0].id) : null;
+        }
+        renderDeviceList();
+        const selected = devices.find(d => String(d.id) === String(selectedDeviceId));
+        renderDeviceDetail(selected);
+        if (selected) await loadChannels(selected.id);
+      } catch (e) {
+        setError(listNode, e.message);
+        detailNode.innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    zoneFilter.addEventListener('change', async () => {
+      const visible = filteredDevices();
+      selectedDeviceId = visible.length ? String(visible[0].id) : null;
+      renderDeviceList();
+      const selected = visible[0];
+      renderDeviceDetail(selected);
+      if (selected) await loadChannels(selected.id);
+    });
+    $('#deviceCreate', root).addEventListener('click', () => {
+      if (zones.length === 0) { toast('장치를 등록할 수 있는 구역이 없습니다.', true); return; }
+      openDeviceModal(null);
+    });
     load();
   }
 

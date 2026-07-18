@@ -72,19 +72,23 @@ public class SecurityConfig {
 
                         // 장치 중심 overview — 운영 데이터 조회 역할만 허용
                         .requestMatchers(HttpMethod.GET, "/dashboard/overview")
-                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER", "VIEWER")
 
-                        // 센서 데이터 조회 — FACTORY_ADMIN 제외 (운영 데이터 불필요)
+                        // 센서 데이터 조회 — 접근 가능한 장치 범위는 서비스 계층에서 스코핑
                         .requestMatchers(HttpMethod.GET, "/sensor-data", "/sensor-data/**")
-                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER", "VIEWER")
 
-                        // 알림 조회 — FACTORY_ADMIN 제외
+                        // 알림 조회 — 접근 가능한 장치 범위는 서비스 계층에서 스코핑
                         .requestMatchers(HttpMethod.GET, "/alerts", "/alerts/**")
-                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER", "VIEWER")
 
-                        // 채널 조회 — 센서 데이터 조회와 같은 계열(FACTORY_ADMIN 제외, VIEWER 읽기 가능)
+                        // 채널 조회 — 센서 데이터 조회와 같은 계열(VIEWER 읽기 가능)
                         .requestMatchers(HttpMethod.GET, "/channels", "/channels/**")
-                        .hasAnyRole("SYSTEM_ADMIN", "MEMBER", "VIEWER")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER", "VIEWER")
+
+                        // 구역 선택용 조회 — 역할별 범위는 AccessControlService에서 스코핑
+                        .requestMatchers(HttpMethod.GET, "/zones")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN", "MEMBER", "VIEWER")
 
                         // 채널 변경(등록·임계 수정) — 장치 변경과 같은 계열. VIEWER는 읽기 전용.
                         // 등록은 /devices/{deviceId}/channels 아래라 device POST 규칙보다 먼저 둔다.

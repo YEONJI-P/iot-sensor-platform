@@ -46,7 +46,7 @@ public class DashboardOverviewService {
     private static final String UNASSIGNED_ZONE = "미지정 구역";
     private static final long FRESHNESS_GRACE_MULTIPLIER = 2L;
     private static final EnumSet<Role> ALLOWED_ROLES =
-            EnumSet.of(Role.SYSTEM_ADMIN, Role.MEMBER, Role.VIEWER);
+            EnumSet.of(Role.SYSTEM_ADMIN, Role.FACTORY_ADMIN, Role.MEMBER, Role.VIEWER);
 
     private final AccessControlService accessControlService;
     private final DeviceRepository deviceRepository;

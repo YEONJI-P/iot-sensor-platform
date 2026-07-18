@@ -24,6 +24,9 @@ import dev.bugi.sensor.sensordata.failure.FailedReadingRepository;
 import dev.bugi.sensor.sensordata.repository.MeasurementBatchRepository;
 import dev.bugi.sensor.sensordata.repository.SensorReadingRepository;
 import dev.bugi.sensor.sse.SseBroadcastEvent;
+import dev.bugi.sensor.user.entity.Role;
+import dev.bugi.sensor.user.entity.User;
+import dev.bugi.sensor.user.entity.UserStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +36,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -44,6 +48,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -417,5 +422,35 @@ class SensorDataServiceTest {
         sensorDataService.receive(req(96.99)); // 경계 아래 → 해제
 
         assertThat(channelStatus.isInAlarm()).isFalse();
+    }
+
+    @Test
+    void factory_admin_getReadings_same_factory_allowed() {
+        User admin = User.builder().employeeId("ADMIN").name("공장 관리자").password("pw")
+                .role(Role.FACTORY_ADMIN).status(UserStatus.ACTIVE).build();
+        SensorChannel target = SensorChannel.builder().code("s4").thresholdValue(80.0)
+                .thresholdDirection(ThresholdDirection.ABOVE).build();
+        when(accessControlService.getUser("ADMIN")).thenReturn(admin);
+        when(accessControlService.getChannel(1L)).thenReturn(target);
+        when(sensorReadingRepository.findByChannelIdOrderByObservedAtDesc(eq(1L), any()))
+                .thenReturn(List.of());
+
+        assertThat(sensorDataService.getReadingsByChannel("ADMIN", 1L, 50)).isEmpty();
+        verify(accessControlService).assertCanAccessChannel(admin, target);
+    }
+
+    @Test
+    void factory_admin_getReadings_other_factory_forbidden() {
+        User admin = User.builder().employeeId("ADMIN").name("공장 관리자").password("pw")
+                .role(Role.FACTORY_ADMIN).status(UserStatus.ACTIVE).build();
+        SensorChannel target = SensorChannel.builder().code("s4").build();
+        when(accessControlService.getUser("ADMIN")).thenReturn(admin);
+        when(accessControlService.getChannel(2L)).thenReturn(target);
+        doThrow(new AccessDeniedException("접근 권한이 없는 장치예요"))
+                .when(accessControlService).assertCanAccessChannel(admin, target);
+
+        assertThrows(AccessDeniedException.class,
+                () -> sensorDataService.getReadingsByChannel("ADMIN", 2L, 50));
+        verify(sensorReadingRepository, never()).findByChannelIdOrderByObservedAtDesc(any(), any());
     }
 }

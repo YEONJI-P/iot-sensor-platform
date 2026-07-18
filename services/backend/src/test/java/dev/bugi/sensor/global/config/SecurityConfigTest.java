@@ -135,6 +135,16 @@ public class SecurityConfigTest {
         verifyNoInteractions(sensorDataService);
     }
 
+    @Test
+    @WithMockUser(roles = "FACTORY_ADMIN")
+    void post_sensor_data_factory_admin_without_ingest_key_returns_401() throws Exception {
+        mockMvc.perform(post("/sensor-data")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_BODY))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(sensorDataService);
+    }
+
     // -- C2 계약: 잘못된 수신 요청은 400(500 아님) + 실패 적재 --
     @Test
     void post_sensor_data_invalid_returns_400_and_records_failure() throws Exception {
@@ -203,9 +213,9 @@ public class SecurityConfigTest {
 
     @Test
     @WithMockUser(roles = "FACTORY_ADMIN")
-    void get_dashboard_overview_factory_admin_forbidden() throws Exception {
+    void get_dashboard_overview_factory_admin_ok() throws Exception {
         mockMvc.perform(get("/dashboard/overview"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().is(not(403)));
     }
 
     // -- 역할 제한
@@ -226,9 +236,9 @@ public class SecurityConfigTest {
 
     @Test
     @WithMockUser(roles = "FACTORY_ADMIN")
-    void get_channels_factory_admin_forbidden() throws Exception {
+    void get_channels_factory_admin_ok() throws Exception {
         mockMvc.perform(get("/channels"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().is(not(403)));
     }
 
     @Test
@@ -267,9 +277,50 @@ public class SecurityConfigTest {
 
     @Test
     @WithMockUser(roles = "FACTORY_ADMIN")
-    void get_sensor_data_org_admin_forbidden() throws Exception {
+    void get_sensor_data_factory_admin_ok() throws Exception {
         mockMvc.perform(get("/sensor-data"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().is(not(403)));
+    }
+
+    @Test
+    @WithMockUser(roles = "FACTORY_ADMIN")
+    void get_alerts_factory_admin_ok() throws Exception {
+        mockMvc.perform(get("/alerts"))
+                .andExpect(status().is(not(403)));
+    }
+
+    @Test
+    void get_zones_no_auth() throws Exception {
+        mockMvc.perform(get("/zones"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = {"SYSTEM_ADMIN"})
+    void get_zones_system_admin_ok() throws Exception {
+        mockMvc.perform(get("/zones"))
+                .andExpect(status().is(not(403)));
+    }
+
+    @Test
+    @WithMockUser(roles = "FACTORY_ADMIN")
+    void get_zones_factory_admin_ok() throws Exception {
+        mockMvc.perform(get("/zones"))
+                .andExpect(status().is(not(403)));
+    }
+
+    @Test
+    @WithMockUser(roles = "MEMBER")
+    void get_zones_member_ok() throws Exception {
+        mockMvc.perform(get("/zones"))
+                .andExpect(status().is(not(403)));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void get_zones_viewer_ok() throws Exception {
+        mockMvc.perform(get("/zones"))
+                .andExpect(status().is(not(403)));
     }
 
     @Test

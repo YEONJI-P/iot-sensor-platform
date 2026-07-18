@@ -5,6 +5,7 @@ import dev.bugi.sensor.device.entity.SensorChannel;
 import dev.bugi.sensor.device.repository.DeviceRepository;
 import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.factory.entity.Zone;
+import dev.bugi.sensor.factory.repository.ZoneRepository;
 import dev.bugi.sensor.factory.repository.ZoneUserRepository;
 import dev.bugi.sensor.user.entity.Role;
 import dev.bugi.sensor.user.entity.User;
@@ -21,6 +22,7 @@ import java.util.List;
 public class AccessControlService {
 
     private final DeviceRepository deviceRepository;
+    private final ZoneRepository zoneRepository;
     private final ZoneUserRepository zoneUserRepository;
     private final UserRepository userRepository;
     private final SensorChannelRepository sensorChannelRepository;
@@ -66,6 +68,19 @@ public class AccessControlService {
         List<Long> zoneIds = getZoneIds(user);
         if (zoneIds.isEmpty()) return List.of();
         return deviceRepository.findIdsByZoneIdIn(zoneIds);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Zone> getAccessibleZones(User user) {
+        if (user.getRole() == Role.SYSTEM_ADMIN) {
+            return zoneRepository.findAll();
+        }
+        if (user.getRole() == Role.FACTORY_ADMIN) {
+            if (user.getFactory() == null) return List.of();
+            return zoneRepository.findAllByFactoryId(user.getFactory().getId());
+        }
+        return zoneUserRepository.findAllByUserId(user.getId())
+                .stream().map(zoneUser -> zoneUser.getZone()).toList();
     }
 
     @Transactional(readOnly = true)
