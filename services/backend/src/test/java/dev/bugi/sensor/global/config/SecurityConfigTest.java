@@ -40,8 +40,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -373,6 +375,19 @@ public class SecurityConfigTest {
         mockMvc.perform(patch("/admin/users/1/reject")
                         .header(HttpHeaders.ORIGIN, "https://sensor.bugihub.site"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void approve_user_patch_preflight_without_auth_is_allowed() throws Exception {
+        mockMvc.perform(options("/admin/users/1/approve")
+                        .header(HttpHeaders.ORIGIN, "https://sensor.bugihub.site")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PATCH")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization,content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://sensor.bugihub.site"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                        org.hamcrest.Matchers.containsString("PATCH")));
     }
 
     @Test
