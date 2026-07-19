@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -46,6 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest
 @Import({
         SecurityConfig.class,
+        CorsConfig.class,
         CustomAuthenticationEntryPoint.class,
         CustomAccessDeniedHandler.class
 })
@@ -306,6 +308,24 @@ public class SecurityConfigTest {
         mockMvc.perform(patch("/admin/users/1/approve")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"role\":\"VIEWER\",\"factoryId\":1,\"zoneIds\":[]}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "SYSTEM_ADMIN")
+    void approve_user_patch_with_public_origin_is_allowed() throws Exception {
+        mockMvc.perform(patch("/admin/users/1/approve")
+                        .header(HttpHeaders.ORIGIN, "https://sensor.bugihub.site")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"VIEWER\",\"factoryId\":1,\"zoneIds\":[1,2]}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "SYSTEM_ADMIN")
+    void reject_user_patch_with_public_origin_is_allowed() throws Exception {
+        mockMvc.perform(patch("/admin/users/1/reject")
+                        .header(HttpHeaders.ORIGIN, "https://sensor.bugihub.site"))
                 .andExpect(status().isOk());
     }
 
