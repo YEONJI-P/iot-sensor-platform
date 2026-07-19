@@ -6,6 +6,7 @@ import dev.bugi.sensor.explain.client.ExplainClient;
 import dev.bugi.sensor.explain.config.ExplainProperties;
 import dev.bugi.sensor.explain.dto.AnomalyExplainRequest;
 import dev.bugi.sensor.explain.dto.AnomalyExplainResponse;
+import dev.bugi.sensor.device.entity.SensorChannel.ThresholdDirection;
 import dev.bugi.sensor.sensordata.entity.SensorReading;
 import dev.bugi.sensor.sensordata.repository.SensorReadingRepository;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,12 @@ class AlertEnrichmentSchedulerTest {
 
     // 채널 기반 프로젝션: channelId 7, quantityKind=temperature, unit=°R
     private EnrichTarget target(Double threshold) {
-        return new EnrichTarget(1L, 7L, "엔진 유닛1", "temperature", "°R", 1500.0, threshold, "임계 초과");
+        return target(threshold, ThresholdDirection.ABOVE);
+    }
+
+    private EnrichTarget target(Double threshold, ThresholdDirection direction) {
+        return new EnrichTarget(1L, 7L, "엔진 유닛1", "temperature", "°R",
+                1500.0, threshold, direction, "임계 이탈");
     }
 
     private SensorReading reading(double value) {
@@ -83,6 +89,7 @@ class AlertEnrichmentSchedulerTest {
         assertThat(req.trend()).isGreaterThan(0.0);      // 상승 추세
         assertThat(req.volatility()).isGreaterThan(0.0);
         assertThat(req.recentValues()).hasSize(10);
+        assertThat(req.thresholdDirection()).isEqualTo(ThresholdDirection.ABOVE);
     }
 
     @Test
@@ -101,5 +108,38 @@ class AlertEnrichmentSchedulerTest {
         assertThat(req.breachRate()).isNull();
         assertThat(req.trend()).isNull();
         assertThat(req.volatility()).isNull();
+    }
+
+    @Test
+    void BELOW는_임계값_미만을_이탈률로_계산한다() {
+        when(explainProperties.isEnabled()).thenReturn(true);
+        when(alertRepository.findEnrichTargets(any()))
+                .thenReturn(List.of(target(100.0, ThresholdDirection.BELOW)));
+        when(sensorReadingRepository.findByChannelIdOrderByObservedAtDesc(eq(7L), any()))
+                .thenReturn(List.of(reading(120), reading(110), reading(100), reading(90), reading(80)));
+        when(explainClient.explainAnomaly(any()))
+                .thenReturn(new AnomalyExplainResponse("근거", "권고", "WARNING", "echo"));
+
+        scheduler.enrichAlerts();
+
+        verify(explainClient).explainAnomaly(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().breachRate()).isEqualTo(0.4, within(1e-9));
+        assertThat(requestCaptor.getValue().thresholdDirection()).isEqualTo(ThresholdDirection.BELOW);
+    }
+
+    @Test
+    void ABS_ABOVE는_절댓값_초과를_이탈률로_계산한다() {
+        when(explainProperties.isEnabled()).thenReturn(true);
+        when(alertRepository.findEnrichTargets(any()))
+                .thenReturn(List.of(target(100.0, ThresholdDirection.ABS_ABOVE)));
+        when(sensorReadingRepository.findByChannelIdOrderByObservedAtDesc(eq(7L), any()))
+                .thenReturn(List.of(reading(120), reading(100), reading(20), reading(-110), reading(-90)));
+        when(explainClient.explainAnomaly(any()))
+                .thenReturn(new AnomalyExplainResponse("근거", "권고", "WARNING", "echo"));
+
+        scheduler.enrichAlerts();
+
+        verify(explainClient).explainAnomaly(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().breachRate()).isEqualTo(0.4, within(1e-9));
     }
 }

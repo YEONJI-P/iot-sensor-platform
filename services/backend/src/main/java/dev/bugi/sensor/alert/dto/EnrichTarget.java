@@ -1,5 +1,7 @@
 package dev.bugi.sensor.alert.dto;
 
+import dev.bugi.sensor.device.entity.SensorChannel;
+
 /**
  * 알림 보강 대상의 최소 값 집합. LAZY 프록시 접근 없이 트랜잭션 밖 explain 호출에 필요한 값만 담는 프로젝션.
  *
@@ -14,6 +16,7 @@ public record EnrichTarget(
         String unit,
         Double sensorValue,
         Double thresholdValue,
+        SensorChannel.ThresholdDirection thresholdDirection,
         String message
 ) {
 }

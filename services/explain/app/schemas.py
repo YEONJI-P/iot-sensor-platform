@@ -5,6 +5,8 @@ alias_generator=to_camel + populate_by_name 으로 camelCase를 함께 받는다
 (예: Python device_name  <->  JSON deviceName)
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
@@ -31,10 +33,13 @@ class AnomalyExplainRequest(CamelModel):
     unit: str | None = Field(None, description="측정 단위(예: °C, kPa, A)")
     value: float = Field(..., description="이상으로 판정된 측정값")
     threshold: float | None = Field(None, description="임계값")
+    threshold_direction: Literal["ABOVE", "BELOW", "ABS_ABOVE"] | None = Field(
+        None, description="임계 방향. 생략 시 ABOVE로 해석"
+    )
     message: str | None = Field(None, description="Spring이 만든 원본 알림 메시지")
     recent_values: list[float] | None = Field(None, description="직전 측정값들(추세 근거)")
     # Spring이 최근 윈도우에서 규칙으로 계산한 파생 지표. 여기선 서술만 하고 재계산하지 않는다.
-    breach_rate: float | None = Field(None, description="윈도우 내 임계 초과 비율(0~1)")
+    breach_rate: float | None = Field(None, description="윈도우 내 방향별 임계 이탈 비율(0~1)")
     trend: float | None = Field(None, description="추세(후반 평균 - 전반 평균), 양수면 상승 중")
     volatility: float | None = Field(None, description="변동성(표준편차)")
 

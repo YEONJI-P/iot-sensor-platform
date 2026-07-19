@@ -6,6 +6,7 @@ import dev.bugi.sensor.explain.client.ExplainClient;
 import dev.bugi.sensor.explain.config.ExplainProperties;
 import dev.bugi.sensor.explain.dto.AnomalyExplainRequest;
 import dev.bugi.sensor.explain.dto.AnomalyExplainResponse;
+import dev.bugi.sensor.device.entity.SensorChannel;
 import dev.bugi.sensor.sensordata.entity.SensorReading;
 import dev.bugi.sensor.sensordata.repository.SensorReadingRepository;
 import lombok.RequiredArgsConstructor;
@@ -54,9 +55,10 @@ public class AlertEnrichmentScheduler {
                 continue;
             }
 
-            // 설명용 윈도우: 채널의 최근 판독을 읽어 규칙으로 추세·초과율·변동성을 계산(탐지엔 안 씀).
+            // 설명용 윈도우: 채널의 최근 판독을 읽어 규칙으로 추세·이탈률·변동성을 계산(탐지엔 안 씀).
             List<Double> recentValues = recentValues(target.channelId());
-            WindowMetrics metrics = WindowMetrics.of(recentValues, target.thresholdValue());
+            WindowMetrics metrics = WindowMetrics.of(
+                    recentValues, target.thresholdValue(), target.thresholdDirection());
 
             AnomalyExplainRequest request = new AnomalyExplainRequest(
                     target.deviceName(),
@@ -64,6 +66,7 @@ public class AlertEnrichmentScheduler {
                     target.unit(),
                     target.sensorValue(),
                     target.thresholdValue(),
+                    target.thresholdDirection(),
                     target.message(),
                     recentValues.isEmpty() ? null : recentValues,
                     metrics.breachRate(),
@@ -109,17 +112,24 @@ public class AlertEnrichmentScheduler {
 
         private static final WindowMetrics EMPTY = new WindowMetrics(null, null, null);
 
-        static WindowMetrics of(List<Double> values, Double threshold) {
+        static WindowMetrics of(List<Double> values, Double threshold,
+                                SensorChannel.ThresholdDirection direction) {
             if (values == null || values.size() < MIN_SAMPLES) {
                 return EMPTY;
             }
             int n = values.size();
 
-            // 초과율: 임계 초과 판독 비율(threshold 없으면 계산 불가).
+            // 이탈률: 채널 방향에 맞게 임계를 벗어난 판독 비율(threshold 없으면 계산 불가).
             Double breachRate = null;
             if (threshold != null) {
-                long over = values.stream().filter(v -> v > threshold).count();
-                breachRate = (double) over / n;
+                SensorChannel.ThresholdDirection effectiveDirection = direction == null
+                        ? SensorChannel.ThresholdDirection.ABOVE : direction;
+                long breaches = values.stream().filter(value -> switch (effectiveDirection) {
+                    case ABOVE -> value > threshold;
+                    case BELOW -> value < threshold;
+                    case ABS_ABOVE -> Math.abs(value) > threshold;
+                }).count();
+                breachRate = (double) breaches / n;
             }
 
             // 추세: 후반 절반 평균 - 전반 절반 평균(양수면 상승 중).

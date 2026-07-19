@@ -63,13 +63,17 @@
     .window-selector { display: inline-flex; gap: .25rem; }
     .window-selector .active { color: var(--signal); border-color: var(--signal); background: color-mix(in srgb, var(--signal) 8%, transparent); }
     .thr-badge { font-family: var(--font-mono); font-size: .7rem; color: var(--brand); }
-    .alarm-panel { min-height: 360px; }
-    .alarm-list { list-style: none; }
-    .alarm-list li { padding: .9rem 1rem; border-bottom: 1px solid var(--line-soft); }
+    .alarm-panel { height: 360px; min-height: 360px; display: flex; flex-direction: column; overflow: hidden; }
+    .alarm-panel .panel-head { flex: 0 0 auto; }
+    .alarm-list { list-style: none; overflow-y: auto; min-height: 0; }
+    .alarm-list li { padding: 0; border-bottom: 1px solid var(--line-soft); }
     .alarm-list li:last-child { border-bottom: 0; }
-    .alarm-line { display: flex; justify-content: space-between; gap: .8rem; margin-bottom: .35rem; }
-    .alarm-message { font-size: .82rem; line-height: 1.45; }
+    .alarm-summary { width: 100%; padding: .72rem 1rem; border: 0; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+    .alarm-summary:hover, .alarm-summary[aria-expanded="true"] { background: color-mix(in srgb, var(--signal) 5%, transparent); }
+    .alarm-line { display: flex; justify-content: space-between; gap: .8rem; margin-bottom: .28rem; }
+    .alarm-message { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; line-height: 1.4; }
     .alarm-time { color: var(--text-faint); font-family: var(--font-mono); font-size: .7rem; white-space: nowrap; }
+    .alarm-detail { padding: 0 1rem .8rem; font-size: .78rem; line-height: 1.45; }
     .evi { display: block; font-size: .74rem; color: var(--text-faint); margin-top: .35rem; line-height: 1.4; }
     @media (max-width: 960px) {
       .device-grid, .channel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -165,7 +169,7 @@
         </div>
       </div>
       <div class="panel alarm-panel">
-        <div class="panel-head"><h3>장치 최근 알림</h3></div>
+        <div class="panel-head"><h3>장치 최근 알림</h3><button id="alarmListToggle" class="btn btn-sm btn-ghost hidden" type="button" aria-expanded="false" aria-controls="alarmList">최근 20건 보기</button></div>
         <ul id="alarmList" class="alarm-list"><li class="empty">알림을 불러오는 중입니다.</li></ul>
       </div>
     </div>

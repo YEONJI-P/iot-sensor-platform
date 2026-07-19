@@ -57,7 +57,7 @@ def test_explain_anomaly_includes_unit_in_evidence():
 
 
 def test_explain_anomaly_includes_window_metrics_in_evidence():
-    """윈도우 지표를 넘기면 근거에 초과율·추세·변동성이 반영된다."""
+    """윈도우 지표를 넘기면 근거에 이탈률·추세·변동성이 반영된다."""
     from app.main import app
 
     client = TestClient(app)
@@ -75,8 +75,38 @@ def test_explain_anomaly_includes_window_metrics_in_evidence():
     )
     assert res.status_code == 200
     evidence = res.json()["evidence"]
-    assert "초과율 60%" in evidence
+    assert "이탈률 60%" in evidence
     assert "상승 추세" in evidence
+
+
+def test_explain_anomaly_describes_below_and_absolute_directions():
+    """임계 방향에 따라 근거 문구가 미만/절댓값 초과로 달라진다."""
+    from app.main import app
+
+    client = TestClient(app)
+    below = client.post(
+        "/explain/anomaly",
+        json={
+            "deviceName": "압력센서-A1",
+            "value": 40.0,
+            "threshold": 50.0,
+            "thresholdDirection": "BELOW",
+        },
+    )
+    absolute = client.post(
+        "/explain/anomaly",
+        json={
+            "deviceName": "진동센서-A1",
+            "value": -12.0,
+            "threshold": 10.0,
+            "thresholdDirection": "ABS_ABOVE",
+        },
+    )
+
+    assert below.status_code == 200
+    assert "미만" in below.json()["evidence"]
+    assert absolute.status_code == 200
+    assert "절댓값 초과" in absolute.json()["evidence"]
 
 
 def test_explain_anomaly_rejects_missing_value():

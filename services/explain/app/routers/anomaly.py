@@ -15,11 +15,18 @@ from ..schemas import AnomalyExplainRequest, AnomalyExplainResponse
 router = APIRouter(prefix="/explain", tags=["anomaly"])
 
 
+def _direction_label(req: AnomalyExplainRequest) -> str:
+    return {
+        "BELOW": "미만",
+        "ABS_ABOVE": "절댓값 초과",
+    }.get(req.threshold_direction, "초과")
+
+
 def _metrics_phrase(req: AnomalyExplainRequest) -> str:
     """Spring이 계산한 윈도우 지표를 사람이 읽는 한 구절로 정리한다(값 재계산 없음)."""
     parts: list[str] = []
     if req.breach_rate is not None:
-        parts.append(f"최근 초과율 {round(req.breach_rate * 100)}%")
+        parts.append(f"최근 이탈률 {round(req.breach_rate * 100)}%")
     if req.trend is not None:
         if req.trend > 0:
             parts.append(f"상승 추세(+{req.trend:.1f})")
@@ -43,15 +50,15 @@ def _build_prompt(req: AnomalyExplainRequest) -> str:
     unit = f" {req.unit}" if req.unit else ""
     lines.append(f"- 측정값: {req.value}{unit}")
     if req.threshold is not None:
-        lines.append(f"- 임계값: {req.threshold}{unit}")
+        lines.append(f"- 임계 조건: {req.threshold}{unit} {_direction_label(req)}")
     if req.recent_values:
         lines.append(f"- 직전 값들: {req.recent_values}")
     metrics = _metrics_phrase(req)
     if metrics:
         lines.append(f"- 최근 추세 지표: {metrics}")
         lines.append(
-            "  (초과율이 낮고 추세가 평탄하면 간헐 스파이크로 노이즈 가능성, "
-            "초과율이 높거나 상승 추세면 지속 이상으로 판단해 권고 수위를 높여라.)"
+            "  (이탈률이 낮고 추세가 평탄하면 간헐 스파이크로 노이즈 가능성, "
+            "이탈률이 높거나 임계 방향으로 추세가 이어지면 지속 이상으로 판단해 권고 수위를 높여라.)"
         )
     return "\n".join(lines)
 
@@ -69,7 +76,7 @@ def explain_anomaly(
         evidence += f" {req.sensor_type}"
     evidence += f" 측정값 {req.value}{unit}"
     if req.threshold is not None:
-        evidence += f"가 임계값 {req.threshold}{unit}를 초과"
+        evidence += f"가 임계값 {req.threshold}{unit} {_direction_label(req)}"
     metrics = _metrics_phrase(req)
     if metrics:
         evidence += f" ({metrics})"

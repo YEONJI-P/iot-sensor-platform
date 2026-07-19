@@ -89,11 +89,15 @@ class SensorDataServiceTest {
 
     /** 정상 저장 경로에 필요한 스텁을 세팅한다(테스트별 미사용 가능성 때문에 lenient). */
     private void arrange(Double threshold) {
+        arrange(threshold, ThresholdDirection.ABOVE);
+    }
+
+    private void arrange(Double threshold, ThresholdDirection direction) {
         device = Device.builder().zone(null).code("CMAPSS-U1").name("엔진 유닛1")
                 .location("C-MAPSS unit1").expectedIntervalSeconds(10).build();
         channel = SensorChannel.builder().device(device).code("s4").unit("°R")
                 .quantityKind("temperature").thresholdValue(threshold)
-                .thresholdDirection(ThresholdDirection.ABOVE).build();
+                .thresholdDirection(direction).build();
         channelStatus = new ChannelStatus(channel);
 
         lenient().when(deviceRepository.findByCode("CMAPSS-U1")).thenReturn(Optional.of(device));
@@ -307,6 +311,36 @@ class SensorDataServiceTest {
         verify(alertRepository, times(1)).save(any(Alert.class));
         assertThat(channelStatus.isInAlarm()).isTrue();
         assertThat(channelStatus.getLastAlertAt()).isEqualTo(FIXED);
+    }
+
+    @Test
+    void BELOW_알림은_임계값_미만으로_표현한다() {
+        arrange(100.0, ThresholdDirection.BELOW);
+
+        sensorDataService.receive(req(50.0));
+
+        verify(alertRepository).save(alertCaptor.capture());
+        assertThat(alertCaptor.getValue().getMessage()).contains("임계값 미만");
+    }
+
+    @Test
+    void ABS_ABOVE_알림은_절댓값_초과로_표현한다() {
+        arrange(100.0, ThresholdDirection.ABS_ABOVE);
+
+        sensorDataService.receive(req(-150.0));
+
+        verify(alertRepository).save(alertCaptor.capture());
+        assertThat(alertCaptor.getValue().getMessage()).contains("임계값 절댓값 초과");
+    }
+
+    @Test
+    void legacy_null방향은_ABOVE_알림문구로_fallback한다() {
+        arrange(100.0, null);
+
+        sensorDataService.receive(req(150.0));
+
+        verify(alertRepository).save(alertCaptor.capture());
+        assertThat(alertCaptor.getValue().getMessage()).contains("임계값 초과");
     }
 
     @Test

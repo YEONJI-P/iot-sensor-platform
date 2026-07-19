@@ -20,7 +20,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     List<Alert> findByChannelIdOrderByCreatedAtDesc(Long channelId, Pageable pageable);
 
     // 보강 대상은 임계 alert 만(channel is not null). sensor_type←quantityKind, unit←channel.unit.
-    @Query("select new dev.bugi.sensor.alert.dto.EnrichTarget(a.id, a.channel.id, a.device.name, a.channel.quantityKind, a.channel.unit, a.sensorValue, a.thresholdValue, a.message) from Alert a where a.evidence is null and a.channel is not null order by a.createdAt desc")
+    @Query("select new dev.bugi.sensor.alert.dto.EnrichTarget(a.id, a.channel.id, a.device.name, a.channel.quantityKind, a.channel.unit, a.sensorValue, a.thresholdValue, a.channel.thresholdDirection, a.message) from Alert a where a.evidence is null and a.channel is not null order by a.createdAt desc")
     List<EnrichTarget> findEnrichTargets(Pageable pageable);
 
     @Query(value = """

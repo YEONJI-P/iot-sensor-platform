@@ -198,8 +198,8 @@ public class SensorDataService {
             Alert alert = Alert.builder()
                     .device(device).channel(channel).batch(batch)
                     .sensorValue(value).thresholdValue(threshold)
-                    .message(String.format("[%s/%s] 임계값 초과! 현재값: %.1f, 임계값: %.1f",
-                            device.getName(), channel.getCode(), value, threshold))
+                    .message(String.format("[%s/%s] 임계값 %s! 현재값: %.1f, 임계값: %.1f",
+                            device.getName(), channel.getCode(), thresholdCondition(channel), value, threshold))
                     .severity(severity)
                     .build();
             alertRepository.save(alert);
@@ -214,6 +214,16 @@ public class SensorDataService {
             log.info("Alert 해제 - channel: {}, value: {}", channel.getCode(), value);
         }
         // breach && inAlarm → 억제 / 여유 구간 → 알람 유지
+    }
+
+    private String thresholdCondition(SensorChannel channel) {
+        SensorChannel.ThresholdDirection direction = channel.getThresholdDirection() == null
+                ? SensorChannel.ThresholdDirection.ABOVE : channel.getThresholdDirection();
+        return switch (direction) {
+            case BELOW -> "미만";
+            case ABS_ABOVE -> "절댓값 초과";
+            case ABOVE -> "초과";
+        };
     }
 
     // 수신 하트비트는 Device(설정)가 아니라 DeviceStatus(텔레메트리)에 찍는다 — 설정 감사 오염 방지.

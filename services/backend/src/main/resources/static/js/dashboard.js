@@ -27,6 +27,9 @@
   let readingsRequestId = 0;
   let channelAlertsRequestId = 0;
   let deviceAlertsRequestId = 0;
+  let deviceAlerts = [];
+  let showAllDeviceAlerts = false;
+  let expandedDeviceAlertId = null;
   let pollTimer = null;
   let clockTimer = null;
   let sse = null;
@@ -381,6 +384,10 @@
     const entry = deviceIndex.get(String(deviceId));
     if (!entry) return;
     currentDeviceId = String(deviceId);
+    deviceAlerts = [];
+    showAllDeviceAlerts = false;
+    expandedDeviceAlertId = null;
+    renderDeviceAlerts();
     if (!(entry.device.channels || []).some((channel) => String(channel.id) === String(currentChannelId))) {
       currentChannelId = entry.device.channels && entry.device.channels.length ? String(entry.device.channels[0].id) : null;
     }
@@ -498,6 +505,32 @@
     return parts.length ? `<span class="evi">${parts.join(' · ')}</span>` : '';
   }
 
+  function renderDeviceAlerts(focusAlertId) {
+    const entry = currentEntry();
+    if (!entry) return;
+    const visible = showAllDeviceAlerts ? deviceAlerts : deviceAlerts.slice(0, 5);
+    if (expandedDeviceAlertId != null
+        && !visible.some((alert) => String(alert.id) === String(expandedDeviceAlertId))) {
+      expandedDeviceAlertId = null;
+    }
+    $('alarmList').innerHTML = visible.length ? visible.map((alert) => {
+      const channel = channelName(entry.device, alert.channelId);
+      const lamp = alert.severity === 'CRITICAL' ? 'alarm' : alert.severity === 'WARNING' ? 'warn' : 'ok';
+      const expanded = String(alert.id) === String(expandedDeviceAlertId);
+      const detailId = `device-alert-detail-${alert.id}`;
+      return `<li><button class="alarm-summary" type="button" data-device-alert-id="${escapeHtml(String(alert.id))}" aria-expanded="${expanded}" aria-controls="${escapeHtml(detailId)}"><span class="alarm-line"><span class="freshness"><span class="lamp ${lamp}"></span><strong>${escapeHtml(channel)}</strong> · ${escapeHtml(alert.severity || 'INFO')}</span><span class="alarm-time">${escapeHtml(fmtDateTime(alert.createdAt))}</span></span><span class="alarm-message">${escapeHtml(alert.message || '')}</span></button><div id="${escapeHtml(detailId)}" class="alarm-detail${expanded ? '' : ' hidden'}">${escapeHtml(alert.message || '')}${evidenceHtml(alert)}</div></li>`;
+    }).join('') : '<li class="empty">최근 알림이 없습니다.</li>';
+    const toggle = $('alarmListToggle');
+    toggle.classList.toggle('hidden', deviceAlerts.length <= 5);
+    toggle.textContent = showAllDeviceAlerts ? '접기' : '최근 20건 보기';
+    toggle.setAttribute('aria-expanded', String(showAllDeviceAlerts));
+    if (focusAlertId != null) {
+      const focused = [...$('alarmList').querySelectorAll('[data-device-alert-id]')]
+        .find((button) => String(button.dataset.deviceAlertId) === String(focusAlertId));
+      if (focused) focused.focus({ preventScroll: true });
+    }
+  }
+
   async function loadDeviceAlerts() {
     const entry = currentEntry();
     if (!entry) return;
@@ -508,12 +541,12 @@
     let page;
     try { page = await res.json(); } catch { return; }
     if (requestId !== deviceAlertsRequestId || !currentEntry() || requestedDevice !== String(currentEntry().device.id)) return;
-    const alerts = Array.isArray(page.content) ? page.content : [];
-    $('alarmList').innerHTML = alerts.length ? alerts.map((alert) => {
-      const channel = channelName(entry.device, alert.channelId);
-      const lamp = alert.severity === 'CRITICAL' ? 'alarm' : alert.severity === 'WARNING' ? 'warn' : 'ok';
-      return `<li><div class="alarm-line"><span class="freshness"><span class="lamp ${lamp}"></span><strong>${escapeHtml(channel)}</strong></span><span class="alarm-time">${escapeHtml(fmtDateTime(alert.createdAt))}</span></div><div class="alarm-message">${escapeHtml(alert.message || '')}${evidenceHtml(alert)}</div></li>`;
-    }).join('') : '<li class="empty">최근 알림이 없습니다.</li>';
+    deviceAlerts = Array.isArray(page.content) ? page.content : [];
+    if (expandedDeviceAlertId != null
+        && !deviceAlerts.some((alert) => String(alert.id) === String(expandedDeviceAlertId))) {
+      expandedDeviceAlertId = null;
+    }
+    renderDeviceAlerts();
   }
 
   function appendLivePoint(batchId, value, anomaly, observedAt) {
@@ -619,6 +652,17 @@
       if (card) openDevice(card.dataset.deviceId);
     });
     $('backButton').addEventListener('click', showOverview);
+    $('alarmList').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-device-alert-id]');
+      if (!button) return;
+      const alertId = button.dataset.deviceAlertId;
+      expandedDeviceAlertId = String(expandedDeviceAlertId) === String(alertId) ? null : alertId;
+      renderDeviceAlerts(alertId);
+    });
+    $('alarmListToggle').addEventListener('click', () => {
+      showAllDeviceAlerts = !showAllDeviceAlerts;
+      renderDeviceAlerts();
+    });
     $('channelGrid').addEventListener('click', async (event) => {
       const card = event.target.closest('[data-channel-id]');
       if (!card || String(card.dataset.channelId) === String(currentChannelId)) return;
