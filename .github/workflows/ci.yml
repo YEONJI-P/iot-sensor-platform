@@ -52,3 +52,28 @@ jobs:
     uses: ./.github/workflows/publish-images.yml
     with:
       services: all
+
+  propose-personal-hub-release:
+    name: Propose personal-hub release
+    needs: publish-images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Sensor Monitor automation
+        uses: actions/checkout@v4
+
+      - name: Checkout personal-hub
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/personal-hub
+          ref: main
+          path: personal-hub
+          token: ${{ secrets.PERSONAL_HUB_PR_TOKEN }}
+
+      - name: Update Sensor pin and open PR
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_HUB_PR_TOKEN }}
+          HUB_REPOSITORY: ${{ github.repository_owner }}/personal-hub
+          SOURCE_SHA: ${{ github.sha }}
+        run: bash .github/scripts/propose-personal-hub-release.sh personal-hub

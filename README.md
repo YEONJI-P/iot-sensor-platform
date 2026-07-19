@@ -681,7 +681,9 @@ ghcr.io/yeonji-p/sensor-monitor-simulator:<git-sha>
 ```
 
 - **`latest` 는 발행하지 않습니다.** 같은 태그가 다른 코드를 가리키면 무엇이 돌고 있는지 확인할 수도, 되돌릴 좌표를 잡을 수도 없습니다.
-- main push의 CI(`ci.yml`)가 모든 테스트를 통과하면 `.github/workflows/publish-images.yml`을 호출해 세 이미지를 같은 SHA로 자동 발행합니다. `workflow_dispatch`는 선택 서비스 재발행용으로 유지합니다. 이미지 발행만으로 소비자의 pin이나 홈서버 실행 버전은 바뀌지 않습니다.
+- main push의 CI(`ci.yml`)가 모든 테스트를 통과하면 `.github/workflows/publish-images.yml`을 호출해 세 이미지를 같은 SHA로 자동 발행합니다. `workflow_dispatch`는 선택 서비스 재발행용으로 유지합니다.
+- 세 이미지 발행이 성공하면 CI는 personal-hub의 세 image pin과 배포 문서를 같은 SHA로 바꾸는 branch와 PR을 제안합니다. PR은 자동 병합되지 않으므로 새 환경변수·Flyway·rollback 호환성을 확인하고 사람이 병합해야 홈서버 배포 대상이 됩니다.
+- cross-repository PR에는 Sensor Monitor 저장소의 Actions secret `PERSONAL_HUB_PR_TOKEN`을 사용합니다. 값은 personal-hub 한 저장소만 선택한 fine-grained token이며 `Contents: Read and write`, `Pull requests: Read and write`만 부여합니다. 운영 환경변수와 홈서버 비밀값은 이 workflow에 전달하지 않습니다.
 - 독립 풀 데모가 만드는 이미지는 `sensor-monitor-backend:local`·`sensor-monitor-explain:local`·`sensor-monitor-simulator:local`로, 배포 이미지와 태그가 겹치지 않습니다.
 - 최초 발행된 GHCR 패키지는 **private**입니다. workflow의 OCI source 라벨은 이미지 출처와 저장소 연결을 명시할 뿐 visibility를 public으로 바꾸지 않습니다.
 - private 유지 시 홈서버가 GHCR 로그인 자격증명을 가져야 합니다. 공개 전환은 발행 후 패키지 설정에서 별도로 결정하며, workflow가 자동으로 바꾸지 않습니다.
