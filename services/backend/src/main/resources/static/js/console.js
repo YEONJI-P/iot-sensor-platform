@@ -163,7 +163,7 @@
         return `<tr>
           <td class="num">${escapeHtml(u.employeeId)}</td>
           <td>${escapeHtml(u.name)}</td>
-          <td class="dim">${escapeHtml(u.factoryName) || '—'}</td>
+          <td class="dim">${u.factoryName ? escapeHtml(u.factoryName) : '<span class="faint">공장 미지정</span>'}</td>
           <td>${roleTag(u.role)}</td>
           <td><span class="tag ${statusCls}">${escapeHtml(u.status)}</span></td>
           <td>${actions}</td>
@@ -195,40 +195,61 @@
       } catch (e) { toast(e.message, true); }
     }
 
-    /* 승인 = 역할 부여 + 구역 배정. 부여 가능 역할은 호출자 역할로 제한(백엔드도 검증). */
+    /* 승인 = 역할·공장 부여 + 선택 공장 구역 배정. 백엔드도 같은 범위를 검증한다. */
     async function openApproveModal(user) {
       if (!user) return;
-      const grantable = Auth.getRole() === 'SYSTEM_ADMIN'
+      const isSystemAdmin = Auth.getRole() === 'SYSTEM_ADMIN';
+      const grantable = isSystemAdmin
         ? ['VIEWER', 'MEMBER', 'FACTORY_ADMIN']
         : ['VIEWER', 'MEMBER'];
 
       let zones = [];
-      try { zones = (await apiGet('/admin/zones')) || []; }
-      catch (e) { toast(e.message, true); return; }
-      // 대상 사용자 공장으로 필터(공장 미지정이면 전체 노출, 백엔드가 동일 공장 강제)
-      if (user.factoryId != null) {
-        zones = zones.filter(z => String(z.factoryId) === String(user.factoryId));
+      let factories = [];
+      try {
+        zones = await apiGet('/admin/zones');
+        if (isSystemAdmin) {
+          // apiFetch의 401 refresh가 중복되지 않도록 인증 요청은 순차 처리한다.
+          factories = await apiGet('/admin/factories');
+        }
+        zones = Array.isArray(zones) ? zones : [];
+        factories = Array.isArray(factories) ? factories : [];
       }
+      catch (e) { toast(e.message, true); return; }
 
       const roleOpts = grantable
         .map(r => `<option value="${r}">${(Auth.ROLE_LABEL[r] || {}).text || r}</option>`).join('');
-      const zoneRows = zones.length
-        ? zones.map(z => `<label><input type="checkbox" value="${z.id}"/> ${escapeHtml(z.name)}
-             <span class="faint mono" style="font-size:.72rem;">${escapeHtml(z.factoryName)}</span></label>`).join('')
-        : '<div class="faint" style="font-size:.85rem;">배정 가능한 구역이 없습니다. 역할만 부여합니다.</div>';
+      const validFactories = factories.filter(factory => FactorySelection.parsePositiveId(factory && factory.id) != null);
+      const factoryIds = new Set(validFactories.map(factory => FactorySelection.parsePositiveId(factory.id)));
+      const targetFactoryId = FactorySelection.parsePositiveId(user.factoryId);
+      const initialFactoryId = isSystemAdmin
+        ? (FactorySelection.isAllowedId(targetFactoryId, factoryIds) ? targetFactoryId : null)
+        : targetFactoryId;
+      const factoryField = isSystemAdmin
+        ? `<select class="input" id="apFactory" aria-describedby="apFactoryHint">
+             <option value="">공장을 선택해주세요</option>
+             ${validFactories.map(factory => `<option value="${FactorySelection.parsePositiveId(factory.id)}"${initialFactoryId === FactorySelection.parsePositiveId(factory.id) ? ' selected' : ''}>${escapeHtml(factory.name)}</option>`).join('')}
+           </select>
+           <p id="apFactoryHint" class="faint" style="font-size:.72rem; margin-top:.35rem;">가입 신청 공장을 확인하고 필요하면 교정할 수 있습니다.</p>`
+        : `<input class="input" id="apFactory" type="text" value="${escapeHtml(user.factoryName || (targetFactoryId == null ? '공장 미지정' : '공장 #' + targetFactoryId))}" readonly/>
+           <p class="faint" style="font-size:.72rem; margin-top:.35rem;">공장 관리자는 대상의 소속 공장으로만 승인할 수 있습니다.</p>`;
 
       const overlay = el('div', 'modal-overlay');
       const box = el('div', 'modal-box');
       box.innerHTML = `
         <h3>승인 — ${escapeHtml(user.name)} <span class="faint mono">${escapeHtml(user.employeeId)}</span></h3>
         <div class="field">
-          <label>부여 역할</label>
+          <label for="apFactory">소속 공장</label>
+          ${factoryField}
+        </div>
+        <div class="field">
+          <label for="apRole">부여 역할</label>
           <select class="input" id="apRole">${roleOpts}</select>
         </div>
         <div class="field">
           <label>구역 배정 <span class="faint">(복수 선택 가능)</span></label>
-          <div class="zone-picker" id="apZones">${zoneRows}</div>
+          <div class="zone-picker" id="apZones"></div>
         </div>
+        <div id="apError" class="hidden" role="alert" aria-live="assertive" style="color:var(--alarm); font-size:.82rem; margin-top:.8rem;"></div>
         <div class="modal-actions">
           <button class="btn btn-ghost btn-sm" id="apCancel">취소</button>
           <button class="btn btn-primary btn-sm" id="apConfirm">승인 확정</button>
@@ -236,17 +257,109 @@
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
-      const close = () => overlay.remove();
+      const factoryControl = $('#apFactory', box);
+      const roleControl = $('#apRole', box);
+      const zonePicker = $('#apZones', box);
+      const errorNode = $('#apError', box);
+      const cancelButton = $('#apCancel', box);
+      const confirmButton = $('#apConfirm', box);
+      let submitting = false;
+
+      const selectedFactoryId = () => isSystemAdmin
+        ? (FactorySelection.isAllowedId(factoryControl.value, factoryIds)
+          ? FactorySelection.parsePositiveId(factoryControl.value) : null)
+        : initialFactoryId;
+
+      function showModalError(message) {
+        errorNode.textContent = message;
+        errorNode.classList.remove('hidden');
+      }
+
+      function clearModalError() {
+        errorNode.textContent = '';
+        errorNode.classList.add('hidden');
+      }
+
+      function renderZoneOptions() {
+        const factoryId = selectedFactoryId();
+        if (factoryId == null) {
+          zonePicker.innerHTML = '<div class="faint" style="font-size:.85rem;">공장을 먼저 선택해주세요.</div>';
+          return;
+        }
+        const availableZones = FactorySelection.filterZones(zones, factoryId)
+          .filter(zone => FactorySelection.parsePositiveId(zone && zone.id) != null);
+        zonePicker.innerHTML = availableZones.length
+          ? availableZones.map(zone => `<label><input type="checkbox" value="${FactorySelection.parsePositiveId(zone.id)}"/> ${escapeHtml(zone.name)}</label>`).join('')
+          : '<div class="faint" style="font-size:.85rem;">이 공장에는 배정 가능한 구역이 없습니다. 공장과 역할만 부여합니다.</div>';
+      }
+
+      function updateConfirmAvailability() {
+        confirmButton.disabled = submitting || selectedFactoryId() == null;
+      }
+
+      function setSubmitting(next) {
+        submitting = next;
+        roleControl.disabled = next;
+        if (isSystemAdmin) factoryControl.disabled = next;
+        zonePicker.querySelectorAll('input').forEach(input => { input.disabled = next; });
+        cancelButton.disabled = next;
+        updateConfirmAvailability();
+      }
+
+      const close = (force = false) => {
+        if (submitting && !force) return;
+        overlay.remove();
+      };
       overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-      $('#apCancel', box).addEventListener('click', close);
-      $('#apConfirm', box).addEventListener('click', async () => {
-        const role = $('#apRole', box).value;
-        const zoneIds = Array.from(box.querySelectorAll('#apZones input:checked')).map(c => Number(c.value));
+      cancelButton.addEventListener('click', () => close());
+      if (isSystemAdmin) {
+        factoryControl.addEventListener('change', () => {
+          factoryControl.removeAttribute('aria-invalid');
+          clearModalError();
+          // 공장 변경 때 이전 체크 DOM 자체를 교체해 교차 공장 선택이 남지 않게 한다.
+          renderZoneOptions();
+          updateConfirmAvailability();
+        });
+      }
+      confirmButton.addEventListener('click', async () => {
+        if (submitting) return;
+        clearModalError();
+        const factoryId = selectedFactoryId();
+        if (factoryId == null) {
+          factoryControl.setAttribute('aria-invalid', 'true');
+          showModalError('승인할 공장을 선택해주세요.');
+          updateConfirmAvailability();
+          return;
+        }
+        const payload = FactorySelection.buildApprovalPayload(
+          roleControl.value,
+          factoryId,
+          Array.from(zonePicker.querySelectorAll('input:checked')).map(input => input.value),
+        );
+        if (!payload) {
+          showModalError('공장과 구역 선택을 다시 확인해주세요.');
+          return;
+        }
+
+        setSubmitting(true);
         try {
-          const msg = await apiMutate(`/admin/users/${user.id}/approve`, 'PATCH', { role, zoneIds }, '승인 처리되었습니다.');
-          toast(msg); close(); load();
-        } catch (e) { toast(e.message, true); }
+          const msg = await apiMutate(`/admin/users/${user.id}/approve`, 'PATCH', payload, '승인 처리되었습니다.');
+          toast(msg);
+          close(true);
+          load();
+        } catch (e) {
+          showModalError(e.message);
+          setSubmitting(false);
+        }
       });
+
+      renderZoneOptions();
+      if (!isSystemAdmin && initialFactoryId == null) {
+        showModalError('대상 사용자의 소속 공장을 확인할 수 없습니다.');
+      } else if (isSystemAdmin && validFactories.length === 0) {
+        showModalError('승인에 사용할 공장이 없습니다. 공장을 먼저 등록해주세요.');
+      }
+      updateConfirmAvailability();
     }
 
     pendingOnly.addEventListener('change', load);

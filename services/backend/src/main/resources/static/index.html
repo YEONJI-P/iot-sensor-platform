@@ -55,7 +55,7 @@
 
     <div class="field">
       <label for="employeeId">사원번호</label>
-      <input id="employeeId" class="input" type="text" placeholder="예: ADMIN001" autocomplete="username"/>
+      <input id="employeeId" class="input" type="text" placeholder="예: SYSTEM" autocomplete="username"/>
     </div>
     <div class="field">
       <label for="password">비밀번호</label>
@@ -100,9 +100,14 @@
       <input id="registerEmail" class="input" type="email" placeholder="name@example.com" autocomplete="email"/>
     </div>
     <div class="field">
-      <label for="registerFactoryId">공장 ID <span class="faint">(선택)</span></label>
-      <input id="registerFactoryId" class="input" type="number" min="1" step="1" placeholder="예: 1" inputmode="numeric"/>
-      <p class="faint" style="font-size:.72rem; margin-top:.4rem;">모르면 비워두세요. 시스템 관리자가 승인할 때 소속 구역을 배정할 수 있습니다.</p>
+      <label for="registerFactoryId">공장</label>
+      <select id="registerFactoryId" class="input" required disabled>
+        <option value="">공장 목록 불러오는 중…</option>
+      </select>
+      <div id="registerFactoryLoadError" class="hidden" role="alert" style="color:var(--alarm); font-size:.78rem; margin-top:.45rem;">
+        <span id="registerFactoryLoadErrorText"></span>
+        <button id="retryRegisterFactoriesBtn" class="btn btn-sm btn-ghost" type="button" style="margin-left:.35rem;">다시 시도</button>
+      </div>
     </div>
     <div id="registerError" class="hidden" role="alert" style="color:var(--alarm); font-size:.82rem; margin-bottom:.8rem;"></div>
     <button id="registerBtn" class="btn btn-primary" style="width:100%; justify-content:center;">승인 요청 보내기</button>
@@ -142,6 +147,7 @@
 
 <script src="/js/theme.js"></script>
 <script src="/js/auth.js"></script>
+<script src="/js/factory-selection.js"></script>
 <script>
   /* 역할 → 콘솔 진입점 (4역할 정합) */
   const ENTRIES = {
@@ -167,21 +173,102 @@
     document.getElementById('employeeId').focus();
   }
 
+  let registerFactoryIds = new Set();
+  let registerFactoryLoadVersion = 0;
+  let registerFactoriesReady = false;
+  let registerSubmitting = false;
+
+  function setRegisterSubmitAvailability() {
+    const select = document.getElementById('registerFactoryId');
+    const factorySelected = registerFactoriesReady
+      && FactorySelection.isAllowedId(select.value, registerFactoryIds);
+    document.getElementById('registerBtn').disabled = registerSubmitting || !factorySelected;
+  }
+
+  function resetRegisterFactorySelect() {
+    registerFactoryLoadVersion += 1;
+    registerFactoryIds = new Set();
+    registerFactoriesReady = false;
+    const select = document.getElementById('registerFactoryId');
+    select.innerHTML = '<option value="">공장을 선택해주세요</option>';
+    select.value = '';
+    select.disabled = true;
+    select.removeAttribute('aria-invalid');
+    document.getElementById('registerFactoryLoadError').classList.add('hidden');
+    setRegisterSubmitAvailability();
+  }
+
+  async function loadRegisterFactories() {
+    const version = ++registerFactoryLoadVersion;
+    const select = document.getElementById('registerFactoryId');
+    const errorWrap = document.getElementById('registerFactoryLoadError');
+    const errorText = document.getElementById('registerFactoryLoadErrorText');
+    const retryBtn = document.getElementById('retryRegisterFactoriesBtn');
+    registerFactoryIds = new Set();
+    registerFactoriesReady = false;
+    select.disabled = true;
+    select.innerHTML = '<option value="">공장 목록 불러오는 중…</option>';
+    errorWrap.classList.add('hidden');
+    retryBtn.disabled = true;
+    document.getElementById('registerLamp').className = 'lamp warn';
+    document.getElementById('registerStatus').textContent = 'ACCESS · 공장 조회 중…';
+    setRegisterSubmitAvailability();
+
+    try {
+      const res = await fetch('/auth/factories');
+      if (!res.ok) throw new Error('공장 목록을 불러오지 못했습니다.');
+      const factories = await res.json();
+      if (version !== registerFactoryLoadVersion) return;
+      const validFactories = (Array.isArray(factories) ? factories : [])
+        .filter(factory => FactorySelection.parsePositiveId(factory && factory.id) != null);
+      if (validFactories.length === 0) throw new Error('가입 가능한 공장이 없습니다. 관리자에게 문의해주세요.');
+
+      registerFactoryIds = new Set(validFactories.map(factory => FactorySelection.parsePositiveId(factory.id)));
+      select.innerHTML = '<option value="">공장을 선택해주세요</option>'
+        + validFactories.map(factory => `<option value="${FactorySelection.parsePositiveId(factory.id)}">${escapeRegisterHtml(factory.name)}</option>`).join('');
+      select.disabled = false;
+      registerFactoriesReady = true;
+      document.getElementById('registerLamp').className = 'lamp idle';
+      document.getElementById('registerStatus').textContent = 'ACCESS · REQUEST';
+    } catch (e) {
+      if (version !== registerFactoryLoadVersion) return;
+      select.innerHTML = '<option value="">공장 목록을 불러올 수 없습니다</option>';
+      errorText.textContent = e.message || '공장 목록을 불러오지 못했습니다.';
+      errorWrap.classList.remove('hidden');
+      document.getElementById('registerLamp').className = 'lamp alarm';
+      document.getElementById('registerStatus').textContent = 'ACCESS · 목록 오류';
+    } finally {
+      if (version === registerFactoryLoadVersion) {
+        retryBtn.disabled = false;
+        setRegisterSubmitAvailability();
+      }
+    }
+  }
+
+  function escapeRegisterHtml(value) {
+    const node = document.createElement('span');
+    node.textContent = value == null ? '' : String(value);
+    return node.innerHTML;
+  }
+
   function showRegister() {
     document.getElementById('loginView').classList.add('hidden');
     document.getElementById('homeView').classList.add('hidden');
     document.getElementById('registerView').classList.remove('hidden');
     document.getElementById('registerError').classList.add('hidden');
     document.getElementById('registerLamp').className = 'lamp idle';
-    document.getElementById('registerStatus').textContent = 'ACCESS · REQUEST';
+    document.getElementById('registerStatus').textContent = 'ACCESS · 공장 조회 중…';
     const employeeId = document.getElementById('employeeId').value.trim();
     if (employeeId) document.getElementById('registerEmployeeId').value = employeeId;
     document.getElementById('registerEmployeeId').focus();
+    loadRegisterFactories();
   }
 
   function clearRegisterForm() {
-    ['registerEmployeeId', 'registerName', 'registerPassword', 'registerEmail', 'registerFactoryId']
+    ['registerEmployeeId', 'registerName', 'registerPassword', 'registerEmail']
       .forEach(id => { document.getElementById(id).value = ''; });
+    registerSubmitting = false;
+    resetRegisterFactorySelect();
   }
 
   function showHome() {
@@ -233,13 +320,12 @@
     const emailEl = document.getElementById('registerEmail');
     const email = emailEl.value.trim();
     const factoryIdEl = document.getElementById('registerFactoryId');
-    const factoryIdRaw = factoryIdEl.value;
+    const factoryId = FactorySelection.parsePositiveId(factoryIdEl.value);
     const err = document.getElementById('registerError');
     const lamp = document.getElementById('registerLamp');
     const status = document.getElementById('registerStatus');
-    const btn = document.getElementById('registerBtn');
 
-    if (btn.disabled) return;
+    if (registerSubmitting) return;
     err.classList.add('hidden');
     if (!employeeId || !name || !password) {
       err.textContent = '사원번호, 이름, 비밀번호를 입력해주세요.';
@@ -251,13 +337,17 @@
       err.classList.remove('hidden');
       return;
     }
-    if (factoryIdRaw && !factoryIdEl.validity.valid) {
-      err.textContent = '공장 ID는 1 이상의 정수로 입력해주세요.';
+    if (!registerFactoriesReady || factoryId == null || !registerFactoryIds.has(factoryId)) {
+      factoryIdEl.setAttribute('aria-invalid', 'true');
+      err.textContent = '가입할 공장을 선택해주세요.';
       err.classList.remove('hidden');
       return;
     }
 
-    btn.disabled = true;
+    factoryIdEl.removeAttribute('aria-invalid');
+    registerSubmitting = true;
+    factoryIdEl.disabled = true;
+    setRegisterSubmitAvailability();
     lamp.className = 'lamp warn'; status.textContent = 'ACCESS · 요청 중…';
     try {
       const message = await Auth.register({
@@ -265,7 +355,7 @@
         name,
         password,
         email: email || null,
-        factoryId: factoryIdRaw ? Number(factoryIdRaw) : null,
+        factoryId,
       });
       document.getElementById('employeeId').value = employeeId;
       clearRegisterForm();
@@ -274,7 +364,9 @@
       lamp.className = 'lamp alarm'; status.textContent = 'ACCESS · 거부됨';
       err.textContent = e.message; err.classList.remove('hidden');
     } finally {
-      btn.disabled = false;
+      registerSubmitting = false;
+      if (registerFactoriesReady) factoryIdEl.disabled = false;
+      setRegisterSubmitAvailability();
     }
   }
 
@@ -289,12 +381,20 @@
   document.getElementById('loginView').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   document.getElementById('showRegisterBtn').addEventListener('click', showRegister);
   document.getElementById('registerBtn').addEventListener('click', doRegister);
+  document.getElementById('registerFactoryId').addEventListener('change', () => {
+    document.getElementById('registerFactoryId').removeAttribute('aria-invalid');
+    document.getElementById('registerError').classList.add('hidden');
+    setRegisterSubmitAvailability();
+  });
+  document.getElementById('retryRegisterFactoriesBtn').addEventListener('click', loadRegisterFactories);
   document.getElementById('cancelRegisterBtn').addEventListener('click', () => {
     clearRegisterForm();
     showLogin();
   });
   document.getElementById('registerView').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); doRegister(); }
+    if (e.key === 'Enter' && !document.getElementById('registerBtn').disabled) {
+      e.preventDefault(); doRegister();
+    }
   });
 
   /* 진입 */

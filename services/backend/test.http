@@ -1,6 +1,12 @@
 @host = http://localhost:23100
+@factoryId = 1
+@zoneId = 1
+@pendingUserId = 8
 
-### 회원가입 (승인 대기 상태로 생성됨 — 로그인하려면 관리자 승인 필요)
+### 가입 가능한 공장 목록 (무인증, id/name만 반환)
+GET {{host}}/auth/factories
+
+### 회원가입 (factoryId 필수, 승인 대기 상태로 생성됨)
 POST {{host}}/auth/register
 Content-Type: application/json
 
@@ -9,8 +15,7 @@ Content-Type: application/json
   "name": "테스트사용자",
   "password": "password123!",
   "email": "test@factory.com",
-  "department": "생산팀",
-  "factoryId": 1
+  "factoryId": {{factoryId}}
 }
 
 ### 로그인 — MEMBER 계정(seed: DEV001) → accessToken 캡처
@@ -91,13 +96,13 @@ Authorization: Bearer {{token}}
 GET {{host}}/alerts/1
 Authorization: Bearer {{token}}
 
-### ── 관리자 (seed: ADMIN001 = SYSTEM_ADMIN) ──
+### ── 관리자 (수동 seed: SYSTEM = SYSTEM_ADMIN) ──
 # @name adminLogin
 POST {{host}}/auth/login
 Content-Type: application/json
 
 {
-  "employeeId": "ADMIN001",
+  "employeeId": "SYSTEM",
   "password": "admin1234!"
 }
 
@@ -114,3 +119,14 @@ Authorization: Bearer {{adminToken}}
 ### 가입 승인 대기 사용자 목록
 GET {{host}}/admin/users/pending
 Authorization: Bearer {{adminToken}}
+
+### 가입 승인 (pendingUserId는 위 목록 응답에서 확인, factoryId와 zoneIds는 같은 공장)
+PATCH {{host}}/admin/users/{{pendingUserId}}/approve
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "role": "MEMBER",
+  "factoryId": {{factoryId}},
+  "zoneIds": [{{zoneId}}]
+}
