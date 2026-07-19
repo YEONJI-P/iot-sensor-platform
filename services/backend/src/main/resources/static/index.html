@@ -23,6 +23,13 @@
       padding: .55rem .75rem; border: 1px solid var(--line-soft); border-radius: var(--radius-sm);
       background: var(--bg); margin-bottom: 1.3rem;
     }
+    .sample-account {
+      display: grid; grid-template-columns: auto 1fr; gap: .35rem .8rem;
+      padding: .75rem; margin: 1rem 0; border: 1px solid var(--line-soft);
+      border-radius: var(--radius-sm); background: var(--bg); font-size: .76rem;
+    }
+    .sample-account .label { color: var(--text-faint); }
+    .sample-account .value { color: var(--text-dim); font-family: var(--font-mono); }
     /* 홈 화면 */
     .hero-eyebrow { margin-bottom: .6rem; }
     .entry {
@@ -65,6 +72,10 @@
     <div id="loginError" class="hidden" role="alert" style="color:var(--alarm); font-size:.82rem; margin-bottom:.8rem;"></div>
     <div id="loginNotice" class="hidden" role="status" aria-live="polite" style="color:var(--signal); font-size:.82rem; margin-bottom:.8rem;"></div>
     <button id="loginBtn" class="btn btn-primary" style="width:100%; justify-content:center;">접속</button>
+    <div class="sample-account" aria-label="샘플 VIEWER 계정">
+      <span class="label">SAMPLE VIEWER</span><span class="value">guest</span>
+      <span class="label">PASSWORD</span><span class="value">a123456!</span>
+    </div>
     <p class="faint" style="font-size:.76rem; margin-top:1rem; text-align:center;">
       계정이 없으면 관리자 승인이 필요합니다.
     </p>
