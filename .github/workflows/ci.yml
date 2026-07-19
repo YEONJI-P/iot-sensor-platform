@@ -2,6 +2,19 @@ name: Iot Sensor Platform CI
 on:
   push:
     branches: [ "main" ]
+    # 이미지 build context나 발행 workflow가 바뀐 push만 전체 검증·발행한다.
+    paths:
+      - "services/backend/**"
+      - "services/explain/**"
+      - "services/simulator/**"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/publish-images.yml"
+
+# main push가 연달아 오면 최신 commit이 앞선 commit을 모두 포함하므로 오래된 run은 취소한다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
