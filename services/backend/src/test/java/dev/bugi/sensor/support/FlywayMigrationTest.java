@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * 빈 PostgreSQL에 운영(prod) 설정을 그대로 적용한다.
  *
- * 컨텍스트가 뜨려면 Flyway V1~V5 적용 후 Hibernate ddl-auto=validate가 성공해야 한다.
+ * 컨텍스트가 뜨려면 Flyway V1~V6 적용 후 Hibernate ddl-auto=validate가 성공해야 한다.
  * 별도 SQL로 history, 핵심 스키마와 공개 데모 토폴로지를 확인해 테스트 설정이 우연히
  * create/update로 우회하지 않았는지도 막는다.
  */
@@ -52,7 +52,7 @@ class FlywayMigrationTest {
     Environment environment;
 
     @Test
-    void prod는_flyway_V1부터_V5를_적용하고_공개_데모_토폴로지를_준비한다() {
+    void prod는_flyway_V1부터_V6를_적용하고_공개_데모_토폴로지와_운영캘린더를_준비한다() {
         assertThat(environment.getProperty("spring.flyway.enabled")).isEqualTo("true");
         assertThat(environment.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
 
@@ -61,7 +61,7 @@ class FlywayMigrationTest {
                 WHERE version IS NOT NULL AND success = true
                 ORDER BY installed_rank
                 """, String.class);
-        assertThat(appliedVersions).containsExactly("1", "2", "3", "4", "5");
+        assertThat(appliedVersions).containsExactly("1", "2", "3", "4", "5", "6");
 
         // 정규화 batch 스키마: 관측 시각(observed_at)은 batch 가 timestamptz 로 가진다.
         String observedAtType = jdbcTemplate.queryForObject("""
@@ -86,6 +86,12 @@ class FlywayMigrationTest {
         assertThat(indexExists("sensor_reading", "uk_sensor_reading_batch_channel")).isTrue();
         assertThat(indexExists("device", "uk_device_code")).isTrue();
         assertThat(indexExists("sensor_channel", "uk_sensor_channel_device_code")).isTrue();
+        assertThat(tableExists("factory_operating_calendar")).isTrue();
+        assertThat(tableExists("factory_weekly_interval")).isTrue();
+        assertThat(tableExists("factory_date_override")).isTrue();
+        assertThat(tableExists("factory_date_override_interval")).isTrue();
+        assertThat(indexExists("factory_weekly_interval", "idx_factory_weekly_interval_factory_day")).isTrue();
+        assertThat(indexExists("factory_date_override", "uk_factory_date_override")).isTrue();
         // 채널 화면 알림 조회(channel_id 필터 + created_at 정렬)용 인덱스.
         assertThat(indexExists("alert", "idx_alert_channel_created")).isTrue();
 
@@ -110,6 +116,42 @@ class FlywayMigrationTest {
         assertThat(rowCount("sensor_channel")).isEqualTo(20);
         assertThat(rowCount("users")).isZero();
         assertThat(rowCount("zone_users")).isZero();
+        assertThat(rowCount("factory_operating_calendar")).isEqualTo(2);
+        assertThat(rowCount("factory_weekly_interval")).isEqualTo(10);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM factories f
+                LEFT JOIN factory_operating_calendar c ON c.factory_id = f.id
+                WHERE c.factory_id IS NULL
+                """, Integer.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM factory_operating_calendar
+                WHERE timezone_id = 'Asia/Seoul' AND resume_grace_seconds = 300 AND revision = 0
+                """, Integer.class)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM factory_weekly_interval
+                WHERE iso_day BETWEEN 1 AND 5 AND start_minute = 480 AND end_minute = 1080
+                """, Integer.class)).isEqualTo(10);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM factory_weekly_interval WHERE iso_day IN (6, 7)
+                """, Integer.class)).isZero();
+
+        assertThat(columnType("factory_operating_calendar", "created_at"))
+                .isEqualTo("timestamp with time zone");
+        assertThat(columnType("factory_date_override", "local_date")).isEqualTo("date");
+        assertThat(columnType("factory_weekly_interval", "start_minute")).isEqualTo("smallint");
+
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                UPDATE factory_operating_calendar SET resume_grace_seconds = 86401
+                WHERE factory_id = (SELECT min(id) FROM factories)
+                """)).hasMessageContaining("ck_factory_operating_calendar_grace");
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO factory_weekly_interval (factory_id, iso_day, start_minute, end_minute)
+                VALUES ((SELECT min(id) FROM factories), 8, 0, 60)
+                """)).hasMessageContaining("ck_factory_weekly_interval_day");
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO factory_date_override (factory_id, local_date, kind)
+                VALUES ((SELECT min(id) FROM factories), DATE '2026-07-20', 'HOLIDAY')
+                """)).hasMessageContaining("ck_factory_date_override_kind");
 
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM zones z
@@ -215,6 +257,13 @@ class FlywayMigrationTest {
                 SELECT count(*) FROM pg_indexes
                 WHERE schemaname = 'public' AND tablename = ? AND indexname = ?
                 """, Integer.class, table, index) > 0;
+    }
+
+    private String columnType(String table, String column) {
+        return jdbcTemplate.queryForObject("""
+                SELECT data_type FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = ? AND column_name = ?
+                """, String.class, table, column);
     }
 
     private java.util.List<String> channelCodes(String deviceCode) {

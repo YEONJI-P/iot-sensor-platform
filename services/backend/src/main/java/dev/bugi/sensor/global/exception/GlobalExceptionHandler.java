@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
@@ -36,6 +37,12 @@ public class GlobalExceptionHandler {
             failedReadingRepository.save(FailedReading.builder()
                     .deviceCode(req.getDeviceCode()).reason("INVALID_REQUEST").build());
         }
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse("BAD_REQUEST", "요청 형식이 올바르지 않습니다."));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse("BAD_REQUEST", "요청 형식이 올바르지 않습니다."));
     }

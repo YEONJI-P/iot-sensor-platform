@@ -3,6 +3,7 @@ package dev.bugi.sensor.global.config;
 import dev.bugi.sensor.admin.service.AdminService;
 import dev.bugi.sensor.admin.service.ZoneService;
 import dev.bugi.sensor.admin.service.FactoryService;
+import dev.bugi.sensor.admin.service.FactoryCalendarAdminService;
 import dev.bugi.sensor.alert.service.AlertService;
 import dev.bugi.sensor.auth.dto.FactoryOptionResponse;
 import dev.bugi.sensor.auth.service.AuthService;
@@ -76,6 +77,8 @@ public class SecurityConfigTest {
     ZoneService zoneService;
     @MockitoBean
     FactoryService factoryService;
+    @MockitoBean
+    FactoryCalendarAdminService factoryCalendarAdminService;
     @MockitoBean
     AccessControlService accessControlService;
     @MockitoBean
@@ -280,6 +283,49 @@ public class SecurityConfigTest {
         mockMvc.perform(get("/admin/factories"))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(factoryService);
+    }
+
+    @Test
+    void get_factory_calendar_without_auth_is_unauthorized() throws Exception {
+        mockMvc.perform(get("/admin/factory-calendars"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(factoryCalendarAdminService);
+    }
+
+    @Test
+    @WithMockUser(username = "SYSTEM", roles = "SYSTEM_ADMIN")
+    void get_factory_calendar_with_system_admin_is_allowed() throws Exception {
+        given(factoryCalendarAdminService.summaries("SYSTEM")).willReturn(List.of());
+        mockMvc.perform(get("/admin/factory-calendars"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(username = "ADMIN", roles = "FACTORY_ADMIN")
+    void put_factory_calendar_with_factory_admin_is_allowed() throws Exception {
+        mockMvc.perform(put("/admin/factory-calendars/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"timezone":"Asia/Seoul","resumeGraceSeconds":300,"revision":0,
+                                 "weeklyIntervals":[],"dateOverrides":[]}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "MEMBER")
+    void factory_calendar_with_member_is_forbidden() throws Exception {
+        mockMvc.perform(get("/admin/factory-calendars"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(factoryCalendarAdminService);
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void factory_calendar_with_viewer_is_forbidden() throws Exception {
+        mockMvc.perform(get("/admin/factory-calendars/1"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(factoryCalendarAdminService);
     }
 
     @Test

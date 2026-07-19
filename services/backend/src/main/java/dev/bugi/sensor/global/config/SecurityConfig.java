@@ -57,6 +57,8 @@ public class SecurityConfig {
                         .hasAuthority("INGEST")
 
                         // 공장 관리 — SYSTEM_ADMIN만
+                        .requestMatchers("/admin/factory-calendars/**")
+                        .hasAnyRole("SYSTEM_ADMIN", "FACTORY_ADMIN")
                         .requestMatchers("/admin/factories/**")
                         .hasRole("SYSTEM_ADMIN")
 

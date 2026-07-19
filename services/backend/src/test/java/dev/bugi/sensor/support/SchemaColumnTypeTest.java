@@ -40,6 +40,8 @@ class SchemaColumnTypeTest extends AbstractPostgresTest {
             "users,           created_at",
             "refresh_tokens,  expires_at",
             "failed_reading,  created_at",
+            "factory_operating_calendar, created_at",
+            "factory_operating_calendar, updated_at",
     })
     void 모든_Instant_시각컬럼은_timestamptz로_생성된다(String table, String column) {
         String dataType = (String) em.createNativeQuery("""
