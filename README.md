@@ -431,13 +431,13 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 - 장치 freshness 감지 (구역 코호트 판정으로 오탐 억제, 침묵 원인 explain 진단)
 - SSE 기반 실시간 대시보드 (접근 범위 스코핑)
 - LLM 기반 이상 근거, 원인 진단 (Python 분석 서비스 HTTP 연동)
+- Gemini provider 실호출 (`gemini-3.1-flash-lite`, `google-genai`)
 - 실측 공개 센서 시계열(C-MAPSS 엔진, CNC 밀링) 리플레이로 시뮬레이터 데이터 교체
 - 운영시간을 반영한 무제한 합성 데이터 스트림과 Compose live 프로파일
 - Refresh Token 저장·회전 (PostgreSQL)
 
 ### 향후
 
-- explain provider Gemini 실호출 (현재 기본 `echo`, 키 주입 시 전환)
 - MQTT 수신 경로 도입 (엣지 게이트웨이와의 표준 연동)
 - 대용량 시계열 저장소(TimescaleDB) 검토
 
@@ -517,7 +517,7 @@ docker compose --profile live up -d simulator-live
 - 홈서버 기존 PostgreSQL 인스턴스에 별도 `sensor_monitor` database와 전용 role 생성
 - PostgreSQL 컨테이너와 backend가 함께 참가할 외부 Docker network 준비
 - reverse proxy와 backend가 함께 참가할 외부 Docker network 준비
-- backend·explain·simulator 이미지를 같은 commit SHA로 GHCR에 수동 발행
+- main CI를 통과한 backend·explain·simulator 이미지가 같은 commit SHA로 GHCR에 발행됐는지 확인
 - public reverse proxy에서 공유 키 수신 경로 `POST /sensor-data`를 추가 차단. live simulator는 내부 `app` network로 backend를 직접 호출
 - 첫 로그인·승인을 위한 운영 관리자 bootstrap 절차 확정
 - PostgreSQL host 디스크 사용량 경보와 임계 도달 시 `simulator-live` 중단 자동화
@@ -681,7 +681,7 @@ ghcr.io/yeonji-p/sensor-monitor-simulator:<git-sha>
 ```
 
 - **`latest` 는 발행하지 않습니다.** 같은 태그가 다른 코드를 가리키면 무엇이 돌고 있는지 확인할 수도, 되돌릴 좌표를 잡을 수도 없습니다.
-- 발행은 `.github/workflows/publish-images.yml` 의 **수동 실행(workflow_dispatch)** 뿐입니다. main push 는 CI(`ci.yml`, 빌드·테스트)만 돌고 이미지를 덮어쓰지 않습니다.
+- main push의 CI(`ci.yml`)가 모든 테스트를 통과하면 `.github/workflows/publish-images.yml`을 호출해 세 이미지를 같은 SHA로 자동 발행합니다. `workflow_dispatch`는 선택 서비스 재발행용으로 유지합니다. 이미지 발행만으로 소비자의 pin이나 홈서버 실행 버전은 바뀌지 않습니다.
 - 독립 풀 데모가 만드는 이미지는 `sensor-monitor-backend:local`·`sensor-monitor-explain:local`·`sensor-monitor-simulator:local`로, 배포 이미지와 태그가 겹치지 않습니다.
 - 최초 발행된 GHCR 패키지는 **private**입니다. workflow의 OCI source 라벨은 이미지 출처와 저장소 연결을 명시할 뿐 visibility를 public으로 바꾸지 않습니다.
 - private 유지 시 홈서버가 GHCR 로그인 자격증명을 가져야 합니다. 공개 전환은 발행 후 패키지 설정에서 별도로 결정하며, workflow가 자동으로 바꾸지 않습니다.

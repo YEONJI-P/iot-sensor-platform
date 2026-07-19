@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     explain_provider: str = "echo"     # echo | gemini
     gemini_api_key: str = ""           # EXPLAIN_PROVIDER=gemini 일 때만 필요
-    model_name: str = "gemini-2.0-flash"
+    model_name: str = "gemini-3.1-flash-lite"
     port: int = 23200
     request_timeout: float = 30.0
 
