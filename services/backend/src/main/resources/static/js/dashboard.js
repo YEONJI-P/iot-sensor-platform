@@ -9,6 +9,8 @@
   const MAX_FUTURE_SKEW_MS = 60 * 1000;
   const FRESHNESS = {
     NOT_MONITORED: { label: '미감시', lamp: 'idle' },
+    PLANNED_OFFLINE: { label: '계획 비가동', lamp: 'idle' },
+    RESUMING: { label: '재개 대기', lamp: 'idle' },
     NEVER_SEEN: { label: '수신 없음', lamp: 'warn' },
     ONLINE: { label: '온라인', lamp: 'ok' },
     STALE: { label: '수신 지연', lamp: 'alarm' },
@@ -276,14 +278,15 @@
 
   function renderSummary() {
     const devices = allDevices().map((entry) => entry.device);
-    const online = devices.filter((device) => device.freshness === 'ONLINE').length;
+    const monitored = devices.filter((device) => !['NOT_MONITORED', 'PLANNED_OFFLINE', 'RESUMING'].includes(device.freshness));
+    const online = monitored.filter((device) => device.freshness === 'ONLINE').length;
     const alarmCount = devices.reduce((sum, device) => sum + (Number(device.currentAlarmCount) || 0), 0);
     const latest = devices.map((device) => date(device.lastSeenAt)).filter(Boolean)
       .sort((a, b) => b.getTime() - a.getTime())[0];
-    const hasStale = devices.some((device) => device.freshness === 'STALE' || device.freshness === 'NEVER_SEEN');
+    const hasStale = monitored.some((device) => device.freshness === 'STALE' || device.freshness === 'NEVER_SEEN');
 
-    $('summaryFreshness').textContent = `${online} / ${devices.length}`;
-    $('summaryFreshnessLamp').className = `lamp ${hasStale ? 'warn' : devices.length ? 'ok' : 'idle'}`;
+    $('summaryFreshness').textContent = monitored.length ? `${online} / ${monitored.length}` : '운영 예정 없음';
+    $('summaryFreshnessLamp').className = `lamp ${hasStale ? 'warn' : monitored.length ? 'ok' : 'idle'}`;
     $('summaryLastSeen').textContent = latest ? fmtRelative(latest.toISOString()) : '수신 없음';
     $('summaryLastSeenLamp').className = `lamp ${latest ? 'ok' : 'idle'}`;
     $('summaryAlarm').textContent = String(alarmCount);

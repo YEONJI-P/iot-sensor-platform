@@ -46,6 +46,8 @@ public record DashboardOverviewResponse(
 
     public enum Freshness {
         NOT_MONITORED,
+        PLANNED_OFFLINE,
+        RESUMING,
         NEVER_SEEN,
         ONLINE,
         STALE

@@ -16,6 +16,8 @@ import dev.bugi.sensor.device.repository.DeviceStatusRepository;
 import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.factory.entity.Zone;
+import dev.bugi.sensor.factory.calendar.service.OperatingCalendarService;
+import dev.bugi.sensor.factory.calendar.service.OperatingCalendarService.OperatingDecision;
 import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.sensordata.anomaly.ThresholdDetector;
 import dev.bugi.sensor.sensordata.repository.SensorReadingRepository;
@@ -55,6 +57,7 @@ public class DashboardOverviewService {
     private final ChannelStatusRepository channelStatusRepository;
     private final SensorReadingRepository sensorReadingRepository;
     private final ThresholdDetector thresholdDetector;
+    private final OperatingCalendarService operatingCalendarService;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -91,6 +94,12 @@ public class DashboardOverviewService {
         Map<Long, List<SensorChannel>> channelsByDevice = channels.stream()
                 .collect(Collectors.groupingBy(c -> c.getDevice().getId(), LinkedHashMap::new, Collectors.toList()));
 
+        List<Long> factoryIds = devices.stream()
+                .map(Device::getZone).filter(java.util.Objects::nonNull)
+                .map(Zone::getFactory).filter(java.util.Objects::nonNull)
+                .map(Factory::getId).distinct().toList();
+        Map<Long, OperatingDecision> operatingDecisions = operatingCalendarService.evaluate(factoryIds, generatedAt);
+
         Map<GroupKey, FactoryGroup> factoryGroups = new LinkedHashMap<>();
         for (Device device : devices) {
             Zone zone = device.getZone();
@@ -108,10 +117,14 @@ public class DashboardOverviewService {
                             latestReadings.get(channel.getId())))
                     .toList();
             int alarmCount = (int) channelOverviews.stream().filter(ChannelOverview::inAlarm).count();
+            OperatingDecision operatingDecision = factory == null
+                    ? operatingCalendarService.evaluateAlwaysOpenFallback()
+                    : operatingDecisions.getOrDefault(factory.getId(),
+                    operatingCalendarService.evaluateAlwaysOpenFallback());
             DeviceOverview deviceOverview = new DeviceOverview(
                     device.getId(), device.getCode(), device.getName(), device.getLocation(),
                     device.getExpectedIntervalSeconds(), lastSeenAt,
-                    freshness(device.getExpectedIntervalSeconds(), lastSeenAt, generatedAt),
+                    freshness(device.getExpectedIntervalSeconds(), lastSeenAt, generatedAt, operatingDecision),
                     alarmCount, channelOverviews);
 
             factoryGroups.computeIfAbsent(factoryKey, FactoryGroup::new)
@@ -139,15 +152,26 @@ public class DashboardOverviewService {
                 channel.getThresholdValue(), channel.getThresholdDirection());
     }
 
-    static Freshness freshness(Integer expectedIntervalSeconds, Instant lastSeenAt, Instant now) {
+    static Freshness freshness(Integer expectedIntervalSeconds, Instant lastSeenAt, Instant now,
+                               OperatingDecision operatingDecision) {
         if (expectedIntervalSeconds == null || expectedIntervalSeconds <= 0) {
             return Freshness.NOT_MONITORED;
+        }
+        long staleAfterSeconds = Math.multiplyExact(expectedIntervalSeconds.longValue(), FRESHNESS_GRACE_MULTIPLIER);
+        if (lastSeenAt != null) {
+            long elapsedSeconds = Math.max(0L, Duration.between(lastSeenAt, now).getSeconds());
+            if (elapsedSeconds <= staleAfterSeconds) return Freshness.ONLINE;
+        }
+        if (!operatingDecision.scheduledActive()) {
+            return Freshness.PLANNED_OFFLINE;
+        }
+        if (operatingDecision.monitoringSuppressed(lastSeenAt)) {
+            return Freshness.RESUMING;
         }
         if (lastSeenAt == null) {
             return Freshness.NEVER_SEEN;
         }
         long elapsedSeconds = Math.max(0L, Duration.between(lastSeenAt, now).getSeconds());
-        long staleAfterSeconds = Math.multiplyExact(expectedIntervalSeconds.longValue(), FRESHNESS_GRACE_MULTIPLIER);
         return elapsedSeconds > staleAfterSeconds ? Freshness.STALE : Freshness.ONLINE;
     }
 

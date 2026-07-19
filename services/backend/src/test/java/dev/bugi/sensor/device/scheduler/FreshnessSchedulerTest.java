@@ -11,8 +11,12 @@ import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.DeviceStatus;
 import dev.bugi.sensor.device.repository.DeviceStatusRepository;
 import dev.bugi.sensor.factory.entity.Zone;
+import dev.bugi.sensor.factory.entity.Factory;
+import dev.bugi.sensor.factory.calendar.service.OperatingCalendarService;
+import dev.bugi.sensor.factory.calendar.service.OperatingCalendarService.OperatingDecision;
 import dev.bugi.sensor.sensordata.failure.FailedReadingRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -38,13 +42,29 @@ class FreshnessSchedulerTest {
     @Mock AlertRepository alertRepository;
     @Mock ExplainClient explainClient;
     @Mock ExplainProperties explainProperties;
+    @Mock OperatingCalendarService operatingCalendarService;
     private static final Instant NOW = Instant.parse("2026-07-16T00:00:00Z");
     @Spy Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @InjectMocks FreshnessScheduler scheduler;
 
+    @BeforeEach
+    void operatingCalendarDefaultsToActive() {
+        lenient().when(operatingCalendarService.evaluate(anySet(), eq(NOW)))
+                .thenReturn(java.util.Map.of(1L, new OperatingDecision(true, false, null, "SCHEDULED_ACTIVE")));
+        lenient().when(operatingCalendarService.evaluateAlwaysOpenFallback())
+                .thenReturn(new OperatingDecision(true, false, null, "LEGACY_ALWAYS_OPEN"));
+    }
+
     private DeviceStatus device(long id, long zoneId, long silentSeconds) {
+        return device(id, zoneId, silentSeconds, 1L);
+    }
+
+    private DeviceStatus device(long id, long zoneId, long silentSeconds, long factoryId) {
         Zone zone = mock(Zone.class);
+        Factory factory = mock(Factory.class);
+        lenient().when(factory.getId()).thenReturn(factoryId);
+        when(zone.getFactory()).thenReturn(factory);
         when(zone.getId()).thenReturn(zoneId);
         // 이름·id 는 알림(코호트/개별)을 만드는 경로에서만 읽히므로 정상 시나리오에선 미사용.
         lenient().when(zone.getName()).thenReturn("Z" + zoneId);
@@ -52,7 +72,7 @@ class FreshnessSchedulerTest {
         lenient().when(device.getId()).thenReturn(id);
         lenient().when(device.getName()).thenReturn("dev" + id);
         when(device.getZone()).thenReturn(zone);
-        when(device.getExpectedIntervalSeconds()).thenReturn(10);
+        lenient().when(device.getExpectedIntervalSeconds()).thenReturn(10);
         DeviceStatus status = mock(DeviceStatus.class);
         when(status.getDevice()).thenReturn(device);
         when(status.getLastSeenAt()).thenReturn(NOW.minusSeconds(silentSeconds));
@@ -173,6 +193,58 @@ class FreshnessSchedulerTest {
     }
 
     @Test
+    void 계획비가동과_재개유예중에는_alert와_explain을_호출하지_않는다() {
+        DeviceStatus status = silent(1, 100);
+        when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(status));
+        OperatingDecision off = new OperatingDecision(false, false, null, "PLANNED_OFFLINE");
+        when(operatingCalendarService.evaluate(anySet(), eq(NOW))).thenReturn(java.util.Map.of(1L, off));
+
+        scheduler.checkFreshness();
+
+        verifyNoInteractions(alertRepository, explainClient);
+
+        OperatingDecision grace = new OperatingDecision(true, true, NOW.minusSeconds(30), "RESUME_GRACE");
+        when(operatingCalendarService.evaluate(anySet(), eq(NOW))).thenReturn(java.util.Map.of(1L, grace));
+        scheduler.checkFreshness();
+
+        verifyNoInteractions(alertRepository, explainClient);
+    }
+
+    @Test
+    void 한공장이_비운영이어도_다른공장은_계속_감시한다() {
+        DeviceStatus offFactory = device(1, 100, 120, 1L);
+        DeviceStatus activeFactory = device(2, 200, 120, 2L);
+        when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(offFactory, activeFactory));
+        when(operatingCalendarService.evaluate(anySet(), eq(NOW))).thenReturn(java.util.Map.of(
+                1L, new OperatingDecision(false, false, null, "PLANNED_OFFLINE"),
+                2L, new OperatingDecision(true, false, NOW.minusSeconds(3600), "SCHEDULED_ACTIVE")));
+        when(explainProperties.isEnabled()).thenReturn(false);
+
+        scheduler.checkFreshness();
+
+        ArgumentCaptor<Alert> alert = ArgumentCaptor.forClass(Alert.class);
+        verify(alertRepository).save(alert.capture());
+        assertThat(alert.getValue().getDevice().getId()).isEqualTo(2L);
+    }
+
+    @Test
+    void 운영종료가_debounce를_해제해_다음운영구간을_새_episode로_만든다() {
+        DeviceStatus status = silent(1, 100);
+        when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(status));
+        OperatingDecision active = new OperatingDecision(true, false, NOW.minusSeconds(3600), "SCHEDULED_ACTIVE");
+        OperatingDecision off = new OperatingDecision(false, false, null, "PLANNED_OFFLINE");
+        when(operatingCalendarService.evaluate(anySet(), eq(NOW)))
+                .thenReturn(java.util.Map.of(1L, active), java.util.Map.of(1L, off), java.util.Map.of(1L, active));
+        when(explainProperties.isEnabled()).thenReturn(false);
+
+        scheduler.checkFreshness();
+        scheduler.checkFreshness();
+        scheduler.checkFreshness();
+
+        verify(alertRepository, times(2)).save(any());
+    }
+
+    @Test
     void 일부만_침묵하면_침묵한_장치들만_개별_CRITICAL() {
         // 3대 중 2대 침묵(silent < seen) → 구역 집계가 아니라 침묵한 2대 각각 개별 처리.
         DeviceStatus d1 = silent(1, 100), d2 = silent(2, 100), d3 = healthy(3, 100);
@@ -244,7 +316,14 @@ class FreshnessSchedulerTest {
     void 수신시각_없는_상태행은_건너뛴다() {
         // 한 번도 수신 없는 장치는 device_status 행 자체가 없어 조회(JOIN)에서 빠진다.
         // 그래도 lastSeenAt 이 비어 있는 행은 방어적으로 건너뛴다.
+        Factory factory = mock(Factory.class);
+        when(factory.getId()).thenReturn(1L);
+        Zone zone = mock(Zone.class);
+        when(zone.getFactory()).thenReturn(factory);
+        Device device = mock(Device.class);
+        when(device.getZone()).thenReturn(zone);
         DeviceStatus neverSeen = mock(DeviceStatus.class);
+        when(neverSeen.getDevice()).thenReturn(device);
         when(neverSeen.getLastSeenAt()).thenReturn(null);
         when(deviceStatusRepository.findMonitoredWithDeviceAndZone()).thenReturn(List.of(neverSeen));
 

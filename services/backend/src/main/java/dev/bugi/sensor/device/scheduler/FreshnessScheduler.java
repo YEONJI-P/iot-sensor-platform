@@ -7,6 +7,8 @@ import dev.bugi.sensor.explain.client.ExplainClient;
 import dev.bugi.sensor.explain.config.ExplainProperties;
 import dev.bugi.sensor.explain.dto.FreshnessDiagnoseRequest;
 import dev.bugi.sensor.explain.dto.FreshnessDiagnoseResponse;
+import dev.bugi.sensor.factory.calendar.service.OperatingCalendarService;
+import dev.bugi.sensor.factory.calendar.service.OperatingCalendarService.OperatingDecision;
 import dev.bugi.sensor.device.entity.Device;
 import dev.bugi.sensor.device.entity.DeviceStatus;
 import dev.bugi.sensor.device.repository.DeviceStatusRepository;
@@ -51,6 +53,7 @@ public class FreshnessScheduler {
     private final AlertRepository alertRepository;
     private final ExplainClient explainClient;
     private final ExplainProperties explainProperties;
+    private final OperatingCalendarService operatingCalendarService;
     private final Clock clock;
 
     // 개별 침묵 디바운스: deviceId → 알림을 남긴 시점의 lastSeenAt(회복 시 새 episode).
@@ -63,18 +66,31 @@ public class FreshnessScheduler {
         // 수신 이력이 있는(status 행 존재) 감시 대상만 조회된다.
         List<DeviceStatus> statuses = deviceStatusRepository.findMonitoredWithDeviceAndZone();
         Instant now = clock.instant();
+        Set<Long> factoryIds = statuses.stream()
+                .map(status -> status.getDevice().getZone().getFactory().getId())
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, OperatingDecision> decisions = operatingCalendarService.evaluate(factoryIds, now);
 
         // 관측된 장치를 구역별로, 그중 침묵 장치도 구역별로 모은다.
         Map<Long, List<DeviceStatus>> seenByZone = new HashMap<>();
         Map<Long, List<DeviceStatus>> silentByZone = new HashMap<>();
         for (DeviceStatus status : statuses) {
+            Device device = status.getDevice();
+            Long factoryId = device.getZone().getFactory().getId();
+            OperatingDecision decision = decisions.getOrDefault(factoryId,
+                    operatingCalendarService.evaluateAlwaysOpenFallback());
+            if (decision.monitoringSuppressed(status.getLastSeenAt())) {
+                diagnosedEpisodes.remove(device.getId());
+                cohortAlertedZones.remove(device.getZone().getId());
+                continue;
+            }
             if (status.getLastSeenAt() == null) {
                 continue;
             }
-            Long zoneId = status.getDevice().getZone().getId();
+            Long zoneId = device.getZone().getId();
             seenByZone.computeIfAbsent(zoneId, k -> new ArrayList<>()).add(status);
             long elapsed = Duration.between(status.getLastSeenAt(), now).getSeconds();
-            if (elapsed > status.getDevice().getExpectedIntervalSeconds()) {
+            if (elapsed > device.getExpectedIntervalSeconds()) {
                 silentByZone.computeIfAbsent(zoneId, k -> new ArrayList<>()).add(status);
             }
         }

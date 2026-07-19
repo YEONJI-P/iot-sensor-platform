@@ -13,7 +13,8 @@ public interface DeviceStatusRepository extends JpaRepository<DeviceStatus, Long
     @Query("""
             SELECT s FROM DeviceStatus s
             JOIN FETCH s.device d
-            JOIN FETCH d.zone
+            JOIN FETCH d.zone z
+            JOIN FETCH z.factory
             WHERE d.expectedIntervalSeconds IS NOT NULL
             """)
     List<DeviceStatus> findMonitoredWithDeviceAndZone();

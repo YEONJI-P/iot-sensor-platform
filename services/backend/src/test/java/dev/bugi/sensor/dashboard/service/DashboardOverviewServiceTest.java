@@ -13,6 +13,8 @@ import dev.bugi.sensor.device.repository.DeviceStatusRepository;
 import dev.bugi.sensor.device.repository.SensorChannelRepository;
 import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.factory.entity.Zone;
+import dev.bugi.sensor.factory.calendar.service.OperatingCalendarService;
+import dev.bugi.sensor.factory.calendar.service.OperatingCalendarService.OperatingDecision;
 import dev.bugi.sensor.global.service.AccessControlService;
 import dev.bugi.sensor.sensordata.anomaly.ThresholdDetector;
 import dev.bugi.sensor.sensordata.repository.SensorReadingRepository;
@@ -20,6 +22,7 @@ import dev.bugi.sensor.sensordata.repository.SensorReadingRepository.LatestReadi
 import dev.bugi.sensor.user.entity.Role;
 import dev.bugi.sensor.user.entity.User;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -46,9 +49,19 @@ class DashboardOverviewServiceTest {
     @Mock ChannelStatusRepository channelStatusRepository;
     @Mock SensorReadingRepository sensorReadingRepository;
     @Spy ThresholdDetector thresholdDetector = new ThresholdDetector();
+    @Mock OperatingCalendarService operatingCalendarService;
     @Spy Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @InjectMocks DashboardOverviewService service;
+
+    private static final OperatingDecision ACTIVE = new OperatingDecision(true, false, null, "SCHEDULED_ACTIVE");
+
+    @BeforeEach
+    void operatingCalendarDefaultsToActive() {
+        lenient().when(operatingCalendarService.evaluate(anyList(), eq(NOW)))
+                .thenReturn(java.util.Map.of(1L, ACTIVE));
+        lenient().when(operatingCalendarService.evaluateAlwaysOpenFallback()).thenReturn(ACTIVE);
+    }
 
     @Test
     void overview는_접근가능_device만_grouping하고_status_latest_threshold를_합성한다() {
@@ -171,11 +184,28 @@ class DashboardOverviewServiceTest {
 
     @Test
     void freshness는_감시여부와_수신이력과_기대주기_경계를_구분한다() {
-        assertThat(DashboardOverviewService.freshness(null, null, NOW)).isEqualTo(Freshness.NOT_MONITORED);
-        assertThat(DashboardOverviewService.freshness(0, null, NOW)).isEqualTo(Freshness.NOT_MONITORED);
-        assertThat(DashboardOverviewService.freshness(30, null, NOW)).isEqualTo(Freshness.NEVER_SEEN);
-        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(60), NOW)).isEqualTo(Freshness.ONLINE);
-        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(61), NOW)).isEqualTo(Freshness.STALE);
-        assertThat(DashboardOverviewService.freshness(30, NOW.plusSeconds(1), NOW)).isEqualTo(Freshness.ONLINE);
+        assertThat(DashboardOverviewService.freshness(null, null, NOW, ACTIVE)).isEqualTo(Freshness.NOT_MONITORED);
+        assertThat(DashboardOverviewService.freshness(0, null, NOW, ACTIVE)).isEqualTo(Freshness.NOT_MONITORED);
+        assertThat(DashboardOverviewService.freshness(30, null, NOW, ACTIVE)).isEqualTo(Freshness.NEVER_SEEN);
+        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(60), NOW, ACTIVE)).isEqualTo(Freshness.ONLINE);
+        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(61), NOW, ACTIVE)).isEqualTo(Freshness.STALE);
+        assertThat(DashboardOverviewService.freshness(30, NOW.plusSeconds(1), NOW, ACTIVE)).isEqualTo(Freshness.ONLINE);
+    }
+
+    @Test
+    void freshness는_계획비가동_재개대기와_최근수신_우선순위를_지킨다() {
+        OperatingDecision off = new OperatingDecision(false, false, null, "PLANNED_OFFLINE");
+        OperatingDecision grace = new OperatingDecision(true, true, NOW.minusSeconds(60), "RESUME_GRACE");
+
+        assertThat(DashboardOverviewService.freshness(null, null, NOW, off))
+                .isEqualTo(Freshness.NOT_MONITORED);
+        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(61), NOW, off))
+                .isEqualTo(Freshness.PLANNED_OFFLINE);
+        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(10), NOW, off))
+                .isEqualTo(Freshness.ONLINE);
+        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(120), NOW, grace))
+                .isEqualTo(Freshness.RESUMING);
+        assertThat(DashboardOverviewService.freshness(30, NOW.minusSeconds(30), NOW, grace))
+                .isEqualTo(Freshness.ONLINE);
     }
 }
