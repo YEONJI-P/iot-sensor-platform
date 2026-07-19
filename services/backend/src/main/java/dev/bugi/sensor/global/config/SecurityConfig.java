@@ -40,7 +40,7 @@ public class SecurityConfig {
                         // 정적 자산은 공개(인증은 JS가 JWT로 API 호출 시 수행). 페이지 접근 제어는 프론트가 역할로 처리.
                         .requestMatchers("/", "/index.html", "/dashboard.html", "/console.html")
                         .permitAll()
-                        .requestMatchers("/css/**", "/js/**", "/favicon.ico")
+                        .requestMatchers("/css/**", "/js/**", "/favicon.ico", "/favicon.svg")
                         .permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**")
                         .permitAll()

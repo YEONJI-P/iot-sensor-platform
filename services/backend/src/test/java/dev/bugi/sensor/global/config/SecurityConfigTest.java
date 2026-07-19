@@ -182,6 +182,12 @@ public class SecurityConfigTest {
 
     // -- 보호 endpoint --
     @Test
+    void favicon_no_auth_is_public() throws Exception {
+        mockMvc.perform(get("/favicon.svg"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void get_auth_factories_no_auth_returns_public_id_and_name_only() throws Exception {
         given(authService.getFactories()).willReturn(List.of(
                 new FactoryOptionResponse(1L, "가 공장"),

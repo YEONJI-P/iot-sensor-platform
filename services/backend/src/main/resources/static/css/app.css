@@ -187,7 +187,7 @@ a { color: var(--brand); text-decoration: none; }
 }
 .brand { display: flex; align-items: center; gap: .6rem; font-weight: 600; letter-spacing: -.01em; color: var(--text); white-space: nowrap; }
 a.brand:hover .mark { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 30%, transparent); }
-.brand .mark {
+.brand .mark, .brand-lg .mark {
   width: 26px; height: 26px; border-radius: 7px; flex: none;
   background: var(--brand); color: var(--brand-ink);
   display: grid; place-items: center; font-family: var(--font-mono); font-weight: 700; font-size: .9rem;
