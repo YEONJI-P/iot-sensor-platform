@@ -4,6 +4,7 @@ import dev.bugi.sensor.admin.service.AdminService;
 import dev.bugi.sensor.admin.service.ZoneService;
 import dev.bugi.sensor.admin.service.FactoryService;
 import dev.bugi.sensor.alert.service.AlertService;
+import dev.bugi.sensor.auth.dto.FactoryOptionResponse;
 import dev.bugi.sensor.auth.service.AuthService;
 import dev.bugi.sensor.auth.util.JwtUtil;
 import dev.bugi.sensor.dashboard.service.DashboardOverviewService;
@@ -36,6 +37,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -180,6 +182,43 @@ public class SecurityConfigTest {
 
     // -- 보호 endpoint --
     @Test
+    void get_auth_factories_no_auth_returns_public_id_and_name_only() throws Exception {
+        given(authService.getFactories()).willReturn(List.of(
+                new FactoryOptionResponse(1L, "가 공장"),
+                new FactoryOptionResponse(2L, "나 공장")
+        ));
+
+        mockMvc.perform(get("/auth/factories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1L))
+                .andExpect(jsonPath("$[0].name").value("가 공장"))
+                .andExpect(jsonPath("$[0].description").doesNotExist())
+                .andExpect(jsonPath("$[0].createdAt").doesNotExist())
+                .andExpect(jsonPath("$[1].id").value(2L))
+                .andExpect(jsonPath("$[1].name").value("나 공장"));
+    }
+
+    @Test
+    void register_without_factory_returns_400() throws Exception {
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"employeeId\":\"EMP001\",\"name\":\"홍길동\",\"password\":\"password123!\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    void register_with_non_positive_factory_returns_400() throws Exception {
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"employeeId\":\"EMP001\",\"name\":\"홍길동\",\"password\":\"password123!\",\"factoryId\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+        verifyNoInteractions(authService);
+    }
+
+    @Test
     void get_sensor_data_no_auth() throws Exception {
         mockMvc.perform(get("/sensor-data"))
                 .andExpect(status().isUnauthorized());
@@ -225,6 +264,84 @@ public class SecurityConfigTest {
     void get_admin_factory_with_system_admin() throws Exception {
         mockMvc.perform(get("/admin/factories"))
                 .andExpect(status().is(not(403)));
+    }
+
+    @Test
+    @WithMockUser(roles = "FACTORY_ADMIN")
+    void get_admin_factory_with_factory_admin_is_still_forbidden() throws Exception {
+        mockMvc.perform(get("/admin/factories"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(factoryService);
+    }
+
+    @Test
+    @WithMockUser(roles = "MEMBER")
+    void post_admin_factory_with_member_is_still_forbidden() throws Exception {
+        mockMvc.perform(post("/admin/factories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"새 공장\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(factoryService);
+    }
+
+    @Test
+    @WithMockUser(roles = "FACTORY_ADMIN")
+    void post_admin_factory_with_factory_admin_is_still_forbidden() throws Exception {
+        mockMvc.perform(post("/admin/factories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"새 공장\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(factoryService);
+    }
+
+    @Test
+    @WithMockUser(roles = "SYSTEM_ADMIN")
+    void approve_user_with_system_admin_is_allowed() throws Exception {
+        mockMvc.perform(patch("/admin/users/1/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"VIEWER\",\"factoryId\":1,\"zoneIds\":[]}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "FACTORY_ADMIN")
+    void approve_user_with_factory_admin_is_allowed() throws Exception {
+        mockMvc.perform(patch("/admin/users/1/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"VIEWER\",\"factoryId\":1,\"zoneIds\":[]}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "SYSTEM_ADMIN")
+    void approve_user_without_factory_returns_400() throws Exception {
+        mockMvc.perform(patch("/admin/users/1/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"VIEWER\",\"zoneIds\":[]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+        verifyNoInteractions(adminService);
+    }
+
+    @Test
+    @WithMockUser(roles = "SYSTEM_ADMIN")
+    void approve_user_with_non_positive_factory_returns_400() throws Exception {
+        mockMvc.perform(patch("/admin/users/1/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"VIEWER\",\"factoryId\":0,\"zoneIds\":[]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+        verifyNoInteractions(adminService);
+    }
+
+    @Test
+    @WithMockUser(roles = "MEMBER")
+    void approve_user_with_member_is_forbidden() throws Exception {
+        mockMvc.perform(patch("/admin/users/1/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"VIEWER\",\"factoryId\":1,\"zoneIds\":[]}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(adminService);
     }
 
     @Test

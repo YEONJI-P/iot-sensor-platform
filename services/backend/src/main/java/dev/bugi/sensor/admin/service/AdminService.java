@@ -5,6 +5,7 @@ import dev.bugi.sensor.admin.dto.UserResponse;
 import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.factory.entity.ZoneUser;
+import dev.bugi.sensor.factory.repository.FactoryRepository;
 import dev.bugi.sensor.factory.repository.ZoneRepository;
 import dev.bugi.sensor.factory.repository.ZoneUserRepository;
 import dev.bugi.sensor.global.service.AccessControlService;
@@ -24,6 +25,7 @@ import java.util.List;
 public class AdminService {
 
     private final UserRepository userRepository;
+    private final FactoryRepository factoryRepository;
     private final ZoneRepository zoneRepository;
     private final ZoneUserRepository zoneUserRepository;
     private final AccessControlService accessControlService;
@@ -46,7 +48,7 @@ public class AdminService {
         return users.stream().map(UserResponse::new).toList();
     }
 
-    // 승인 = 상태 ACTIVE + 역할 부여 + 구역 배정을 한 트랜잭션에서.
+    // 승인 = 상태 ACTIVE + 역할·공장 부여 + 구역 배정을 한 트랜잭션에서.
     @Transactional
     public void approveUser(Long id, ApproveRequest request, String employeeId) {
         User caller = getCaller(employeeId);
@@ -57,14 +59,15 @@ public class AdminService {
         }
         assertCanGrantRole(caller, request.role());
 
-        // 배정할 구역 검증(관리 권한 + 동일 공장). 구역이 있으면 사용자 공장도 그 공장으로 맞춘다.
+        Factory factory = getFactory(request.factoryId());
+        assertCanAssignFactory(caller, factory);
+
+        // 공장과 구역 검증을 모두 끝낸 뒤에만 대상 상태·소속을 변경한다.
         List<Zone> zones = request.zoneIds().stream().map(this::getZone).toList();
-        Factory factory = validateZonesSameFactory(caller, zones);
+        validateZonesInFactory(caller, factory, zones);
 
         target.approve(request.role());
-        if (factory != null) {
-            target.assignFactory(factory);
-        }
+        target.assignFactory(factory);
         for (Zone zone : zones) {
             if (!zoneUserRepository.existsByZoneIdAndUserId(zone.getId(), target.getId())) {
                 zoneUserRepository.save(ZoneUser.builder().zone(zone).user(target).build());
@@ -93,19 +96,23 @@ public class AdminService {
         }
     }
 
-    // 각 구역에 대한 관리 권한을 확인(SYSTEM_ADMIN=전체, FACTORY_ADMIN=자기 공장)하고,
-    // 모든 구역이 같은 공장인지 검증한 뒤 그 공장을 반환. 구역이 없으면 null.
-    private Factory validateZonesSameFactory(User caller, List<Zone> zones) {
-        Factory factory = null;
+    private void assertCanAssignFactory(User caller, Factory factory) {
+        if (isSystemAdmin(caller)) {
+            return;
+        }
+        if (!callerFactoryId(caller).equals(factory.getId())) {
+            throw new AccessDeniedException("본인 공장으로만 사용자를 승인할 수 있어요");
+        }
+    }
+
+    // 각 구역에 대한 관리 권한을 확인하고 요청한 공장 소속인지 검증한다.
+    private void validateZonesInFactory(User caller, Factory factory, List<Zone> zones) {
         for (Zone zone : zones) {
             accessControlService.assertCanManageZone(caller, zone);
-            if (factory == null) {
-                factory = zone.getFactory();
-            } else if (!factory.getId().equals(zone.getFactory().getId())) {
-                throw new IllegalArgumentException("서로 다른 공장의 구역은 함께 배정할 수 없어요");
+            if (!factory.getId().equals(zone.getFactory().getId())) {
+                throw new IllegalArgumentException("선택한 공장 소속 구역만 배정할 수 있어요");
             }
         }
-        return factory;
     }
 
     // FACTORY_ADMIN은 자기 공장 소속 사용자만 관리 가능. SYSTEM_ADMIN은 전체.
@@ -135,6 +142,17 @@ public class AdminService {
     private Zone getZone(Long id) {
         return zoneRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 구역이에요 - id " + id));
+    }
+
+    private Factory getFactory(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("배정할 공장은 필수예요");
+        }
+        if (id <= 0) {
+            throw new IllegalArgumentException("공장 ID는 1 이상이어야 해요");
+        }
+        return factoryRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 공장이에요 - id " + id));
     }
 
     private User getCaller(String employeeId) {

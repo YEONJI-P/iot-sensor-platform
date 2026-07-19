@@ -47,6 +47,8 @@ public class SecurityConfig {
                         // health 감시용 — 상태만 노출(show-details: never)
                         .requestMatchers(HttpMethod.GET, "/actuator/health")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/auth/factories")
+                        .permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/auth/refresh")
                         .permitAll()
 

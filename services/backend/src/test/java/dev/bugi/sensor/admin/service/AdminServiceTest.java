@@ -4,6 +4,7 @@ import dev.bugi.sensor.admin.dto.ApproveRequest;
 import dev.bugi.sensor.factory.entity.Factory;
 import dev.bugi.sensor.factory.entity.Zone;
 import dev.bugi.sensor.factory.entity.ZoneUser;
+import dev.bugi.sensor.factory.repository.FactoryRepository;
 import dev.bugi.sensor.factory.repository.ZoneRepository;
 import dev.bugi.sensor.factory.repository.ZoneUserRepository;
 import dev.bugi.sensor.global.service.AccessControlService;
@@ -29,104 +30,185 @@ import static org.mockito.Mockito.*;
 class AdminServiceTest {
 
     @Mock UserRepository userRepository;
+    @Mock FactoryRepository factoryRepository;
     @Mock ZoneRepository zoneRepository;
     @Mock ZoneUserRepository zoneUserRepository;
     @Mock AccessControlService accessControlService;
     @InjectMocks AdminService adminService;
 
     private User caller(Role role, Long factoryId) {
-        User u = mock(User.class);
-        when(u.getRole()).thenReturn(role);
+        User user = mock(User.class);
+        when(user.getRole()).thenReturn(role);
         if (factoryId != null) {
-            Factory f = mock(Factory.class);
-            when(f.getId()).thenReturn(factoryId);
-            when(u.getFactory()).thenReturn(f);
+            Factory userFactory = factory(factoryId);
+            when(user.getFactory()).thenReturn(userFactory);
         }
-        return u;
+        return user;
     }
 
     private User pendingTarget(Long id, Long factoryId) {
-        User u = mock(User.class);
-        lenient().when(u.getId()).thenReturn(id);
-        lenient().when(u.getStatus()).thenReturn(UserStatus.PENDING);
+        User user = mock(User.class);
+        lenient().when(user.getId()).thenReturn(id);
+        lenient().when(user.getStatus()).thenReturn(UserStatus.PENDING);
         if (factoryId != null) {
-            Factory f = mock(Factory.class);
-            lenient().when(f.getId()).thenReturn(factoryId);
-            lenient().when(u.getFactory()).thenReturn(f);
+            Factory userFactory = factory(factoryId);
+            lenient().when(user.getFactory()).thenReturn(userFactory);
         }
-        return u;
+        return user;
     }
 
-    private Zone zoneInFactory(Long zoneId, Long factoryId) {
-        Zone z = mock(Zone.class);
-        lenient().when(z.getId()).thenReturn(zoneId);
-        Factory f = mock(Factory.class);
-        lenient().when(f.getId()).thenReturn(factoryId);
-        lenient().when(z.getFactory()).thenReturn(f);
-        return z;
+    private Factory factory(Long id) {
+        Factory factory = mock(Factory.class);
+        lenient().when(factory.getId()).thenReturn(id);
+        return factory;
+    }
+
+    private Zone zoneInFactory(Long zoneId, Factory factory) {
+        Zone zone = mock(Zone.class);
+        lenient().when(zone.getId()).thenReturn(zoneId);
+        lenient().when(zone.getFactory()).thenReturn(factory);
+        return zone;
+    }
+
+    private void givenCallerAndTarget(String employeeId, User caller, Long targetId, User target) {
+        when(userRepository.findByEmployeeId(employeeId)).thenReturn(Optional.of(caller));
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+    }
+
+    @Test
+    void system_admin은_요청한_공장으로_기존_소속을_교정하고_구역을_배정한다() {
+        User caller = caller(Role.SYSTEM_ADMIN, null);
+        User target = pendingTarget(10L, 1L);
+        Factory requestedFactory = factory(2L);
+        Zone zone = zoneInFactory(5L, requestedFactory);
+        givenCallerAndTarget("ADMIN", caller, 10L, target);
+        when(factoryRepository.findById(2L)).thenReturn(Optional.of(requestedFactory));
+        when(zoneRepository.findById(5L)).thenReturn(Optional.of(zone));
+
+        adminService.approveUser(10L,
+                new ApproveRequest(Role.MEMBER, 2L, List.of(5L)), "ADMIN");
+
+        verify(accessControlService).assertCanManageZone(caller, zone);
+        verify(target).approve(Role.MEMBER);
+        verify(target).assignFactory(requestedFactory);
+        verify(zoneUserRepository).save(any(ZoneUser.class));
+    }
+
+    @Test
+    void zone이_비어도_요청한_공장을_반드시_배정한다() {
+        User caller = caller(Role.SYSTEM_ADMIN, null);
+        User target = pendingTarget(10L, 1L);
+        Factory requestedFactory = factory(2L);
+        givenCallerAndTarget("ADMIN", caller, 10L, target);
+        when(factoryRepository.findById(2L)).thenReturn(Optional.of(requestedFactory));
+
+        adminService.approveUser(10L,
+                new ApproveRequest(Role.VIEWER, 2L, List.of()), "ADMIN");
+
+        verify(target).approve(Role.VIEWER);
+        verify(target).assignFactory(requestedFactory);
+        verifyNoInteractions(zoneRepository, zoneUserRepository, accessControlService);
+    }
+
+    @Test
+    void system_admin도_선택한_공장과_다른_공장_구역은_배정할_수_없고_target은_변경되지_않는다() {
+        User caller = caller(Role.SYSTEM_ADMIN, null);
+        User target = pendingTarget(10L, 1L);
+        Factory requestedFactory = factory(2L);
+        Zone otherFactoryZone = zoneInFactory(9L, factory(3L));
+        givenCallerAndTarget("ADMIN", caller, 10L, target);
+        when(factoryRepository.findById(2L)).thenReturn(Optional.of(requestedFactory));
+        when(zoneRepository.findById(9L)).thenReturn(Optional.of(otherFactoryZone));
+
+        assertThrows(IllegalArgumentException.class, () -> adminService.approveUser(
+                10L, new ApproveRequest(Role.MEMBER, 2L, List.of(9L)), "ADMIN"));
+
+        verify(accessControlService).assertCanManageZone(caller, otherFactoryZone);
+        verify(target, never()).approve(any());
+        verify(target, never()).assignFactory(any());
+        verifyNoInteractions(zoneUserRepository);
+    }
+
+    @Test
+    void factory_admin은_자기_공장_사용자를_자기_공장_구역으로_승인한다() {
+        User caller = caller(Role.FACTORY_ADMIN, 1L);
+        User target = pendingTarget(10L, 1L);
+        Factory requestedFactory = factory(1L);
+        Zone zone = zoneInFactory(5L, requestedFactory);
+        givenCallerAndTarget("MGR", caller, 10L, target);
+        when(factoryRepository.findById(1L)).thenReturn(Optional.of(requestedFactory));
+        when(zoneRepository.findById(5L)).thenReturn(Optional.of(zone));
+
+        adminService.approveUser(10L,
+                new ApproveRequest(Role.MEMBER, 1L, List.of(5L)), "MGR");
+
+        verify(accessControlService).assertCanManageZone(caller, zone);
+        verify(target).approve(Role.MEMBER);
+        verify(target).assignFactory(requestedFactory);
+        verify(zoneUserRepository).save(any(ZoneUser.class));
+    }
+
+    @Test
+    void factory_admin은_타_공장을_요청할_수_없고_target은_변경되지_않는다() {
+        User caller = caller(Role.FACTORY_ADMIN, 1L);
+        User target = pendingTarget(10L, 1L);
+        Factory otherFactory = factory(2L);
+        givenCallerAndTarget("MGR", caller, 10L, target);
+        when(factoryRepository.findById(2L)).thenReturn(Optional.of(otherFactory));
+
+        assertThrows(AccessDeniedException.class, () -> adminService.approveUser(
+                10L, new ApproveRequest(Role.VIEWER, 2L, List.of()), "MGR"));
+
+        verify(target, never()).approve(any());
+        verify(target, never()).assignFactory(any());
+        verifyNoInteractions(zoneRepository, zoneUserRepository, accessControlService);
+    }
+
+    @Test
+    void factory_admin은_타_공장_사용자를_관리할_수_없다() {
+        User caller = caller(Role.FACTORY_ADMIN, 1L);
+        User target = pendingTarget(10L, 2L);
+        givenCallerAndTarget("MGR", caller, 10L, target);
+
+        assertThrows(AccessDeniedException.class, () -> adminService.approveUser(
+                10L, new ApproveRequest(Role.VIEWER, 1L, List.of()), "MGR"));
+
+        verifyNoInteractions(factoryRepository, zoneRepository, zoneUserRepository, accessControlService);
+        verify(target, never()).approve(any());
+        verify(target, never()).assignFactory(any());
+    }
+
+    @Test
+    void factory_admin은_타_공장_구역을_배정할_수_없고_target은_변경되지_않는다() {
+        User caller = caller(Role.FACTORY_ADMIN, 1L);
+        User target = pendingTarget(10L, 1L);
+        Factory requestedFactory = factory(1L);
+        Zone otherFactoryZone = zoneInFactory(9L, factory(2L));
+        givenCallerAndTarget("MGR", caller, 10L, target);
+        when(factoryRepository.findById(1L)).thenReturn(Optional.of(requestedFactory));
+        when(zoneRepository.findById(9L)).thenReturn(Optional.of(otherFactoryZone));
+        doThrow(new AccessDeniedException("본인 공장의 구역만 관리할 수 있어요"))
+                .when(accessControlService).assertCanManageZone(caller, otherFactoryZone);
+
+        assertThrows(AccessDeniedException.class, () -> adminService.approveUser(
+                10L, new ApproveRequest(Role.MEMBER, 1L, List.of(9L)), "MGR"));
+
+        verify(target, never()).approve(any());
+        verify(target, never()).assignFactory(any());
+        verifyNoInteractions(zoneUserRepository);
     }
 
     @Test
     void factory_admin은_factory_admin_역할을_부여할_수_없다() {
         User caller = caller(Role.FACTORY_ADMIN, 1L);
         User target = pendingTarget(10L, 1L);
-        when(userRepository.findByEmployeeId("MGR")).thenReturn(Optional.of(caller));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(target));
+        givenCallerAndTarget("MGR", caller, 10L, target);
 
-        assertThrows(AccessDeniedException.class, () ->
-                adminService.approveUser(10L, new ApproveRequest(Role.FACTORY_ADMIN, List.of()), "MGR"));
+        assertThrows(AccessDeniedException.class, () -> adminService.approveUser(
+                10L, new ApproveRequest(Role.FACTORY_ADMIN, 1L, List.of()), "MGR"));
 
+        verifyNoInteractions(factoryRepository, zoneRepository, zoneUserRepository, accessControlService);
         verify(target, never()).approve(any());
-    }
-
-    @Test
-    void system_admin은_factory_admin_역할과_구역을_배정할_수_있다() {
-        User caller = caller(Role.SYSTEM_ADMIN, null);
-        User target = pendingTarget(10L, null);
-        Zone zone = zoneInFactory(5L, 2L);
-        when(userRepository.findByEmployeeId("ADMIN")).thenReturn(Optional.of(caller));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(target));
-        when(zoneRepository.findById(5L)).thenReturn(Optional.of(zone));
-        when(zoneUserRepository.existsByZoneIdAndUserId(5L, 10L)).thenReturn(false);
-
-        adminService.approveUser(10L, new ApproveRequest(Role.FACTORY_ADMIN, List.of(5L)), "ADMIN");
-
-        verify(target).approve(Role.FACTORY_ADMIN);
-        verify(target).assignFactory(zone.getFactory());
-        verify(zoneUserRepository).save(any(ZoneUser.class));
-    }
-
-    @Test
-    void factory_admin은_자기공장_구역으로_member를_배정한다() {
-        User caller = caller(Role.FACTORY_ADMIN, 1L);
-        User target = pendingTarget(10L, 1L);
-        Zone zone = zoneInFactory(5L, 1L);
-        when(userRepository.findByEmployeeId("MGR")).thenReturn(Optional.of(caller));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(target));
-        when(zoneRepository.findById(5L)).thenReturn(Optional.of(zone));
-        when(zoneUserRepository.existsByZoneIdAndUserId(5L, 10L)).thenReturn(false);
-
-        adminService.approveUser(10L, new ApproveRequest(Role.MEMBER, List.of(5L)), "MGR");
-
-        verify(target).approve(Role.MEMBER);
-        verify(zoneUserRepository).save(any(ZoneUser.class));
-    }
-
-    @Test
-    void 타공장_구역_배정은_거부된다() {
-        User caller = caller(Role.FACTORY_ADMIN, 1L);
-        User target = pendingTarget(10L, 1L);
-        Zone otherZone = zoneInFactory(9L, 2L);
-        when(userRepository.findByEmployeeId("MGR")).thenReturn(Optional.of(caller));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(target));
-        when(zoneRepository.findById(9L)).thenReturn(Optional.of(otherZone));
-        doThrow(new AccessDeniedException("본인 공장의 구역만 관리할 수 있어요"))
-                .when(accessControlService).assertCanManageZone(caller, otherZone);
-
-        assertThrows(AccessDeniedException.class, () ->
-                adminService.approveUser(10L, new ApproveRequest(Role.MEMBER, List.of(9L)), "MGR"));
-
-        verify(target, never()).approve(any());
-        verify(zoneUserRepository, never()).save(any());
+        verify(target, never()).assignFactory(any());
     }
 }

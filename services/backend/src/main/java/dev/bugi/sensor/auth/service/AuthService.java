@@ -1,6 +1,7 @@
 package dev.bugi.sensor.auth.service;
 
 import dev.bugi.sensor.auth.dto.LoginRequest;
+import dev.bugi.sensor.auth.dto.FactoryOptionResponse;
 import dev.bugi.sensor.auth.dto.RegisterRequest;
 import dev.bugi.sensor.auth.dto.TokenResponse;
 import dev.bugi.sensor.auth.util.JwtUtil;
@@ -16,6 +17,9 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Comparator;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -38,21 +42,37 @@ public class AuthService {
             throw new IllegalArgumentException("이미 사용 중인 이메일이에요");
         }
 
-        Factory org = null;
-        if (request.getFactoryId() != null) {
-            org = factoryRepository.findById(request.getFactoryId()).orElse(null);
-        }
+        Factory factory = getFactoryForRegistration(request.getFactoryId());
 
         User user = User.builder()
                 .employeeId(request.getEmployeeId())
                 .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .factory(org)
+                .factory(factory)
                 .role(Role.VIEWER)
                 .status(UserStatus.PENDING)
                 .build();
         userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FactoryOptionResponse> getFactories() {
+        return factoryRepository.findAll().stream()
+                .sorted(Comparator.comparing(Factory::getName))
+                .map(FactoryOptionResponse::from)
+                .toList();
+    }
+
+    private Factory getFactoryForRegistration(Long factoryId) {
+        if (factoryId == null) {
+            throw new IllegalArgumentException("가입할 공장은 필수예요");
+        }
+        if (factoryId <= 0) {
+            throw new IllegalArgumentException("공장 ID는 1 이상이어야 해요");
+        }
+        return factoryRepository.findById(factoryId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 공장이에요 - id " + factoryId));
     }
 
     @Transactional(readOnly = true)

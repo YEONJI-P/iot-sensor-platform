@@ -1,6 +1,7 @@
 package dev.bugi.sensor.auth.controller;
 
 import dev.bugi.sensor.auth.dto.LoginRequest;
+import dev.bugi.sensor.auth.dto.FactoryOptionResponse;
 import dev.bugi.sensor.auth.dto.RefreshRequest;
 import dev.bugi.sensor.auth.dto.RegisterRequest;
 import dev.bugi.sensor.auth.dto.TokenResponse;
@@ -13,12 +14,20 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
+
+    @SecurityRequirements
+    @GetMapping("/factories")
+    public ResponseEntity<List<FactoryOptionResponse>> getFactories() {
+        return ResponseEntity.ok(authService.getFactories());
+    }
 
     // POST /auth/register — 가입 신청 (PENDING 상태로 저장)
     @SecurityRequirements
