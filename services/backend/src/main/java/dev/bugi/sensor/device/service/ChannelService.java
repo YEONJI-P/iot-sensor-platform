@@ -83,8 +83,11 @@ public class ChannelService {
     }
 
     private void validateThreshold(Double thresholdValue, SensorChannel.ThresholdDirection direction) {
+        if ((thresholdValue == null) != (direction == null)) {
+            throw new IllegalArgumentException("임계값과 방향은 함께 입력하거나 함께 비워야 해요");
+        }
         if (direction == SensorChannel.ThresholdDirection.ABS_ABOVE
-                && thresholdValue != null && thresholdValue <= 0) {
+                && thresholdValue <= 0) {
             throw new IllegalArgumentException("ABS_ABOVE 임계값은 0보다 커야 해요");
         }
     }

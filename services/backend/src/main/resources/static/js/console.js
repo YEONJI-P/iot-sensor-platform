@@ -564,6 +564,7 @@
       });
       const first = $('input:not([disabled]), select:not([disabled])', box);
       if (first) first.focus();
+      return box;
     }
 
     function parseOptionalNumber(input, label) {
@@ -576,8 +577,11 @@
 
     function openDeviceModal(device) {
       const creating = !device;
+      const defaultZoneId = creating
+        ? (zoneFilter.value || (zones.length === 1 ? String(zones[0].id) : ''))
+        : String(device.zoneId);
       const zoneOptions = zones.map(z =>
-        `<option value="${z.id}" ${device && String(device.zoneId) === String(z.id) ? 'selected' : ''}>${escapeHtml(zoneLabel(z))}</option>`
+        `<option value="${z.id}" ${defaultZoneId === String(z.id) ? 'selected' : ''}>${escapeHtml(zoneLabel(z))}</option>`
       ).join('');
       const fields = `
         <div class="field"><label for="modalDeviceCode">코드</label>
@@ -619,7 +623,8 @@
       const device = devices.find(d => String(d.id) === String(selectedDeviceId));
       if (!device) return;
       const creating = !channel;
-      const directionOptions = THRESHOLD_DIRECTIONS.map(direction =>
+      const hasThreshold = channel && channel.thresholdValue != null;
+      const directionOptions = '<option value="">없음</option>' + THRESHOLD_DIRECTIONS.map(direction =>
         `<option value="${direction}" ${channel && channel.thresholdDirection === direction ? 'selected' : ''}>${direction}</option>`
       ).join('');
       const fields = `
@@ -632,14 +637,19 @@
         <div class="field"><label for="modalChannelThreshold">임계값</label>
           <input id="modalChannelThreshold" class="input" type="number" step="any" value="${channel && channel.thresholdValue != null ? escapeHtml(String(channel.thresholdValue)) : ''}"/></div>
         <div class="field"><label for="modalChannelDirection">방향</label>
-          <select id="modalChannelDirection" class="input">${directionOptions}</select></div>`;
-      openFormModal(creating ? `${device.name} · 채널 등록` : `${device.name} · 채널 수정`, fields,
+          <select id="modalChannelDirection" class="input" ${hasThreshold ? '' : 'disabled'}>${directionOptions}</select></div>`;
+      const modalBox = openFormModal(creating ? `${device.name} · 채널 등록` : `${device.name} · 채널 수정`, fields,
         creating ? '등록' : '저장', async box => {
+          const thresholdValue = parseOptionalNumber($('#modalChannelThreshold', box), '임계값');
+          const thresholdDirection = $('#modalChannelDirection', box).value;
+          if (thresholdValue != null && !thresholdDirection) {
+            throw new Error('임계값 방향을 선택하세요.');
+          }
           const body = {
             unit: $('#modalChannelUnit', box).value.trim(),
             quantityKind: $('#modalChannelKind', box).value.trim(),
-            thresholdValue: parseOptionalNumber($('#modalChannelThreshold', box), '임계값'),
-            thresholdDirection: $('#modalChannelDirection', box).value,
+            thresholdValue,
+            thresholdDirection: thresholdValue == null ? null : thresholdDirection,
           };
           let msg;
           if (creating) {
@@ -652,6 +662,17 @@
           toast(msg);
           await loadChannels(device.id);
         });
+      const thresholdInput = $('#modalChannelThreshold', modalBox);
+      const directionSelect = $('#modalChannelDirection', modalBox);
+      const syncDirection = () => {
+        const enabled = thresholdInput.value.trim() !== '';
+        directionSelect.disabled = !enabled;
+        directionSelect.options[0].disabled = enabled;
+        if (!enabled) directionSelect.value = '';
+        else if (!directionSelect.value) directionSelect.value = 'ABOVE';
+      };
+      thresholdInput.addEventListener('input', syncDirection);
+      syncDirection();
     }
 
     function filteredDevices() {
