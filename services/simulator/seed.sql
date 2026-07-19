@@ -25,6 +25,18 @@ INSERT INTO factories (name, description, created_at) VALUES
     ('엔진시험동', 'C-MAPSS 터보팬 엔진 시험 설비', NOW()),
     ('가공동',     'CNC 밀링 가공 설비',            NOW());
 
+-- backend 운영 캘린더와 simulator CLI 운영시간은 서로 조회·동기화하지 않는 독립 설정이다.
+-- 데모에서는 양쪽 기본값을 평일 08:00~18:00 Asia/Seoul로 맞춘다.
+INSERT INTO factory_operating_calendar (
+    factory_id, timezone_id, resume_grace_seconds, revision, created_at, updated_at
+)
+SELECT id, 'Asia/Seoul', 300, 0, NOW(), NOW() FROM factories;
+
+INSERT INTO factory_weekly_interval (factory_id, iso_day, start_minute, end_minute)
+SELECT f.id, day.iso_day, 480, 1080
+FROM factories f
+CROSS JOIN (VALUES (1), (2), (3), (4), (5)) AS day(iso_day);
+
 
 -- =============================================================================
 -- 2. Zones

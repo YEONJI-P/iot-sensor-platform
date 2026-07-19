@@ -83,6 +83,7 @@
   const TABS = [
     { key: 'users',    label: '사용자 승인', roles: ['SYSTEM_ADMIN', 'FACTORY_ADMIN'], render: renderUsers },
     { key: 'factories',label: '공장',        roles: ['SYSTEM_ADMIN'],              render: renderFactories },
+    { key: 'calendars',label: '운영 캘린더', roles: ['SYSTEM_ADMIN', 'FACTORY_ADMIN'], render: renderCalendars },
     { key: 'zones',    label: '구역',        roles: ['SYSTEM_ADMIN', 'FACTORY_ADMIN'], render: renderZones },
     { key: 'devices',  label: '장치',        roles: ['SYSTEM_ADMIN', 'FACTORY_ADMIN', 'MEMBER'], render: renderDevices },
   ];
@@ -92,6 +93,8 @@
 
   const panel = $('#tabPanel');
   const tabbar = $('#tabbar');
+  let activeTabKey = null;
+  let canLeaveTab = null;
 
   if (allowed.length === 0) {
     $('#noAccess').classList.remove('hidden');
@@ -108,9 +111,12 @@
   }
 
   function activate(key) {
+    if (activeTabKey && activeTabKey !== key && canLeaveTab && !canLeaveTab()) return;
     Array.from(tabbar.children).forEach(b => b.classList.toggle('active', b.dataset.key === key));
     const tab = allowed.find(t => t.key === key);
     if (!tab) return;
+    activeTabKey = key;
+    canLeaveTab = null;
     panel.innerHTML = '';
     tab.render(panel);
   }
@@ -119,6 +125,188 @@
   function setLoading(node) { node.innerHTML = '<div class="empty">불러오는 중…</div>'; }
   function setEmpty(node, msg) { node.innerHTML = `<div class="empty">${escapeHtml(msg || '표시할 항목이 없습니다.')}</div>`; }
   function setError(node, msg) { node.innerHTML = `<div class="empty">${escapeHtml(msg)}</div>`; }
+
+  /* ==========================================================
+     운영 캘린더 — 공장 단위 aggregate 전체 교체
+     ========================================================== */
+  function renderCalendars(root) {
+    const DAYS = [
+      ['MONDAY', '월요일'], ['TUESDAY', '화요일'], ['WEDNESDAY', '수요일'],
+      ['THURSDAY', '목요일'], ['FRIDAY', '금요일'], ['SATURDAY', '토요일'], ['SUNDAY', '일요일'],
+    ];
+    let summaries = [];
+    let draft = null;
+    let selectedFactoryId = null;
+    let dirty = false;
+    let saving = false;
+
+    root.innerHTML = `<div class="panel panel-pad">
+      <div class="flex between items-center gap" style="margin-bottom:1.2rem; flex-wrap:wrap;">
+        <div><div class="eyebrow">FACTORY · OPERATING CALENDAR</div><h3 style="margin-top:.35rem;">운영 캘린더</h3></div>
+        <div id="calendarFactoryControl" style="min-width:min(320px,100%);"></div>
+      </div>
+      <div id="calendarEditor"><div class="empty">불러오는 중…</div></div>
+    </div>`;
+    const editor = $('#calendarEditor', root);
+    const factoryControl = $('#calendarFactoryControl', root);
+
+    const guard = () => {
+      if (!dirty) return true;
+      if (!confirm('저장하지 않은 운영 캘린더 변경이 있습니다. 이동할까요?')) return false;
+      dirty = false;
+      return true;
+    };
+    canLeaveTab = guard;
+    const beforeUnload = (event) => {
+      if (!dirty) return;
+      event.preventDefault(); event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+
+    function markDirty() { dirty = true; renderStatus(); }
+
+    function renderStatus(message, kind) {
+      const node = $('#calendarMessage', root);
+      if (!node) return;
+      node.textContent = message || (dirty ? '저장하지 않은 변경이 있습니다.' : '저장된 일정입니다.');
+      node.className = `calendar-message${kind ? ` ${kind}` : ''}`;
+    }
+
+    function intervalRows(intervals, context, index) {
+      if (!intervals.length) return '<span class="dim" style="font-size:.82rem;">운영 구간 없음</span>';
+      return intervals.map((interval, intervalIndex) => `<div class="calendar-interval">
+        <input class="input mono" data-action="time" data-context="${context}" data-index="${index}" data-interval="${intervalIndex}" data-field="start" value="${escapeHtml(interval.start)}" aria-label="시작 시간"/>
+        <span class="dim">–</span>
+        <input class="input mono" data-action="time" data-context="${context}" data-index="${index}" data-interval="${intervalIndex}" data-field="end" value="${escapeHtml(interval.end)}" aria-label="종료 시간"/>
+        <button class="btn btn-sm btn-danger" type="button" data-action="remove-interval" data-context="${context}" data-index="${index}" data-interval="${intervalIndex}">삭제</button>
+      </div>`).join('');
+    }
+
+    function renderEditor() {
+      if (!draft) { setEmpty(editor, '편집할 공장이 없습니다.'); return; }
+      const weeklyByDay = new Map(DAYS.map(([key]) => [key, []]));
+      draft.weeklyIntervals.forEach((interval) => weeklyByDay.get(interval.dayOfWeek)?.push(interval));
+      editor.innerHTML = `<fieldset id="calendarFieldset" ${saving ? 'disabled' : ''} style="border:0; min-width:0;">
+        <div class="calendar-settings">
+          <div class="field"><label for="calendarTimezone">IANA timezone</label>
+            <input class="input mono" id="calendarTimezone" list="timezoneOptions" value="${escapeHtml(draft.timezone)}"/>
+            <datalist id="timezoneOptions"><option value="Asia/Seoul"><option value="UTC"><option value="America/New_York"><option value="Europe/Berlin"></datalist>
+          </div>
+          <div class="field"><label for="calendarGrace">재개 유예 (초)</label><input class="input mono" id="calendarGrace" type="number" min="0" max="86400" value="${draft.resumeGraceSeconds}"/></div>
+        </div>
+        <div class="detail-section"><div class="detail-head"><div><h3>주간 운영시간</h3><div class="hint">[시작, 종료), 24:00 허용 · 야간 교대는 날짜별 두 구간으로 분할</div></div></div>
+          ${DAYS.map(([key, label], dayIndex) => `<div class="calendar-day"><strong>${label}</strong><div class="calendar-intervals">${intervalRows(weeklyByDay.get(key), 'weekly', dayIndex)}</div><button class="btn btn-sm" type="button" data-action="add-weekly" data-day="${key}">구간 추가</button></div>`).join('')}
+        </div>
+        <div class="detail-section"><div class="detail-head"><div><h3>날짜 예외</h3><div class="hint">휴무는 종일 닫고, 특근은 해당 날짜 주간표를 완전히 대체합니다.</div></div><button class="btn btn-sm" type="button" data-action="add-override">예외 추가</button></div>
+          <div class="calendar-overrides">${draft.dateOverrides.length ? draft.dateOverrides.map((override, index) => `<div class="calendar-override">
+            <div class="form-grid"><div class="field"><label>날짜</label><input class="input" type="date" data-action="override-field" data-index="${index}" data-field="date" value="${escapeHtml(override.date)}"/></div>
+            <div class="field"><label>종류</label><select class="input" data-action="override-field" data-index="${index}" data-field="kind"><option value="CLOSED" ${override.kind === 'CLOSED' ? 'selected' : ''}>휴무</option><option value="OPEN" ${override.kind === 'OPEN' ? 'selected' : ''}>특근</option></select></div></div>
+            ${override.kind === 'OPEN' ? `<div class="calendar-intervals">${intervalRows(override.intervals, 'override', index)}<button class="btn btn-sm" type="button" data-action="add-override-interval" data-index="${index}">구간 추가</button></div>` : ''}
+            <div style="margin-top:.6rem;"><button class="btn btn-sm btn-danger" type="button" data-action="remove-override" data-index="${index}">예외 삭제</button></div>
+          </div>`).join('') : '<div class="empty">등록된 날짜 예외가 없습니다.</div>'}</div>
+        </div>
+        <div class="detail-section flex between items-center gap" style="flex-wrap:wrap;"><div><span class="tag">revision ${draft.revision}</span><div id="calendarMessage" class="calendar-message"></div></div><div class="flex gap-sm"><button class="btn" type="button" data-action="reload">새로고침</button><button class="btn btn-primary" type="button" data-action="save">저장</button></div></div>
+      </fieldset>`;
+      renderStatus();
+    }
+
+    async function loadDetail(factoryId, skipGuard) {
+      if (!skipGuard && !guard()) {
+        renderFactoryControl(); return;
+      }
+      selectedFactoryId = String(factoryId);
+      setLoading(editor);
+      try {
+        draft = await apiGet(`/admin/factory-calendars/${encodeURIComponent(factoryId)}`);
+        dirty = false;
+        renderFactoryControl(); renderEditor();
+      } catch (error) { setError(editor, error.message); }
+    }
+
+    function renderFactoryControl() {
+      if (role === 'SYSTEM_ADMIN') {
+        factoryControl.innerHTML = `<label class="hint" for="calendarFactory">공장</label><select class="input" id="calendarFactory">${summaries.map((summary) => `<option value="${summary.factoryId}" ${String(summary.factoryId) === String(selectedFactoryId) ? 'selected' : ''}>${escapeHtml(summary.factoryName)}</option>`).join('')}</select>`;
+        $('#calendarFactory', root)?.addEventListener('change', (event) => loadDetail(event.target.value, false));
+      } else {
+        const summary = summaries[0];
+        factoryControl.innerHTML = summary ? `<div class="hint">내 공장</div><strong>${escapeHtml(summary.factoryName)}</strong>` : '';
+      }
+    }
+
+    function payload() {
+      return {
+        timezone: String(draft.timezone || '').trim(),
+        resumeGraceSeconds: Number(draft.resumeGraceSeconds),
+        revision: Number(draft.revision),
+        weeklyIntervals: draft.weeklyIntervals,
+        dateOverrides: draft.dateOverrides,
+      };
+    }
+
+    async function save() {
+      const request = payload();
+      const validation = CalendarValidation.validate(request);
+      if (!validation.valid) { renderStatus(validation.errors.join('\n'), 'error'); return; }
+      saving = true; renderEditor();
+      try {
+        const res = await Auth.apiFetch(`/admin/factory-calendars/${encodeURIComponent(selectedFactoryId)}`, { method: 'PUT', body: JSON.stringify(request) });
+        if (!res) throw new Error('세션이 만료되었습니다.');
+        if (res.status === 409) {
+          saving = false; renderEditor(); renderStatus('다른 관리자가 먼저 수정했습니다. 새로고침 후 변경을 다시 적용해 주세요.', 'conflict'); return;
+        }
+        if (!res.ok) throw new Error(await readMsg(res, '운영 캘린더를 저장하지 못했습니다.'));
+        draft = await res.json(); dirty = false; saving = false; renderEditor(); toast('운영 캘린더를 저장했습니다.');
+      } catch (error) { saving = false; renderEditor(); renderStatus(error.message, 'error'); }
+    }
+
+    editor.addEventListener('input', (event) => {
+      if (!draft) return;
+      if (event.target.id === 'calendarTimezone') draft.timezone = event.target.value;
+      else if (event.target.id === 'calendarGrace') draft.resumeGraceSeconds = Number(event.target.value);
+      else if (event.target.dataset.action === 'time') {
+        const target = event.target.dataset.context === 'weekly'
+          ? draft.weeklyIntervals.filter((item) => item.dayOfWeek === DAYS[Number(event.target.dataset.index)][0])[Number(event.target.dataset.interval)]
+          : draft.dateOverrides[Number(event.target.dataset.index)].intervals[Number(event.target.dataset.interval)];
+        if (target) target[event.target.dataset.field] = event.target.value;
+      } else return;
+      markDirty();
+    });
+    editor.addEventListener('change', (event) => {
+      if (event.target.dataset.action !== 'override-field') return;
+      const override = draft.dateOverrides[Number(event.target.dataset.index)];
+      override[event.target.dataset.field] = event.target.value;
+      if (event.target.dataset.field === 'kind') override.intervals = event.target.value === 'OPEN' ? [{ start: '08:00', end: '18:00' }] : [];
+      markDirty(); renderEditor();
+    });
+    editor.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-action]'); if (!button || !draft) return;
+      const action = button.dataset.action;
+      if (action === 'save') { save(); return; }
+      if (action === 'reload') { loadDetail(selectedFactoryId, false); return; }
+      if (action === 'add-weekly') draft.weeklyIntervals.push({ dayOfWeek: button.dataset.day, start: '08:00', end: '18:00' });
+      if (action === 'add-override') draft.dateOverrides.push({ date: new Date().toISOString().slice(0, 10), kind: 'CLOSED', intervals: [] });
+      if (action === 'remove-override') draft.dateOverrides.splice(Number(button.dataset.index), 1);
+      if (action === 'add-override-interval') draft.dateOverrides[Number(button.dataset.index)].intervals.push({ start: '08:00', end: '18:00' });
+      if (action === 'remove-interval') {
+        if (button.dataset.context === 'override') draft.dateOverrides[Number(button.dataset.index)].intervals.splice(Number(button.dataset.interval), 1);
+        else {
+          const day = DAYS[Number(button.dataset.index)][0];
+          const match = draft.weeklyIntervals.filter((item) => item.dayOfWeek === day)[Number(button.dataset.interval)];
+          draft.weeklyIntervals.splice(draft.weeklyIntervals.indexOf(match), 1);
+        }
+      }
+      if (!['add-weekly', 'add-override', 'remove-override', 'add-override-interval', 'remove-interval'].includes(action)) return;
+      markDirty(); renderEditor();
+    });
+
+    (async () => {
+      try {
+        summaries = await apiGet('/admin/factory-calendars') || [];
+        if (!summaries.length) { renderFactoryControl(); setEmpty(editor, '접근 가능한 공장이 없습니다.'); return; }
+        await loadDetail(summaries[0].factoryId, true);
+      } catch (error) { setError(editor, error.message); }
+    })();
+  }
 
   /* ==========================================================
      탭 1) 사용자 승인
