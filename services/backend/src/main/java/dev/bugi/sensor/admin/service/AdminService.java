@@ -68,10 +68,10 @@ public class AdminService {
 
         target.approve(request.role());
         target.assignFactory(factory);
+        // 승인 요청을 최종 구역 목록으로 취급해 기존 타 공장 배정이 남지 않게 한다.
+        zoneUserRepository.deleteAllByUserId(target.getId());
         for (Zone zone : zones) {
-            if (!zoneUserRepository.existsByZoneIdAndUserId(zone.getId(), target.getId())) {
-                zoneUserRepository.save(ZoneUser.builder().zone(zone).user(target).build());
-            }
+            zoneUserRepository.save(ZoneUser.builder().zone(zone).user(target).build());
         }
     }
 

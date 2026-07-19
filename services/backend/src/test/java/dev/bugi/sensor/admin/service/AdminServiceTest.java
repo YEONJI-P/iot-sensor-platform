@@ -76,6 +76,18 @@ class AdminServiceTest {
     }
 
     @Test
+    void factory_admin의_대기_목록은_자기_공장으로_조회한다() {
+        User manager = caller(Role.FACTORY_ADMIN, 1L);
+        when(userRepository.findByEmployeeId("MGR")).thenReturn(Optional.of(manager));
+        when(userRepository.findAllByFactory_IdAndStatus(1L, UserStatus.PENDING)).thenReturn(List.of());
+
+        adminService.getPendingUsers("MGR");
+
+        verify(userRepository).findAllByFactory_IdAndStatus(1L, UserStatus.PENDING);
+        verify(userRepository, never()).findAllByStatus(any());
+    }
+
+    @Test
     void system_admin은_요청한_공장으로_기존_소속을_교정하고_구역을_배정한다() {
         User caller = caller(Role.SYSTEM_ADMIN, null);
         User target = pendingTarget(10L, 1L);
@@ -91,6 +103,7 @@ class AdminServiceTest {
         verify(accessControlService).assertCanManageZone(caller, zone);
         verify(target).approve(Role.MEMBER);
         verify(target).assignFactory(requestedFactory);
+        verify(zoneUserRepository).deleteAllByUserId(10L);
         verify(zoneUserRepository).save(any(ZoneUser.class));
     }
 
@@ -107,7 +120,8 @@ class AdminServiceTest {
 
         verify(target).approve(Role.VIEWER);
         verify(target).assignFactory(requestedFactory);
-        verifyNoInteractions(zoneRepository, zoneUserRepository, accessControlService);
+        verify(zoneUserRepository).deleteAllByUserId(10L);
+        verifyNoInteractions(zoneRepository, accessControlService);
     }
 
     @Test
@@ -145,6 +159,7 @@ class AdminServiceTest {
         verify(accessControlService).assertCanManageZone(caller, zone);
         verify(target).approve(Role.MEMBER);
         verify(target).assignFactory(requestedFactory);
+        verify(zoneUserRepository).deleteAllByUserId(10L);
         verify(zoneUserRepository).save(any(ZoneUser.class));
     }
 

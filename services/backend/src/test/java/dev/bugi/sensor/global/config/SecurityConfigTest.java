@@ -346,6 +346,25 @@ public class SecurityConfigTest {
 
     @Test
     @WithMockUser(roles = "VIEWER")
+    void approve_user_with_viewer_is_forbidden() throws Exception {
+        mockMvc.perform(patch("/admin/users/1/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"VIEWER\",\"factoryId\":1,\"zoneIds\":[]}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(adminService);
+    }
+
+    @Test
+    void approve_user_without_auth_is_unauthorized() throws Exception {
+        mockMvc.perform(patch("/admin/users/1/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"VIEWER\",\"factoryId\":1,\"zoneIds\":[]}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(adminService);
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
     void get_channels_with_viewer_ok() throws Exception {
         mockMvc.perform(get("/channels"))
                 .andExpect(status().is(not(403)));

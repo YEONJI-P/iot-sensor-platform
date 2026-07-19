@@ -9,5 +9,6 @@ public interface ZoneUserRepository extends JpaRepository<ZoneUser, Long> {
     List<ZoneUser> findAllByUserId(Long userId);
     List<ZoneUser> findAllByZoneId(Long zoneId);
     boolean existsByZoneIdAndUserId(Long zoneId, Long userId);
+    void deleteAllByUserId(Long userId);
     void deleteByZoneIdAndUserId(Long zoneId, Long userId);
 }
