@@ -42,3 +42,13 @@ jobs:
       - name: Test simulator
         run: python -m unittest -v test_simulator.py
         working-directory: services/simulator
+
+  publish-images:
+    name: Publish immutable images
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-images.yml
+    with:
+      services: all
