@@ -83,7 +83,7 @@ graph LR
 
 ## 4. 시스템 아키텍처
 
-센서 데이터 수신은 별도 메시지 버스 없이 동기 처리합니다. 수신 요청이 들어오면 한 트랜잭션 안에서 센서 데이터를 저장하고, 장치의 마지막 수신 시각을 갱신하고, 임계값 초과를 판정해 알림을 생성합니다. 저장과 알림 이벤트는 트랜잭션 커밋 후 SSE로 대시보드에 실시간 전달됩니다.
+센서 데이터 수신은 별도 메시지 버스 없이 동기 처리합니다. 수신 요청이 들어오면 한 트랜잭션 안에서 센서 데이터를 저장하고, 장치의 마지막 수신 시각을 갱신하고, 채널별 임계 방향(`ABOVE`/`BELOW`/`ABS_ABOVE`)의 이탈을 판정해 알림을 생성합니다. 저장과 알림 이벤트는 트랜잭션 커밋 후 SSE로 대시보드에 실시간 전달됩니다.
 
 주기 스케줄러 두 개가 수신 경로 밖에서 동작합니다. 하나는 기대 수신 주기를 넘긴 침묵 장치를 감지하고, 다른 하나는 생성된 알림의 근거와 권고를 채우기 위해 별도 Python 분석 서비스(explain)를 HTTP로 호출합니다. 이상 탐지는 규칙 기반이고, 설명과 진단만 LLM이 담당합니다.
 
@@ -109,7 +109,7 @@ graph TD
     CLI --> ADMIN
     CLI --> DEVICE
     CLI -->|GET /dashboard/stream| SSE
-    SENSOR -->|저장 + 임계값 초과 시 알림| DB
+    SENSOR -->|저장 + 임계 이탈 시 알림| DB
     SENSOR -->|커밋 후 이벤트| SSE
     SCHED -->|HTTP 요청-응답| EXPLAIN
     SCHED --> DB
@@ -344,13 +344,13 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 
 ## 7. 주요 기능
 
-실시간 대시보드 — SSE로 센서값이 실시간 갱신되고, 임계값 초과 알림에는 LLM(explain 서비스)이 생성한 근거·권고가 붙습니다.
+실시간 대시보드 — SSE로 센서값이 실시간 갱신되고, 임계 이탈 알림에는 LLM(explain 서비스)이 생성한 근거·권고가 붙습니다. 장치 상세의 최근 알림은 기본 5건을 한 줄로 보여주고, 한 건씩 근거·권고를 펼치거나 최근 20건 전체를 내부 스크롤로 확인할 수 있습니다.
 
 ![센서 대시보드](docs/images/dashboard.png)
 
 ![장치 상세와 채널 현황](docs/images/dashboard-device-detail.png)
 
-관리 콘솔은 장치 목록과 선택 장치의 상세·하위 채널을 한 화면에서 관리합니다.
+관리 콘솔은 장치 목록과 선택 장치의 상세·하위 채널을 한 화면에서 관리합니다. 구역 필터가 선택돼 있으면 장치 등록 구역의 기본값으로 이어지며, 채널 임계값과 방향은 둘 다 입력하거나 둘 다 비우는 한 쌍으로 관리합니다.
 
 ![장치·채널 관리 콘솔](docs/images/console-device-channels.png)
 
@@ -370,7 +370,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
   | `VIEWER` | 소속 구역 읽기 전용 (장치 변경 불가) |
 
 - 공장(Factory), 구역(Zone) 계층과 구역 소속 관계로 접근 범위를 계산하는 `AccessControlService`
-- prod의 공개 데모 토폴로지는 Flyway V3·V4가 자동 투입하고, local의 계정 포함 데모 데이터는 `services/simulator/seed.sql`로 별도 투입
+- prod의 공개 데모 토폴로지는 Flyway V3·V4가 자동 투입하고 V5가 채널 임계값·방향 계약을 강제합니다. local의 계정 포함 데모 데이터는 `services/simulator/seed.sql`로 별도 투입
 
 ### 센서 데이터 수신과 알림
 
@@ -381,6 +381,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 - 이상 판정은 `AnomalyDetector` 전략 인터페이스로 분리(현재 `ThresholdDetector`), 판정 로직 교체 가능
 - 검증 실패, 미등록 장치 요청은 조용히 버리지 않고 `failed_readings`에 사유와 함께 적재
 - 알림은 severity(INFO/WARNING/CRITICAL)와 근거(evidence), 권고(recommendation) 필드를 가지며, 근거와 권고는 explain 서비스가 사후 보강
+- explain 보강은 현재 알림 채널의 최근 판독 20건을 사용하며, 방향별 임계 이탈률·추세·변동성을 설명 신호로 전달합니다. 이는 탐지 조건이나 발화 시점을 바꾸지 않습니다
 
 ### 장치 freshness 감지
 
@@ -413,7 +414,7 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 - 공장·구역별 장치 카드 overview에서 freshness, 마지막 수신, 알람 유지 중 채널 수를 한눈에 표시
 - 장치 상세의 채널 카드로 그래프 대상을 선택하고, 1·5·15분 범위의 최대 300개 시계열 점과 실제 저장 알림 삼각형 marker를 함께 확인
 - SSE(`/dashboard/stream`) batch 한 건으로 같은 장치의 여러 채널을 함께 갱신하고, 30초 polling으로 상태를 재동기화
-- 관리 콘솔의 장치 탭은 구역 filter·장치 목록과 선택 장치의 상세·하위 채널을 한 master-detail 화면에서 관리
+- 관리 콘솔의 장치 탭은 구역 filter·장치 목록과 선택 장치의 상세·하위 채널을 한 master-detail 화면에서 관리. 선택 구역은 장치 등록 기본값이며 채널 임계값·방향은 한 쌍으로 저장
 
 ---
 
@@ -558,7 +559,7 @@ python -m unittest -v test_simulator.py
 > 테스트는 세 갈래입니다.
 > - **컨텍스트 부팅 스모크**(`contextLoads`)는 인메모리 H2 로 동작해 별도 인프라 없이 실행됩니다(엔티티 매핑·설정 오류를 싸게 잡는 용도이며, DB 계층은 검증하지 않습니다). 설정은 `services/backend/src/test/resources/application.yml`.
 > - **DB 계층 검증**(리포지토리·네이티브 쿼리·제약·컬럼 타입)은 Testcontainers 로 프로덕션과 동일한 `postgres:15` 를 띄워 검증하므로 **로컬에 도커가 실행 중이어야 합니다**. 컨테이너는 한 번만 떠서 모든 리포지토리 테스트가 재사용합니다.
-> - **운영 스키마 검증**(`FlywayMigrationTest`)은 빈 `postgres:15`에 prod 프로파일을 적용해 Flyway V1~V4 실행, 공개 데모 토폴로지와 Hibernate `ddl-auto=validate` 부팅을 함께 확인합니다.
+> - **운영 스키마 검증**(`FlywayMigrationTest`)은 빈 `postgres:15`에 prod 프로파일을 적용해 Flyway V1~V5 실행, 공개 데모 토폴로지·채널 임계 계약과 Hibernate `ddl-auto=validate` 부팅을 함께 확인합니다.
 
 ### Swagger UI
 
@@ -645,10 +646,11 @@ device는 `deviceCode`(`CMAPSS-U1`/`CMAPSS-U2`/`CNC-EXP01`)로 식별합니다. 
 - V2(`V2__normalized_ingest_model.sql`)는 수신 모델을 "채널=Device"에서 물리 Device ─ SensorChannel ─ MeasurementBatch ─ SensorReading 정규화 모델로 전환하는 DDL입니다. `device.type`·`device.threshold_value` 제거와 `device.code`(UK) 추가, `sensor_channel`·`measurement_batch`·`sensor_reading`·`channel_status` 신설, `alert`에 `channel_id`·`batch_id` 추가, scalar 텔레메트리 테이블 `sensor_data` 제거를 포함합니다.
 - V3(`V3__public_demo_topology.sql`)는 V2가 만든 새 스키마 위에 공장 2개·구역 3개·물리 device 3개·기존 측정 채널 7개를 넣으며, 이미 적용된 파일은 수정하지 않습니다.
 - V4(`V4__expand_representative_sensor_channels.sql`)는 방향 제약에 `ABS_ABOVE`를 추가하고 대표 채널을 총 20개로 확장합니다. C-MAPSS 임계값은 FD001 초기 건강 구간, CNC 임계값은 experiment01 절댓값 분포를 근거로 둔 초기값입니다.
-- V2·V3·V4 모두 사용자, 구역 소속, 비밀번호를 만들지 않습니다. 따라서 공개 홈서버의 첫 계정과 최소 권한 bootstrap 절차는 배포 전에 별도로 확정해야 합니다.
-- 독립 풀 데모는 Flyway를 실행하지 않으므로 V2~V4가 적용되지 않습니다. device/채널과 여러 역할 계정은 `services/simulator/seed.sql`을 수동 실행해 넣습니다.
-- **seed.sql과 Flyway V3+V4는 같은 최종 토폴로지(공장 2·구역 3·device 3·채널 20)를 서로 다른 경로로 넣습니다.** 같은 DB에 둘 다 적용하지 않습니다. 로컬은 seed.sql만, prod는 Flyway(V1~V4)만 적용합니다.
-- 운영 DB에 한 번 적용된 migration은 내용을 수정하지 않고 다음 변경을 새 `Vn__...sql` 파일로 추가합니다. V1~V4는 적용 후 checksum 불변 대상입니다.
+- V5(`V5__enforce_channel_threshold_pair.sql`)는 기존 부분 입력을 정규화하고 `threshold_value`·`threshold_direction`의 동시 NULL/동시 입력과 `ABS_ABOVE > 0`을 CHECK 제약으로 강제합니다.
+- V2·V3·V4·V5 모두 사용자, 구역 소속, 비밀번호를 만들지 않습니다. 따라서 공개 홈서버의 첫 계정과 최소 권한 bootstrap 절차는 배포 전에 별도로 확정해야 합니다.
+- 독립 풀 데모는 Flyway를 실행하지 않으므로 V2~V5가 적용되지 않습니다. device/채널과 여러 역할 계정은 `services/simulator/seed.sql`을 수동 실행해 넣고, 같은 임계 계약은 애플리케이션 서비스가 검증합니다.
+- **seed.sql과 Flyway V3+V4는 같은 최종 토폴로지(공장 2·구역 3·device 3·채널 20)를 서로 다른 경로로 넣습니다.** 같은 DB에 둘 다 적용하지 않습니다. 로컬은 seed.sql만, prod는 Flyway(V1~V5)만 적용합니다.
+- 운영 DB에 한 번 적용된 migration은 내용을 수정하지 않고 다음 변경을 새 `Vn__...sql` 파일로 추가합니다. V1~V5는 적용 후 checksum 불변 대상입니다.
 
 #### Hibernate가 이미 만든 DB의 1회 전환
 
