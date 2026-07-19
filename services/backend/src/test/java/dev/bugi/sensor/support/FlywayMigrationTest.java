@@ -16,11 +16,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 빈 PostgreSQL에 운영(prod) 설정을 그대로 적용한다.
  *
- * 컨텍스트가 뜨려면 Flyway V1~V4 적용 후 Hibernate ddl-auto=validate가 성공해야 한다.
+ * 컨텍스트가 뜨려면 Flyway V1~V5 적용 후 Hibernate ddl-auto=validate가 성공해야 한다.
  * 별도 SQL로 history, 핵심 스키마와 공개 데모 토폴로지를 확인해 테스트 설정이 우연히
  * create/update로 우회하지 않았는지도 막는다.
  */
@@ -51,7 +52,7 @@ class FlywayMigrationTest {
     Environment environment;
 
     @Test
-    void prod는_flyway_V1부터_V4를_적용하고_공개_데모_토폴로지를_준비한다() {
+    void prod는_flyway_V1부터_V5를_적용하고_공개_데모_토폴로지를_준비한다() {
         assertThat(environment.getProperty("spring.flyway.enabled")).isEqualTo("true");
         assertThat(environment.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
 
@@ -60,7 +61,7 @@ class FlywayMigrationTest {
                 WHERE version IS NOT NULL AND success = true
                 ORDER BY installed_rank
                 """, String.class);
-        assertThat(appliedVersions).containsExactly("1", "2", "3", "4");
+        assertThat(appliedVersions).containsExactly("1", "2", "3", "4", "5");
 
         // 정규화 batch 스키마: 관측 시각(observed_at)은 batch 가 timestamptz 로 가진다.
         String observedAtType = jdbcTemplate.queryForObject("""
@@ -172,6 +173,23 @@ class FlywayMigrationTest {
                 ORDER BY code
                 """, String.class))
                 .containsExactly("M1_CURRENT_FEEDRATE", "S1_ActualVelocity");
+
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM pg_constraint
+                WHERE conname = 'ck_sensor_channel_threshold_pair'
+                """, Integer.class)).isEqualTo(1);
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO sensor_channel (
+                    device_id, code, threshold_value, threshold_direction, created_at, updated_at
+                ) VALUES ((SELECT id FROM device WHERE code = 'CMAPSS-U1'),
+                          'INVALID-PAIR', 1.0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """)).hasMessageContaining("ck_sensor_channel_threshold_pair");
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO sensor_channel (
+                    device_id, code, threshold_value, threshold_direction, created_at, updated_at
+                ) VALUES ((SELECT id FROM device WHERE code = 'CMAPSS-U1'),
+                          'INVALID-ABS', -1.0, 'ABS_ABOVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """)).hasMessageContaining("ck_sensor_channel_threshold_pair");
     }
 
     private int rowCount(String tableName) {
