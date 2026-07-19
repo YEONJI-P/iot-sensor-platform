@@ -51,6 +51,17 @@
     setTokens(accessToken, refreshToken);
   }
 
+  async function register(request) {
+    const res = await fetch('/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    let body = {};
+    try { body = await res.json(); } catch {}
+    if (!res.ok) throw new Error(body.message || '가입 요청을 처리하지 못했습니다.');
+    return body.message || '가입 신청이 완료됐어요. 관리자 승인 후 로그인 가능해요';
+  }
+
   async function logout() {
     const t = getToken();
     try {
@@ -102,7 +113,7 @@
 
   window.Auth = {
     ROLE_LABEL, decodeJwt, getToken, getPayload, getRole, getEmployeeId,
-    isLoggedIn, login, logout, apiFetch, refreshAccessToken: tryRefresh,
+    isLoggedIn, login, register, logout, apiFetch, refreshAccessToken: tryRefresh,
     requireLogin, hasRole, toLogin,
   };
 })();
