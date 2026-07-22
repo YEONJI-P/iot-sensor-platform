@@ -1,8 +1,8 @@
 name: sensor-monitor
 
 services:
-  # 독립 풀 데모 전용 DB. 홈서버 구성은 docker-compose.home.yml 에서 기존 PostgreSQL의
-  # 별도 sensor_monitor database를 사용하므로 이 컨테이너를 만들지 않는다.
+  # 독립 풀 데모 전용 DB. 홈서버 prod 배포는 personal-hub infra가 기존 PostgreSQL의
+  # 별도 sensor_monitor database를 사용하며 이 컨테이너를 만들지 않는다.
   postgres:
     image: postgres:15
     environment:
@@ -76,7 +76,8 @@ services:
       - ./services/simulator/data:/app/data
     command: ["--mode", "replay", "--all", "--base-url", "http://backend:8080"]
 
-  # 합성 데이터 상시 스트림. 명시적으로 live 프로파일을 켰을 때만 평일 운영시간에 전송한다.
+  # 컨테이너 데모용 합성 스트림. live 프로파일을 켜면 시간대와 무관하게 상시 전송하고,
+  # 부팅 후 30초에 이상을 1회 보장해 평가자가 곧바로 알람·게이지·주의밴드를 볼 수 있게 한다.
   simulator-live:
     build: ./services/simulator
     image: sensor-monitor-simulator:local
@@ -90,11 +91,11 @@ services:
       - synthetic
       - --all
       - --interval
-      - "10"
+      - "5"
       - --active-days
-      - mon-fri
-      - --active-hours
-      - 08:00-18:00
+      - all
+      - --first-anomaly-after
+      - "30"
       - --timezone
       - Asia/Seoul
       - --base-url
