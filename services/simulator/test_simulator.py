@@ -89,6 +89,18 @@ class SyntheticGeneratorTest(unittest.TestCase):
         self.assertEqual(measurements["display"], 50.0)
         self.assertGreater(measurements["alerted"], 10.0)
 
+    def test_force_anomaly_starts_anomaly_immediately(self):
+        specs = {"temperature": {"normal": 10.0, "noise": 0.0, "anomaly": 20.0}}
+        generator = SyntheticGenerator(specs, seed=1, anomaly_rate=0.0)  # 확률 0 → 강제만 발화
+
+        baseline = generator.next_measurements()["temperature"]  # anomaly_rate 0이라 정상 유지
+        generator.force_anomaly()
+        values = [generator.next_measurements()["temperature"] for _ in range(3)]
+
+        self.assertEqual(baseline, 10.0)
+        self.assertGreater(values[0], baseline)
+        self.assertGreater(values[2], values[0])
+
 
 class ReplayPresetTest(unittest.TestCase):
     def test_public_presets_have_three_devices_and_twenty_channels(self):
@@ -198,7 +210,7 @@ class SyntheticWorkerTest(unittest.TestCase):
 
         synthetic_worker(
             self.PRESET, 1.0, 4, "http://example", "test-ingest-key", 1, 0.0,
-            set(range(7)), None, "UTC", stop_event,
+            set(range(7)), None, "UTC", None, stop_event,
         )
 
         self.assertEqual(send_mock.call_count, 4)
@@ -210,7 +222,7 @@ class SyntheticWorkerTest(unittest.TestCase):
 
         synthetic_worker(
             self.PRESET, 1.0, 8, "http://example", "test-ingest-key", 1, 0.0,
-            set(range(7)), None, "UTC", stop_event,
+            set(range(7)), None, "UTC", None, stop_event,
         )
 
         self.assertEqual(send_mock.call_count, 8)
@@ -222,11 +234,36 @@ class SyntheticWorkerTest(unittest.TestCase):
 
         synthetic_worker(
             self.PRESET, 1.0, 0, "http://example", "test-ingest-key", 1, 0.0,
-            set(range(7)), None, "UTC", stop_event,
+            set(range(7)), None, "UTC", None, stop_event,
         )
 
         self.assertEqual(send_mock.call_count, 1)
         self.assertTrue(stop_event.is_set())
+
+    @patch("simulator.send", return_value=True)
+    def test_first_anomaly_after_forces_one_anomaly(self, send_mock):
+        stop_event = RecordingStopEvent()
+
+        with patch.object(simulator.SyntheticGenerator, "force_anomaly") as force_mock:
+            synthetic_worker(
+                self.PRESET, 1.0, 4, "http://example", "test-ingest-key", 1, 0.0,
+                set(range(7)), None, "UTC", 3.0, stop_event,
+            )
+
+        # first_anomaly_after=3s / interval=1s → forced_tick=3, 한 번만 발화
+        force_mock.assert_called_once()
+
+    @patch("simulator.send", return_value=True)
+    def test_no_forced_anomaly_when_flag_absent(self, send_mock):
+        stop_event = RecordingStopEvent()
+
+        with patch.object(simulator.SyntheticGenerator, "force_anomaly") as force_mock:
+            synthetic_worker(
+                self.PRESET, 1.0, 4, "http://example", "test-ingest-key", 1, 0.0,
+                set(range(7)), None, "UTC", None, stop_event,
+            )
+
+        force_mock.assert_not_called()
 
 
 if __name__ == "__main__":
