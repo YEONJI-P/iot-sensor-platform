@@ -32,6 +32,14 @@
   let deviceAlerts = [];
   let showAllDeviceAlerts = false;
   let expandedDeviceAlertId = null;
+  let statusFilter = 'all';
+  const STATUS_FILTERS = [
+    { key: 'all', label: '전체' },
+    { key: 'alarm', label: '알람' },
+    { key: 'warn', label: '지연' },
+    { key: 'ok', label: '정상' },
+    { key: 'idle', label: '비가동' },
+  ];
   let pollTimer = null;
   let clockTimer = null;
   let sse = null;
@@ -48,6 +56,10 @@
 
   function number(value) {
     return typeof value === 'number' && isFinite(value) ? value : null;
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
   }
 
   function fmtNum(value) {
@@ -276,6 +288,22 @@
     return `<span class="freshness"><span class="lamp ${info.lamp}"></span>${escapeHtml(info.label)}</span>`;
   }
 
+  // 장치 카드 상태 스파인 + 상태 필터 칩이 공유하는 4버킷 분류.
+  function classifyDevice(device) {
+    if ((Number(device.currentAlarmCount) || 0) > 0 || device.freshness === 'STALE') return 'alarm';
+    if (device.freshness === 'NEVER_SEEN') return 'warn';
+    if (['NOT_MONITORED', 'PLANNED_OFFLINE', 'RESUMING'].includes(device.freshness)) return 'idle';
+    return 'ok';
+  }
+
+  function isAttentionDevice(device) {
+    return (Number(device.currentAlarmCount) || 0) > 0 || device.freshness === 'STALE' || device.freshness === 'NEVER_SEEN';
+  }
+
+  function isAttentionAlarm(device) {
+    return (Number(device.currentAlarmCount) || 0) > 0 || device.freshness === 'STALE';
+  }
+
   function renderSummary() {
     const devices = allDevices().map((entry) => entry.device);
     const monitored = devices.filter((device) => !['NOT_MONITORED', 'PLANNED_OFFLINE', 'RESUMING'].includes(device.freshness));
@@ -295,7 +323,8 @@
 
   function deviceCardHtml(device) {
     const location = device.location || device.code || '위치 정보 없음';
-    return `<button class="device-card" type="button" data-device-id="${escapeHtml(String(device.id))}">
+    const cls = classifyDevice(device);
+    return `<button class="device-card ${cls}" type="button" data-device-id="${escapeHtml(String(device.id))}">
       <div class="device-head"><div><h3>${escapeHtml(device.name || device.code || '이름 없는 장치')}</h3><div class="device-meta">${escapeHtml(location)}</div></div>${freshnessHtml(device.freshness)}</div>
       <div class="device-metrics">
         <div class="metric"><span>마지막 수신</span><b>${escapeHtml(fmtRelative(device.lastSeenAt))}</b></div>
@@ -304,8 +333,58 @@
     </button>`;
   }
 
+  function attentionSummary(device) {
+    if ((Number(device.currentAlarmCount) || 0) > 0) {
+      const channel = (device.channels || []).find((item) => item.inAlarm);
+      if (channel) {
+        return { text: `${channel.code} ${fmtNum(channel.latestValue)}${channel.unit || ''} ▲`, cls: 's-alarm' };
+      }
+      return { text: '알람 유지 중', cls: 's-alarm' };
+    }
+    return { text: '수신 지연', cls: device.freshness === 'STALE' ? 's-alarm' : 's-warn' };
+  }
+
+  function attentionRowHtml(entry) {
+    const { factory, zone, device } = entry;
+    const summary = attentionSummary(device);
+    const lamp = isAttentionAlarm(device) ? 'alarm' : 'warn';
+    return `<button class="attn-row" type="button" data-device-id="${escapeHtml(String(device.id))}">
+      <span class="lamp ${lamp}"></span>
+      <div class="attn-id"><b>${escapeHtml(device.name || device.code || '이름 없는 장치')}</b><span>${escapeHtml([factory.name, zone.name].filter(Boolean).join(' · '))}</span></div>
+      <div class="attn-val ${summary.cls}">${escapeHtml(summary.text)}</div>
+      <span class="attn-time">${escapeHtml(fmtRelative(device.lastSeenAt))}</span>
+      <span class="attn-go">→</span>
+    </button>`;
+  }
+
+  function renderAttentionBand() {
+    const band = $('attentionBand');
+    const entries = allDevices().filter((entry) => isAttentionDevice(entry.device))
+      .sort((a, b) => {
+        const rank = (entry) => isAttentionAlarm(entry.device) ? 0 : 1;
+        const diff = rank(a) - rank(b);
+        if (diff !== 0) return diff;
+        return (Number(b.device.currentAlarmCount) || 0) - (Number(a.device.currentAlarmCount) || 0);
+      });
+    if (!entries.length) { band.innerHTML = ''; return; }
+    const channelAlarmCount = entries.reduce((sum, entry) => sum + (Number(entry.device.currentAlarmCount) || 0), 0);
+    band.innerHTML = `<div class="attention">
+      <div class="panel-head"><h3>주의 필요</h3><span class="attn-count">장치 ${entries.length}${channelAlarmCount ? ` · 채널 ${channelAlarmCount}` : ''}</span></div>
+      ${entries.map(attentionRowHtml).join('')}
+    </div>`;
+  }
+
+  function renderStatusFilters(devices) {
+    const counts = { all: devices.length, alarm: 0, warn: 0, ok: 0, idle: 0 };
+    devices.forEach((device) => { counts[classifyDevice(device)] += 1; });
+    $('statusFilters').innerHTML = STATUS_FILTERS.map((filter) => `<button class="chip${filter.key === statusFilter ? ' on' : ''}" type="button" data-filter="${filter.key}">${escapeHtml(filter.label)}<span class="n">${counts[filter.key]}</span></button>`).join('');
+  }
+
   function renderOverview() {
     renderSummary();
+    const devices = allDevices().map((entry) => entry.device);
+    renderAttentionBand();
+    renderStatusFilters(devices);
     const groups = $('factoryGroups');
     if (!overview || !overview.factories || overview.factories.length === 0) {
       groups.innerHTML = '';
@@ -313,14 +392,29 @@
       $('overviewEmpty').textContent = '접근 가능한 장치가 없습니다.';
       return;
     }
+    const factoriesHtml = overview.factories.map((factory) => {
+      const zonesHtml = (factory.zones || []).map((zone) => {
+        const zoneDevices = (zone.devices || []).filter((device) => statusFilter === 'all' || classifyDevice(device) === statusFilter);
+        if (!zoneDevices.length) return '';
+        return `<div class="zone-block">
+          <div class="section-title"><h2 class="sec-title">${escapeHtml(zone.name)}</h2><span class="tag">${zoneDevices.length} 장치</span></div>
+          <div class="device-grid">${zoneDevices.map(deviceCardHtml).join('')}</div>
+        </div>`;
+      }).join('');
+      if (!zonesHtml) return '';
+      return `<section class="factory-block">
+        <div class="factory-name eyebrow">${escapeHtml(factory.name)}</div>
+        ${zonesHtml}
+      </section>`;
+    }).join('');
+    if (!factoriesHtml) {
+      groups.innerHTML = '';
+      $('overviewEmpty').classList.remove('hidden');
+      $('overviewEmpty').textContent = statusFilter === 'all' ? '접근 가능한 장치가 없습니다.' : '조건에 맞는 장치가 없습니다.';
+      return;
+    }
     $('overviewEmpty').classList.add('hidden');
-    groups.innerHTML = overview.factories.map((factory) => `<section class="factory-block">
-      <div class="factory-name eyebrow">${escapeHtml(factory.name)}</div>
-      ${(factory.zones || []).map((zone) => `<div class="zone-block">
-        <div class="section-title"><h2>${escapeHtml(zone.name)}</h2><span class="tag">${(zone.devices || []).length} 장치</span></div>
-        <div class="device-grid">${(zone.devices || []).map(deviceCardHtml).join('')}</div>
-      </div>`).join('')}
-    </section>`).join('');
+    groups.innerHTML = factoriesHtml;
   }
 
   function currentEntry() {
@@ -339,17 +433,82 @@
     return `${condition} ${fmtNum(channel.thresholdValue)}${channel.unit ? ` ${channel.unit}` : ''}`;
   }
 
-  function channelCardHtml(channel) {
+  // 채널의 latestValue·thresholdValue만으로 임계값 게이지를 그린다(별도 min/max 범위 없음).
+  // 반환: {markPct, limitPct, statusClass, condText} 또는 임계값·값이 없으면 null.
+  function gaugeModel(channel) {
+    const v = number(channel.latestValue);
+    const t = number(channel.thresholdValue);
+    if (v == null || t == null || t === 0) return null;
+    const dir = channel.thresholdDirection || 'ABOVE';
+    const val = dir === 'ABS_ABOVE' ? Math.abs(v) : v;
+    const r = val / Math.abs(t);
+    let limitPct, markPct, over;
+    if (dir === 'BELOW') {
+      limitPct = 30; markPct = clamp(r * 30, 2, 98); over = val < t;
+    } else {
+      limitPct = 72; markPct = clamp(r * 72, 2, 98); over = val > Math.abs(t);
+    }
+    const statusClass = channel.inAlarm || over ? 's-alarm'
+      : (dir === 'BELOW' ? r < 1.15 : r > 0.85) ? 's-warn' : 's-ok';
+    const unit = channel.unit || '';
+    const diff = val - (dir === 'BELOW' ? t : Math.abs(t));
+    const condText = over
+      ? `▲ 임계 ${fmtNum(t)}${unit} ${dir === 'BELOW' ? '미만' : '초과'} (${diff >= 0 ? '+' : ''}${fmtNum(diff)}) · 알람`
+      : `임계 ${fmtNum(t)}${unit}${unit ? ' ' : ''}까지 여유 ${fmtNum(Math.abs(diff))}`;
+    return { markPct, limitPct, statusClass, condText };
+  }
+
+  function channelSortRank(channel) {
+    if (channel.inAlarm) return 0;
+    if (channel.anomaly) return 1;
+    return number(channel.latestValue) == null ? 3 : 2;
+  }
+
+  function sortedChannels(device) {
+    return (device.channels || []).slice().sort((a, b) => channelSortRank(a) - channelSortRank(b));
+  }
+
+  function crowHtml(channel) {
     const selected = String(channel.id) === String(currentChannelId) ? ' selected' : '';
-    const alarm = channel.inAlarm ? ' alarm' : '';
-    const state = channel.inAlarm ? '<span class="freshness"><span class="lamp alarm"></span>알람</span>'
-      : channel.anomaly ? '<span class="freshness"><span class="lamp warn"></span>순간 이상</span>'
-        : '<span class="freshness"><span class="lamp ok"></span>정상</span>';
-    return `<button class="channel-card${selected}${alarm}" type="button" data-channel-id="${escapeHtml(String(channel.id))}" aria-pressed="${selected ? 'true' : 'false'}">
-      <div class="channel-head"><div><strong>${escapeHtml(channel.code)}</strong><div class="device-meta">${escapeHtml(channel.quantityKind || '측정 채널')}</div></div>${state}</div>
-      <div class="latest">${fmtNum(channel.latestValue)} <small>${escapeHtml(channel.unit || '')}</small></div>
-      <div class="channel-foot"><span>${escapeHtml(fmtRelative(channel.latestReceivedAt))}</span><span>${escapeHtml(thresholdText(channel))}</span></div>
+    const alarmCls = channel.inAlarm ? ' alarm' : '';
+    const lampCls = channel.inAlarm ? 'alarm' : channel.anomaly ? 'warn' : 'ok';
+    const model = gaugeModel(channel);
+    const bar = model
+      ? `<div class="crow-bar"><span class="crow-mark ${model.statusClass}" style="left:${model.markPct}%"></span></div>`
+      : '';
+    return `<button class="crow${alarmCls}${selected}" type="button" data-channel-id="${escapeHtml(String(channel.id))}" aria-pressed="${selected ? 'true' : 'false'}">
+      <div class="crow-top"><span class="crow-name"><span class="lamp ${lampCls}"></span>${escapeHtml(channel.code)}</span><span class="crow-val${model ? ` ${model.statusClass}` : ''}">${fmtNum(channel.latestValue)} <small>${escapeHtml(channel.unit || '')}</small></span></div>
+      ${bar}
     </button>`;
+  }
+
+  function renderChannelRows(device) {
+    const channels = sortedChannels(device);
+    const alarmCount = Number(device.currentAlarmCount) || 0;
+    $('channelCount').textContent = `${channels.length} 채널${alarmCount ? ` · ${alarmCount} 알람` : ''}`;
+    $('channelRows').innerHTML = channels.length
+      ? channels.map(crowHtml).join('')
+      : '<div class="empty">등록된 채널이 없습니다.</div>';
+  }
+
+  function renderSelStrip() {
+    const strip = $('selStrip');
+    const channel = selectedChannel();
+    if (!channel) {
+      strip.innerHTML = '<span class="dim">채널을 선택하세요.</span>';
+      return;
+    }
+    const model = gaugeModel(channel);
+    const valueCls = model ? ` ${model.statusClass}` : (channel.inAlarm ? ' s-alarm' : '');
+    const gaugeHtml = model
+      ? `<div class="gauge" style="margin-top:0">
+          <div class="gauge-nums"><span class="gauge-rule">${escapeHtml(thresholdText(channel))}</span></div>
+          <div class="gauge-track"><span class="gauge-limit" style="left:${model.limitPct}%"></span><span class="gauge-mark ${model.statusClass}" style="left:${model.markPct}%"></span></div>
+          <div class="gauge-cond ${model.statusClass}">${escapeHtml(model.condText)}</div>
+        </div>`
+      : `<div class="gauge-cond faint" style="margin-top:.4rem">임계값 없음</div>`;
+    strip.innerHTML = `<div class="sel-read"><span class="v${valueCls}">${fmtNum(channel.latestValue)}<small> ${escapeHtml(channel.unit || '')}</small></span><span class="k">${escapeHtml(channel.code)} · 현재값</span></div>
+      <div class="sel-gauge">${gaugeHtml}</div>`;
   }
 
   function renderDetail() {
@@ -365,15 +524,12 @@
     $('detailFreshnessLamp').className = `lamp ${info.lamp}`;
     $('detailLastSeen').textContent = fmtRelative(device.lastSeenAt);
     $('detailLastSeenLamp').className = `lamp ${device.lastSeenAt ? 'ok' : 'idle'}`;
-    $('channelCount').textContent = `${(device.channels || []).length} 채널`;
-    $('channelGrid').innerHTML = (device.channels || []).length
-      ? device.channels.map(channelCardHtml).join('')
-      : '<div class="panel empty">등록된 채널이 없습니다.</div>';
+    renderChannelRows(device);
+    renderSelStrip();
 
-    const selectedChannel = (device.channels || []).find((channel) => String(channel.id) === String(currentChannelId));
-    $('chartChannelName').textContent = selectedChannel
-      ? `${selectedChannel.code}${selectedChannel.unit ? ` (${selectedChannel.unit})` : ''}` : '채널 추이';
-    $('thrBadge').textContent = selectedChannel ? thresholdText(selectedChannel) : '임계값 —';
+    const selChannel = (device.channels || []).find((channel) => String(channel.id) === String(currentChannelId));
+    $('chartChannelName').textContent = selChannel
+      ? `${selChannel.code}${selChannel.unit ? ` (${selChannel.unit})` : ''}` : '채널 추이';
   }
 
   function showOverview() {
@@ -501,11 +657,14 @@
     renderChart();
   }
 
-  function evidenceHtml(alert) {
-    const parts = [];
-    if (alert.evidence) parts.push(`근거 ${escapeHtml(alert.evidence)}`);
-    if (alert.recommendation) parts.push(`권고 ${escapeHtml(alert.recommendation)}`);
-    return parts.length ? `<span class="evi">${parts.join(' · ')}</span>` : '';
+  // AlertResponse에는 model/source 필드가 없어 severity만 footer에 표기한다.
+  function alertDetailHtml(alert) {
+    const blocks = [];
+    if (alert.evidence) blocks.push(`<div class="ab"><div class="ab-h eyebrow">근거</div><p>${escapeHtml(alert.evidence)}</p></div>`);
+    if (alert.recommendation) blocks.push(`<div class="ab action"><div class="ab-h eyebrow">권장 조치</div><p>${escapeHtml(alert.recommendation)}</p></div>`);
+    const severityTagCls = alert.severity === 'CRITICAL' ? 'tag-alarm' : alert.severity === 'WARNING' ? 'tag-brand' : '';
+    blocks.push(`<div class="ab-foot"><span class="tag ${severityTagCls}">${escapeHtml(alert.severity || 'INFO')}</span></div>`);
+    return blocks.join('');
   }
 
   function renderDeviceAlerts(focusAlertId) {
@@ -521,7 +680,7 @@
       const lamp = alert.severity === 'CRITICAL' ? 'alarm' : alert.severity === 'WARNING' ? 'warn' : 'ok';
       const expanded = String(alert.id) === String(expandedDeviceAlertId);
       const detailId = `device-alert-detail-${alert.id}`;
-      return `<li><button class="alarm-summary" type="button" data-device-alert-id="${escapeHtml(String(alert.id))}" aria-expanded="${expanded}" aria-controls="${escapeHtml(detailId)}"><span class="alarm-line"><span class="freshness"><span class="lamp ${lamp}"></span><strong>${escapeHtml(channel)}</strong> · ${escapeHtml(alert.severity || 'INFO')}</span><span class="alarm-time">${escapeHtml(fmtDateTime(alert.createdAt))}</span></span><span class="alarm-message">${escapeHtml(alert.message || '')}</span></button><div id="${escapeHtml(detailId)}" class="alarm-detail${expanded ? '' : ' hidden'}">${escapeHtml(alert.message || '')}${evidenceHtml(alert)}</div></li>`;
+      return `<li><button class="alarm-summary" type="button" data-device-alert-id="${escapeHtml(String(alert.id))}" aria-expanded="${expanded}" aria-controls="${escapeHtml(detailId)}"><span class="alarm-line"><span class="freshness"><span class="lamp ${lamp}"></span><strong>${escapeHtml(channel)}</strong> · ${escapeHtml(alert.severity || 'INFO')}</span><span class="alarm-time">${escapeHtml(fmtDateTime(alert.createdAt))}</span></span><span class="alarm-message">${escapeHtml(alert.message || '')}</span></button><div id="${escapeHtml(detailId)}" class="alarm-detail${expanded ? '' : ' hidden'}">${alertDetailHtml(alert)}</div></li>`;
     }).join('') : '<li class="empty">최근 알림이 없습니다.</li>';
     const toggle = $('alarmListToggle');
     toggle.classList.toggle('hidden', deviceAlerts.length <= 5);
@@ -654,6 +813,16 @@
       const card = event.target.closest('[data-device-id]');
       if (card) openDevice(card.dataset.deviceId);
     });
+    $('attentionBand').addEventListener('click', (event) => {
+      const row = event.target.closest('[data-device-id]');
+      if (row) openDevice(row.dataset.deviceId);
+    });
+    $('statusFilters').addEventListener('click', (event) => {
+      const chip = event.target.closest('[data-filter]');
+      if (!chip || chip.dataset.filter === statusFilter) return;
+      statusFilter = chip.dataset.filter;
+      renderOverview();
+    });
     $('backButton').addEventListener('click', showOverview);
     $('alarmList').addEventListener('click', (event) => {
       const button = event.target.closest('[data-device-alert-id]');
@@ -666,7 +835,7 @@
       showAllDeviceAlerts = !showAllDeviceAlerts;
       renderDeviceAlerts();
     });
-    $('channelGrid').addEventListener('click', async (event) => {
+    $('channelRows').addEventListener('click', async (event) => {
       const card = event.target.closest('[data-channel-id]');
       if (!card || String(card.dataset.channelId) === String(currentChannelId)) return;
       currentChannelId = card.dataset.channelId;

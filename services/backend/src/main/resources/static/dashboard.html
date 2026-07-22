@@ -11,30 +11,24 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/css/app.css"/>
   <style>
-    .dash-titlebar, .detail-titlebar, .section-title, .channel-head, .device-head {
+    .dash-titlebar, .detail-titlebar, .section-title, .device-head {
       display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
     }
     .dash-titlebar { margin-bottom: 1.1rem; }
-    .dash-titlebar h1, .detail-titlebar h1 { font-size: 1.7rem; margin-top: .25rem; }
-    .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 1.35rem; }
-    .detail-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .summary-card { display: flex; align-items: center; gap: .9rem; padding: 1.15rem 1.25rem; }
-    .summary-card .lamp { flex: 0 0 auto; }
-    .summary-card .val { font-size: 1.45rem; }
+    .detail-titlebar { margin: .85rem 0 1.1rem; }
     .factory-block { margin-bottom: 1.8rem; }
     .factory-name { font-size: .78rem; color: var(--text-dim); margin-bottom: .75rem; }
     .zone-block { margin-bottom: 1.25rem; }
     .section-title { align-items: center; margin-bottom: .7rem; }
-    .section-title h2 { font-size: 1.02rem; }
     .device-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
     .device-card {
       appearance: none; width: 100%; color: inherit; text-align: left; cursor: pointer;
-      background: var(--surface); border: 1px solid var(--line); border-radius: 9px;
-      padding: 1.05rem 1.1rem; transition: border-color .16s ease, transform .16s ease, background .16s ease;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+      padding: 1.05rem 1.1rem 1.1rem 1.25rem; transition: border-color .16s ease, transform .16s ease, background .16s ease;
     }
     .device-card:hover, .device-card:focus-visible {
-      border-color: color-mix(in srgb, var(--brand) 65%, var(--line));
-      background: var(--surface-2); transform: translateY(-1px); outline: none;
+      transform: translateY(-1px); outline: none;
+      border-color: color-mix(in srgb, var(--spine, var(--line)) 55%, var(--line));
     }
     .device-card h3 { font-size: 1rem; margin-bottom: .25rem; }
     .device-meta { color: var(--text-faint); font-size: .78rem; min-height: 1.2rem; }
@@ -43,19 +37,7 @@
     .metric b { display: block; font-family: var(--font-mono); font-size: .9rem; margin-top: .22rem; }
     .metric span { color: var(--text-faint); font-size: .7rem; }
     .freshness { display: inline-flex; align-items: center; gap: .38rem; font-family: var(--font-mono); font-size: .7rem; }
-    .detail-titlebar { margin: .85rem 0 1.1rem; }
     .breadcrumb { color: var(--text-faint); font-size: .78rem; margin-top: .3rem; }
-    .channel-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; margin-bottom: 1.1rem; }
-    .channel-card {
-      appearance: none; color: inherit; text-align: left; cursor: pointer; padding: .95rem 1rem;
-      background: transparent; border: 1px solid var(--line); border-radius: 8px;
-    }
-    .channel-card:hover, .channel-card.selected { border-color: var(--signal); background: color-mix(in srgb, var(--signal) 6%, transparent); }
-    .channel-card.alarm { border-color: color-mix(in srgb, var(--alarm) 65%, var(--line)); }
-    .channel-card .latest { font-family: var(--font-mono); font-size: 1.35rem; margin: .85rem 0 .35rem; }
-    .channel-card .latest small { font-size: .72rem; color: var(--text-dim); }
-    .channel-foot { display: flex; justify-content: space-between; gap: .5rem; color: var(--text-faint); font-size: .7rem; }
-    .detail-grid { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); align-items: start; margin-bottom: 1.1rem; }
     .chart-box { position: relative; height: 290px; padding: .7rem .4rem .3rem; }
     .chart-box canvas { max-width: 100%; }
     .chart-heading { display: flex; align-items: baseline; gap: .65rem; flex-wrap: wrap; }
@@ -63,8 +45,7 @@
     .chart-actions { display: flex; align-items: center; justify-content: flex-end; gap: .7rem; flex-wrap: wrap; }
     .window-selector { display: inline-flex; gap: .25rem; }
     .window-selector .active { color: var(--signal); border-color: var(--signal); background: color-mix(in srgb, var(--signal) 8%, transparent); }
-    .thr-badge { font-family: var(--font-mono); font-size: .7rem; color: var(--brand); }
-    .alarm-panel { height: 360px; min-height: 360px; display: flex; flex-direction: column; overflow: hidden; }
+    .alarm-panel { max-height: 330px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
     .alarm-panel .panel-head { flex: 0 0 auto; }
     .alarm-list { list-style: none; overflow-y: auto; min-height: 0; }
     .alarm-list li { padding: 0; border-bottom: 1px solid var(--line-soft); }
@@ -74,14 +55,12 @@
     .alarm-line { display: flex; justify-content: space-between; gap: .8rem; margin-bottom: .28rem; }
     .alarm-message { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; line-height: 1.4; }
     .alarm-time { color: var(--text-faint); font-family: var(--font-mono); font-size: .7rem; white-space: nowrap; }
-    .alarm-detail { padding: 0 1rem .8rem; font-size: .78rem; line-height: 1.45; }
-    .evi { display: block; font-size: .74rem; color: var(--text-faint); margin-top: .35rem; line-height: 1.4; }
+    .alarm-detail { padding: .15rem 1rem 1rem; display: flex; flex-direction: column; gap: .75rem; }
     @media (max-width: 960px) {
-      .device-grid, .channel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .detail-grid { grid-template-columns: 1fr; }
+      .device-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 640px) {
-      .summary-grid, .detail-summary-grid, .device-grid, .channel-grid { grid-template-columns: 1fr; }
+      .device-grid { grid-template-columns: 1fr; }
       .topbar .clock, .identity { display: none; }
       .dash-titlebar, .detail-titlebar { flex-direction: column; }
     }
@@ -118,14 +97,16 @@
 <main id="dash" class="stage hidden">
   <section id="overviewView">
     <div class="dash-titlebar">
-      <div><div class="eyebrow">DEVICE OVERVIEW</div><h1>장치 현황</h1></div>
+      <div><div class="eyebrow">DEVICE OVERVIEW</div><h1 class="page-title">장치 현황</h1></div>
       <span class="tag" id="refreshTag">갱신 대기</span>
     </div>
-    <div class="grid summary-grid">
-      <div class="panel summary-card"><span class="lamp idle" id="summaryFreshnessLamp"></span><div class="readout"><span class="val" id="summaryFreshness">—</span><span class="lbl">온라인 / 전체 장치</span></div></div>
-      <div class="panel summary-card"><span class="lamp idle" id="summaryLastSeenLamp"></span><div class="readout"><span class="val" id="summaryLastSeen">—</span><span class="lbl">마지막 수신</span></div></div>
-      <div class="panel summary-card"><span class="lamp idle" id="summaryAlarmLamp"></span><div class="readout"><span class="val" id="summaryAlarm">—</span><span class="lbl">알람 유지 중 채널</span></div></div>
+    <div class="panel summary" style="margin-bottom:1.5rem">
+      <div class="cell"><span class="lamp idle" id="summaryFreshnessLamp"></span><div><div class="val" id="summaryFreshness">—</div><div class="lbl">온라인 / 전체 장치</div></div></div>
+      <div class="cell"><span class="lamp idle" id="summaryLastSeenLamp"></span><div><div class="val" id="summaryLastSeen">—</div><div class="lbl">마지막 수신</div></div></div>
+      <div class="cell"><span class="lamp idle" id="summaryAlarmLamp"></span><div><div class="val" id="summaryAlarm">—</div><div class="lbl">알람 유지 중 채널</div></div></div>
     </div>
+    <div id="attentionBand"></div>
+    <div id="statusFilters" class="filters"></div>
     <div id="overviewEmpty" class="panel empty">장치 현황을 불러오는 중입니다.</div>
     <div id="factoryGroups"></div>
   </section>
@@ -135,43 +116,47 @@
     <div class="detail-titlebar">
       <div>
         <div class="eyebrow">DEVICE DETAIL</div>
-        <h1 id="detailName">장치</h1>
+        <h1 id="detailName" class="page-title">장치</h1>
         <div class="breadcrumb" id="detailBreadcrumb"></div>
       </div>
       <span id="detailFreshness" class="tag"></span>
     </div>
-    <div class="grid summary-grid detail-summary-grid">
-      <div class="panel summary-card"><span class="lamp idle" id="detailFreshnessLamp"></span><div class="readout"><span class="val" id="detailFreshnessValue">—</span><span class="lbl">freshness</span></div></div>
-      <div class="panel summary-card"><span class="lamp idle" id="detailLastSeenLamp"></span><div class="readout"><span class="val" id="detailLastSeen">—</span><span class="lbl">마지막 수신</span></div></div>
+    <div class="panel summary cols-2" style="margin-bottom:1.35rem">
+      <div class="cell"><span class="lamp idle" id="detailFreshnessLamp"></span><div><div class="val" id="detailFreshnessValue">—</div><div class="lbl">freshness</div></div></div>
+      <div class="cell"><span class="lamp idle" id="detailLastSeenLamp"></span><div><div class="val" id="detailLastSeen">—</div><div class="lbl">마지막 수신</div></div></div>
     </div>
 
-    <div class="section-title"><h2>채널 현황</h2><span class="tag" id="channelCount">0 채널</span></div>
-    <div id="channelGrid" class="channel-grid"></div>
-
-    <div class="grid detail-grid">
-      <div class="panel">
-        <div class="panel-head">
-          <div class="chart-heading">
-            <h3 id="chartChannelName">채널 추이</h3>
-            <span class="chart-meta" id="chartMeta">표시 0점 · 최근 5분</span>
-          </div>
-          <div class="chart-actions">
-            <div class="window-selector" id="windowSelector" aria-label="차트 시간 범위">
-              <button class="btn btn-sm btn-ghost" type="button" data-window-minutes="1" aria-pressed="false">1분</button>
-              <button class="btn btn-sm btn-ghost active" type="button" data-window-minutes="5" aria-pressed="true">5분</button>
-              <button class="btn btn-sm btn-ghost" type="button" data-window-minutes="15" aria-pressed="false">15분</button>
-            </div>
-            <span class="thr-badge" id="thrBadge">임계값 —</span>
-          </div>
-        </div>
-        <div class="chart-box">
-          <div class="empty" id="lineEmpty">채널을 선택하면 최근 판독이 표시됩니다.</div>
-          <canvas id="lineChart" class="hidden"></canvas>
-        </div>
+    <div class="dpane">
+      <div class="panel chan-list">
+        <div class="panel-head"><h3>채널</h3><span class="tag" id="channelCount">0 채널</span></div>
+        <div id="channelRows" class="chan-rows"></div>
       </div>
-      <div class="panel alarm-panel">
-        <div class="panel-head"><h3>장치 최근 알림</h3><button id="alarmListToggle" class="btn btn-sm btn-ghost hidden" type="button" aria-expanded="false" aria-controls="alarmList">최근 20건 보기</button></div>
-        <ul id="alarmList" class="alarm-list"><li class="empty">알림을 불러오는 중입니다.</li></ul>
+
+      <div class="dcol" style="min-width:0">
+        <div class="panel">
+          <div id="selStrip" class="sel-strip"></div>
+          <div class="panel-head">
+            <div class="chart-heading">
+              <h3 id="chartChannelName">채널 추이</h3>
+              <span class="chart-meta" id="chartMeta">표시 0점 · 최근 5분</span>
+            </div>
+            <div class="chart-actions">
+              <div class="window-selector" id="windowSelector" aria-label="차트 시간 범위">
+                <button class="btn btn-sm btn-ghost" type="button" data-window-minutes="1" aria-pressed="false">1분</button>
+                <button class="btn btn-sm btn-ghost active" type="button" data-window-minutes="5" aria-pressed="true">5분</button>
+                <button class="btn btn-sm btn-ghost" type="button" data-window-minutes="15" aria-pressed="false">15분</button>
+              </div>
+            </div>
+          </div>
+          <div class="chart-box">
+            <div class="empty" id="lineEmpty">채널을 선택하면 최근 판독이 표시됩니다.</div>
+            <canvas id="lineChart" class="hidden"></canvas>
+          </div>
+        </div>
+        <div class="panel alarm-panel">
+          <div class="panel-head"><h3>장치 최근 알림</h3><button id="alarmListToggle" class="btn btn-sm btn-ghost hidden" type="button" aria-expanded="false" aria-controls="alarmList">최근 20건 보기</button></div>
+          <ul id="alarmList" class="alarm-list"><li class="empty">알림을 불러오는 중입니다.</li></ul>
+        </div>
       </div>
     </div>
   </section>
