@@ -502,14 +502,11 @@ Spring이 스케줄러에서 HTTP로 호출하는 별도 서비스입니다. 탐
 - Java 17
 - 컨테이너 실행 시 Docker와 Docker Compose
 
-Compose는 두 경로만 유지합니다. 직접 개발 실행은 별도 Compose가 아닙니다.
+독립 풀 데모는 이 저장소의 `docker-compose.yml` 하나로 실행합니다(원커맨드는 `make demo`). 직접 개발 실행은 별도 Compose가 아닙니다. 홈서버/prod 배포는 이 저장소가 아니라 personal-hub `infra`가 담당합니다.
 
 | 경로 | 파일 | PostgreSQL | 용도 |
 |---|---|---|---|
 | 독립 풀 데모 | `docker-compose.yml` | 전용 컨테이너·volume 포함 | 로컬 통합 실행, 평가자 데모 |
-| 홈서버 추가 설치 | `docker-compose.home.yml` | 기존 인스턴스의 별도 `sensor_monitor` database | 운영 blocker 해결 후 독립 앱 stack으로 설치 |
-
-두 Compose 파일은 각각 단독 실행합니다. 홈서버 파일을 독립 데모 파일 위에 override로 겹쳐 쓰지 않습니다.
 
 ### 로컬 실행 (공용 Postgres + bootRun)
 
@@ -560,41 +557,9 @@ docker compose --profile live up -d simulator-live
 
 > 컨테이너 postgres는 호스트 `5433`, backend는 `8080`, explain은 `8000`에 노출됩니다. backend는 내부 네트워크의 `postgres:5432`를 사용하므로 서비스 env의 `DB_*` 값보다 Compose 토폴로지 값이 우선합니다. `SYSTEM_ADMIN` 계정 `SYSTEM`은 위 수동 seed 명령이 만들며 Compose 기동이나 Flyway가 만들지 않습니다. `docker compose down`은 volume을 유지하고, `down -v`는 데모 DB를 삭제하므로 데이터 삭제 의도가 있을 때만 사용합니다.
 
-### 홈서버 추가 설치 골격 (`docker-compose.home.yml`)
+### 홈서버 / prod 배포
 
-홈서버 기본 stack에는 sensor-monitor를 넣지 않습니다. 필요할 때 이 저장소의 독립 Compose를 추가하며, PostgreSQL 컨테이너나 DB volume은 만들지 않습니다. 다만 현재 파일은 아래 운영 blocker를 숨기지 않는 설치 골격이며, 조건을 해결하기 전에는 public 배포하지 않습니다.
-
-선행 조건:
-
-- 홈서버 기존 PostgreSQL 인스턴스에 별도 `sensor_monitor` database와 전용 role 생성
-- PostgreSQL 컨테이너와 backend가 함께 참가할 외부 Docker network 준비
-- reverse proxy와 backend가 함께 참가할 외부 Docker network 준비
-- main CI를 통과한 backend·explain·simulator 이미지가 같은 commit SHA로 GHCR에 발행됐는지 확인
-- public reverse proxy에서 공유 키 수신 경로 `POST /sensor-data`를 추가 차단. live simulator는 내부 `app` network로 backend를 직접 호출
-- 첫 로그인·승인을 위한 운영 관리자 bootstrap 절차 확정
-- PostgreSQL host 디스크 사용량 경보와 임계 도달 시 `simulator-live` 중단 자동화
-
-```bash
-# Compose 보간값: 이미지 SHA와 외부 network 이름
-cp .env.example .env
-
-# backend 설정
-cp services/backend/.env.example services/backend/.env
-
-# services/backend/.env에서 JWT_SECRET과 홈서버 DB_URL/계정/비밀번호를 설정
-# DB_URL의 host는 localhost가 아니라 외부 DB network의 PostgreSQL 서비스 이름
-
-# (선택) Gemini provider를 사용할 때만 준비
-# cp services/explain/.env.example services/explain/.env
-
-# backend + explain. 빈 database에는 prod/Flyway migration이 자동 적용
-docker compose -f docker-compose.home.yml up -d
-
-# synthetic 상시 스트림까지 활성화
-docker compose -f docker-compose.home.yml --profile live up -d
-```
-
-`docker-compose.home.yml`의 simulator는 DB에 직접 연결하지 않고 backend HTTP API만 호출합니다. Compose를 내려도 외부 PostgreSQL database는 삭제되지 않습니다. Flyway의 데모 migration은 공장·구역·device·채널만 만들며 로그인 사용자나 `SYSTEM_ADMIN`은 만들지 않고, 로컬 시연용 `seed.sql`도 자동 실행하지 않습니다. 따라서 첫 운영 관리자 생성은 별도 bootstrap 절차를 확정해야 하는 공개 전 blocker이며, 이 설치 골격은 운영 계정을 자동 생성하지 않습니다. `/sensor-data`는 `X-Ingest-Key` 공유 키로 보호되지만, 키 회전·전송량 제한·mTLS는 포함하지 않은 포트폴리오 수준의 경계입니다. public reverse proxy에서는 계속 수신 경로를 차단하고 simulator가 내부 network로 backend를 호출하게 둡니다.
+홈서버 배포는 이 저장소가 아니라 **personal-hub `infra`** 가 소유합니다: compose·nginx 라우팅·이미지 SHA pin·ingest 공유 키·운영 관리자 bootstrap·배포 자동화(systemd timer)가 모두 그쪽에 있습니다. 이 저장소는 backend·explain·simulator 이미지와 Flyway 스키마·기준 토폴로지만 제공하고, prod 적용 계약(공개 origin·감시 URL·ingest 인증·이미지 배포 경계)은 personal-hub `CONTRACT.md`를 따릅니다. `/sensor-data`는 내부 network에서만 `X-Ingest-Key`로 호출하고 public reverse proxy는 계속 차단합니다.
 
 ### 테스트 실행
 
@@ -687,7 +652,6 @@ device는 `deviceCode`(`CMAPSS-U1`/`CMAPSS-U2`/`CNC-EXP01`)로 식별합니다. 
 
 | 파일 | 필요한 실행 방식 | 사용자가 설정하는 값 |
 |---|---|---|
-| 루트 `.env` | 홈서버 | 이미지 SHA tag, 기존 DB network, reverse proxy network |
 | `services/backend/.env` | 독립 풀 데모·홈서버 | JWT 서명 키, 센서 수신 `INGEST_API_KEY`. 홈서버는 DB URL·사용자·비밀번호도 설정 |
 | `services/simulator/.env` | replay·live simulator | backend와 같은 `INGEST_API_KEY` |
 | `services/explain/.env` | Gemini 사용 시에만 선택 | provider, API key, 필요한 경우 모델명 |
@@ -700,7 +664,7 @@ device는 `deviceCode`(`CMAPSS-U1`/`CMAPSS-U2`/`CNC-EXP01`)로 식별합니다. 
 
 - backend의 `prod` 프로파일은 Flyway migration을 먼저 실행하고 Hibernate는 `ddl-auto=validate`로 결과만 검증합니다. 첫 스키마는 `services/backend/src/main/resources/db/migration/V1__initial_schema.sql`입니다.
 - 독립 풀 데모 `docker-compose.yml`은 `SPRING_PROFILES_ACTIVE=local`을 명시하고 `ddl-auto=update` + `seed.sql` 경로를 유지합니다.
-- 홈서버 `docker-compose.home.yml`은 `prod` 프로파일로 기존 PostgreSQL 인스턴스의 별도 database에 Flyway migration을 적용합니다.
+- 홈서버/prod 배포(personal-hub `infra`)는 `prod` 프로파일로 기존 PostgreSQL 인스턴스의 별도 database에 Flyway migration을 적용합니다.
 - 빈 운영 DB와 접속 role은 배포 인프라가 먼저 만들어야 합니다. Flyway는 DB/role 생성이나 백업 도구가 아니며, 이미 만들어진 DB 안에서 schema와 명시적으로 버전 관리하는 기준 데이터만 적용합니다.
 - V1은 schema만 만들고 checksum 고정을 위해 이후 수정하지 않습니다.
 - V2(`V2__normalized_ingest_model.sql`)는 수신 모델을 "채널=Device"에서 물리 Device ─ SensorChannel ─ MeasurementBatch ─ SensorReading 정규화 모델로 전환하는 DDL입니다. `device.type`·`device.threshold_value` 제거와 `device.code`(UK) 추가, `sensor_channel`·`measurement_batch`·`sensor_reading`·`channel_status` 신설, `alert`에 `channel_id`·`batch_id` 추가, scalar 텔레메트리 테이블 `sensor_data` 제거를 포함합니다.
