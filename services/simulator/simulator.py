@@ -267,6 +267,10 @@ class SyntheticGenerator:
             self.anomaly_remaining -= 1
         return measurements
 
+    def force_anomaly(self, ticks: int = 8):
+        """데모용: 확률 롤과 무관하게 이상 구간을 즉시 시작한다(임계 확실히 넘도록 길게)."""
+        self.anomaly_remaining = ticks
+
 
 # =============================================================================
 # 3. HTTP 전송
@@ -364,6 +368,7 @@ def synthetic_worker(
         active_days: set[int],
         active_hours: tuple[clock_time, clock_time] | None,
         timezone_name: str,
+        first_anomaly_after: float | None,
         stop_event: threading.Event,
 ):
     device_code = preset["code"]
@@ -371,6 +376,9 @@ def synthetic_worker(
     timezone = ZoneInfo(timezone_name)
     generator = SyntheticGenerator(preset["synthetic"], seed, anomaly_rate)
     source_seq = int(time.time())
+    # 데모용 보장 이상: 전송 시도 기준 tick으로 환산해 한 번만 발화한다(벽시계 대신 결정적).
+    forced_tick = None if first_anomaly_after is None else max(1, round(first_anomaly_after / interval))
+    forced_done = False
     attempted = 0
     success = 0
     failure_streak = 0
@@ -392,6 +400,9 @@ def synthetic_worker(
                 waiting = False
 
             attempted += 1
+            if forced_tick is not None and not forced_done and attempted >= forced_tick:
+                generator.force_anomaly()
+                forced_done = True
             measurements = generator.next_measurements()
             if send(base_url, device_code, source_seq, measurements, ingest_api_key):
                 success += 1
@@ -441,6 +452,8 @@ def main():
                         help="synthetic 난수 seed (생략 시 실행마다 다른 패턴)")
     parser.add_argument("--anomaly-rate", type=float, default=0.02,
                         help="synthetic에서 이상 구간을 시작할 확률 (기본 0.02)")
+    parser.add_argument("--first-anomaly-after", type=float, default=None,
+                        help="synthetic에서 부팅 후 N초에 이상 1회 보장 (데모용, 생략 시 off)")
     parser.add_argument("--active-days", default="all",
                         help="synthetic 운영 요일 (all, mon-fri, mon,wed,fri)")
     parser.add_argument("--active-hours", default=None,
@@ -457,6 +470,8 @@ def main():
         parser.error("--limit은 0 이상이어야 합니다")
     if not 0.0 <= args.anomaly_rate <= 1.0:
         parser.error("--anomaly-rate는 0 이상 1 이하여야 합니다")
+    if args.first_anomaly_after is not None and args.first_anomaly_after <= 0:
+        parser.error("--first-anomaly-after는 0보다 커야 합니다")
 
     active_days = set(range(7))
     active_hours = None
@@ -491,6 +506,8 @@ def main():
     log(f"시뮬레이터 시작 — mode {args.mode} / device {len(presets)}개 / {args.interval}초 간격 / 서버 {args.base_url}")
     if args.mode == "synthetic":
         log(f"운영시간 {schedule} / seed {args.seed if args.seed is not None else 'random'}")
+        if args.first_anomaly_after is not None:
+            log(f"데모: 부팅 후 {args.first_anomaly_after:g}초에 이상 1회 보장")
     log("=" * 50)
     stop_event = threading.Event()
 
@@ -501,7 +518,8 @@ def main():
         targets = [
             (p, args.interval, args.limit, args.base_url, ingest_api_key,
              None if args.seed is None else args.seed + index,
-             args.anomaly_rate, active_days, active_hours, args.timezone, stop_event)
+             args.anomaly_rate, active_days, active_hours, args.timezone,
+             args.first_anomaly_after, stop_event)
             for index, p in enumerate(presets)
         ]
         worker_function = synthetic_worker
