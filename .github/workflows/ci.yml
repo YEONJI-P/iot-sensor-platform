@@ -37,6 +37,16 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
         working-directory: services/backend
+      - name: Prepare tested backend artifact
+        run: |
+          mapfile -t jars < <(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' -print)
+          if [ "${#jars[@]}" -ne 1 ]; then
+            echo "Expected exactly one executable backend jar, found ${#jars[@]}" >&2
+            exit 1
+          fi
+          mkdir -p build/ci-image
+          cp "${jars[0]}" build/ci-image/app.jar
+        working-directory: services/backend
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -55,6 +65,14 @@ jobs:
       - name: Test simulator
         run: python -m unittest -v test_simulator.py
         working-directory: services/simulator
+      - name: Upload tested backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-boot-jar
+          path: services/backend/build/ci-image/app.jar
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
 
   publish-images:
     name: Publish immutable images
@@ -65,6 +83,7 @@ jobs:
     uses: ./.github/workflows/publish-images.yml
     with:
       services: all
+      use_backend_artifact: true
 
   propose-personal-hub-release:
     name: Propose personal-hub release

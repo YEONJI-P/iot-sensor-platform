@@ -1,4 +1,8 @@
-build
+# 일반 Gradle 산출물은 제외하되 main CI가 이미지 조립에 쓰는 단일 bootJar만 허용한다.
+build/*
+!build/ci-image/
+build/ci-image/*
+!build/ci-image/app.jar
 .gradle
 .git
 .env
